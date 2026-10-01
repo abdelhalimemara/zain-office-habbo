@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -9,6 +9,8 @@ import { freePort, launch, sleep, waitForHttp, type Managed } from "./processes"
 export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const BIN = join(ROOT, "node_modules", ".bin");
 const NETWORK_STUB = pathToFileURL(fileURLToPath(new URL("./networkStub.mjs", import.meta.url))).href;
+/** The server's HERMES_BIN: records argv instead of touching the user's real ~/.hermes. */
+export const HERMES_CLI_STUB = fileURLToPath(new URL("./hermesCliStub.mjs", import.meta.url));
 
 export const SHOT_DIR =
   process.env.E2E_SHOT_DIR ??
@@ -23,18 +25,17 @@ export interface Stack {
   browser: Browser;
   page: Page;
   shot(name: string): Promise<string>;
+  /** argv of every `hermes` CLI call the server made (through the stub), oldest first. */
+  cliCalls(): string[][];
   stop(): Promise<void>;
 }
 
 function childEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...extra, FORCE_COLOR: "0", NO_COLOR: "1" };
-  delete env.HERMES_SESSION_TOKEN;
-  delete env.HEADCOUNT_REF;
-  delete env.NODE_ENV;
-  delete env.VITEST;
-  delete env.VITEST_WORKER_ID;
-  delete env.VITEST_POOL_ID;
-  return env;
+  const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" };
+  for (const key of ["HERMES_SESSION_TOKEN", "HERMES_BIN", "HEADCOUNT_REF", "NODE_ENV", "VITEST", "VITEST_WORKER_ID", "VITEST_POOL_ID"]) {
+    delete env[key];
+  }
+  return { ...env, ...extra };
 }
 
 /**
@@ -60,6 +61,8 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
     let webPort = await freePort();
     while (webPort === serverPort) webPort = await freePort();
     const webUrl = `http://127.0.0.1:${webPort}`;
+    const cliLog = join(serverCwd, "hermes-cli-calls.jsonl");
+    const envLog = join(serverCwd, "server-env.jsonl");
     const server = launch("server", join(BIN, "tsx"), [join(ROOT, "server", "src", "index.ts")], {
       cwd: serverCwd,
       env: childEnv({
@@ -68,6 +71,10 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
         NODE_OPTIONS: `--import=${NETWORK_STUB}`,
         // The guard only trusts :5173 and its own port; the random Vite port must be listed.
         ZAIN_ALLOWED_ORIGINS: webUrl,
+        HERMES_BIN: HERMES_CLI_STUB,
+        E2E_HERMES_STUB: HERMES_CLI_STUB,
+        E2E_HERMES_CALLS: cliLog,
+        E2E_SERVER_ENV_FILE: envLog,
       }),
     });
     procs.push(server);
@@ -80,6 +87,7 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
     procs.push(web);
 
     await waitForHttp(`${serverUrl}/api/health`, server);
+    assertIsolated(envLog);
     await waitForHttp(`${webUrl}/`, web);
     // Warm Vite's dependency optimizer so the first page load does not race a reload.
     await waitForHttp(`${webUrl}/src/main.tsx`, web);
@@ -101,12 +109,26 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
         await page.screenshot(path);
         return path;
       },
+      cliCalls: () => readLines(cliLog).map((line) => JSON.parse(line) as string[]),
       stop,
     };
   } catch (err) {
     await stop();
     throw err;
   }
+}
+
+function readLines(file: string): string[] {
+  if (!existsSync(file)) return [];
+  return readFileSync(file, "utf8").split("\n").filter(Boolean);
+}
+
+/** Every server process (tsx and its node child) must see HERMES_BIN = the stub, or nothing runs. */
+function assertIsolated(envLog: string): void {
+  const seen = readLines(envLog).map((line) => JSON.parse(line) as { pid: number; HERMES_BIN: string | null });
+  if (seen.length === 0) throw new Error("e2e isolation: the server never loaded the network stub preload");
+  const leaks = seen.filter((p) => p.HERMES_BIN !== HERMES_CLI_STUB);
+  if (leaks.length) throw new Error(`e2e isolation: server HERMES_BIN is not the stub: ${JSON.stringify(leaks)}`);
 }
 
 /** Load the app and wait until the HUD and the world canvas are up. */

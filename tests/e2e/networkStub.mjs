@@ -1,3 +1,8 @@
+import cp from "node:child_process";
+import { appendFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+import { promisify } from "node:util";
+
 // Preloaded into the real server (node --import) by the e2e harness. The server has no setting for
 // the headcount source, so GitHub is answered from this fixture, and every other non-loopback request
 // (and the real Hermes port) is refused so a test can never leak to the network or the user's Hermes.
@@ -23,6 +28,31 @@ const SKILLS = {
 const tree = Object.entries(SKILLS).flatMap(([dept, skills]) =>
   skills.map((skill) => ({ path: `plugins/${dept}/skills/${skill}/SKILL.md`, type: "blob" })),
 );
+
+// The server shells out to the `hermes` CLI (HERMES_BIN), which writes to the user's real ~/.hermes.
+// Record what HERMES_BIN this process sees, and refuse to run any `hermes` binary but the stub.
+const stubBin = process.env.E2E_HERMES_STUB;
+if (process.env.E2E_SERVER_ENV_FILE) {
+  appendFileSync(process.env.E2E_SERVER_ENV_FILE, `${JSON.stringify({ pid: process.pid, HERMES_BIN: process.env.HERMES_BIN ?? null })}\n`);
+}
+const mayRun = (file) => {
+  const f = String(file);
+  if (/(^|\/)hermes$/.test(f) || f.includes("/.local/bin/hermes")) return false;
+  return f === stubBin || !/hermes/i.test(f.split("/").pop() ?? "");
+};
+const refused = (file) => new Error(`e2e isolation: refused to run ${file}`);
+for (const name of ["execFile", "spawn", "execFileSync", "spawnSync"]) {
+  const original = cp[name];
+  const guarded = function (file, ...rest) {
+    if (!mayRun(file)) throw refused(file);
+    return original.call(this, file, ...rest);
+  };
+  if (original[promisify.custom]) {
+    guarded[promisify.custom] = (file, ...rest) => (mayRun(file) ? original[promisify.custom](file, ...rest) : Promise.reject(refused(file)));
+  }
+  cp[name] = guarded;
+}
+syncBuiltinESMExports();
 
 const realFetch = globalThis.fetch;
 
