@@ -22,27 +22,29 @@ describe("city image hotspots", () => {
   });
 
   it.each([
-    ["hq", 1030, 400],
-    ["hq", 1010, 60],
-    ["growth", 640, 700],
-    ["growth", 500, 850],
-    ["studio", 700, 930],
-    ["tech", 1100, 980],
-    ["labs", 1420, 780],
-    ["labs", 1560, 760],
+    ["hq", 1000, 600],
+    ["hq", 992, 150],
+    ["growth", 520, 950],
+    ["growth", 285, 1180],
+    ["studio", 590, 1300],
+    ["tech", 1100, 1350],
+    ["labs", 1500, 1050],
+    ["labs", 1700, 1200],
   ] as const)("hits %s at (%i, %i)", (division, x, y) => {
     expect(hotspotAt(x, y)).toBe(division);
   });
 
   it.each([
-    ["tree left of the tower", 840, 727],
-    ["tree right of the tower", 1208, 758],
-    ["road between studio and tech", 880, 880],
-    ["road right of tech", 1250, 1000],
-    ["front street", 600, 1100],
-    ["road in front of tech", 1180, 1100],
-    ["sky beside the tower", 1200, 300],
-    ["margin", 100, 100],
+    ["tree left of the tower", 766, 1056],
+    ["trees right of the tower", 1232, 1087],
+    ["trees right of the tower base", 1190, 1110],
+    ["street between growth and tech", 820, 1215],
+    ["trees between studio and tech", 860, 1330],
+    ["road right of tech", 1300, 1330],
+    ["front crossing", 700, 1520],
+    ["front road", 1400, 1500],
+    ["sky beside the tower", 1300, 500],
+    ["transparent margin", 60, 60],
   ] as const)("misses the %s", (_name, x, y) => {
     expect(hotspotAt(x, y)).toBeNull();
   });
@@ -81,7 +83,7 @@ describe("city fit", () => {
     expect(fill).toBeCloseTo(0.95, 2);
     const narrow = visibleArea(1400, 900, normalizeInsets({ top: 64, right: 720 }));
     const whole = { x: 0, y: 0, w: CITY_IMAGE.width, h: CITY_IMAGE.height };
-    expect(fitSmooth(CITY_CONTENT, narrow, 1)).toBeGreaterThan(fitSmooth(whole, narrow, 1) * 1.25);
+    expect(fitSmooth(CITY_CONTENT, narrow, 1)).toBeGreaterThan(fitSmooth(whole, narrow, 1) * 1.03);
     expect(fitSmooth(CITY_CONTENT, area, 2)).toBeCloseTo(s * 2, 6);
   });
 

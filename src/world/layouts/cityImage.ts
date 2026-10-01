@@ -1,14 +1,14 @@
 import type { DivisionId } from "../../../shared/divisions";
 import { pointInPolygon, type Pt, type Rect } from "../iso";
 
-/** The rendered city diorama (src/world/assets/city.webp), in image pixels. */
-export const CITY_IMAGE = { width: 2048, height: 1360 } as const;
+/** The rendered, car-free city diorama (src/world/assets/city.webp, transparent background), in image pixels. */
+export const CITY_IMAGE = { width: 2000, height: 2000 } as const;
 
-/** Sampled from the image's flat margins; the canvas uses it so the picture has no visible edge. */
+/** Canvas colour behind the transparent diorama. */
 export const CITY_BACKGROUND = 0xf7f7f7;
 
-/** Tight bounds of the diorama (soil slab to antenna tip) with a little breathing room. */
-export const CITY_CONTENT: Rect = { x: 255, y: 16, w: 1540, h: 1338 };
+/** Opaque-pixel bounds of the diorama (alpha > 8: x 27–1937, y 111–1832) plus a 10 px margin. */
+export const CITY_CONTENT: Rect = { x: 17, y: 101, w: 1931, h: 1742 };
 
 export interface CityHotspot {
   division: DivisionId;
@@ -29,44 +29,44 @@ export const CITY_HOTSPOTS: readonly CityHotspot[] = [
     short: "HQ",
     name: "ZAIN GROUP",
     polygon: pts([
-      [940, 80], [1006, 101], [1006, 24], [1015, 24], [1015, 104], [1120, 140], [1133, 172], [1137, 770],
-      [1052, 822], [977, 808], [921, 782], [919, 172],
+      [895, 185], [989, 215], [989, 114], [996, 114], [996, 218], [1137, 265], [1150, 305], [1166, 927],
+      [1165, 1110], [1150, 1170], [1045, 1182], [955, 1172], [947, 1092], [872, 1100], [872, 300],
     ]),
-    anchor: { x: 1130, y: 128 },
+    anchor: { x: 1140, y: 250 },
   },
   {
     division: "growth",
     short: "GROWTH",
     name: "ZAIN GROWTH",
     polygon: pts([
-      [685, 524], [815, 577], [817, 805], [690, 806], [559, 860], [548, 905], [470, 885], [456, 800],
-      [492, 775], [492, 625], [557, 575],
+      [570, 760], [742, 826], [742, 1148], [567, 1138], [404, 1211], [398, 1268], [265, 1255], [262, 1125],
+      [306, 1105], [308, 900], [400, 828],
     ]),
-    anchor: { x: 680, y: 540 },
+    anchor: { x: 570, y: 780 },
   },
   {
     division: "studio",
     short: "STUDIO",
     name: "ZAIN STUDIO",
-    polygon: pts([[690, 806], [846, 862], [843, 995], [706, 1062], [568, 1005], [559, 860]]),
-    anchor: { x: 703, y: 845 },
+    polygon: pts([[567, 1138], [781, 1221], [778, 1388], [590, 1467], [409, 1420], [404, 1211]]),
+    anchor: { x: 592, y: 1175 },
   },
   {
     division: "tech",
     short: "TECH",
     name: "ZAIN TECH",
-    polygon: pts([[1100, 846], [1221, 905], [1219, 1024], [1096, 1096], [973, 1034], [972, 893]]),
-    anchor: { x: 1097, y: 880 },
+    polygon: pts([[1098, 1196], [1268, 1255], [1268, 1428], [1087, 1528], [947, 1492], [948, 1262]]),
+    anchor: { x: 1105, y: 1225 },
   },
   {
     division: "labs",
     short: "LABS",
     name: "ZAIN LABS",
     polygon: pts([
-      [1375, 566], [1465, 590], [1466, 617], [1505, 625], [1542, 642], [1543, 677], [1570, 690], [1571, 718],
-      [1586, 725], [1586, 800], [1601, 803], [1602, 925], [1418, 960], [1292, 920], [1263, 660], [1298, 602],
+      [1470, 796], [1582, 842], [1590, 875], [1686, 898], [1700, 945], [1736, 995], [1737, 1110], [1760, 1118],
+      [1760, 1294], [1511, 1322], [1314, 1226], [1312, 938], [1355, 846],
     ]),
-    anchor: { x: 1380, y: 580 },
+    anchor: { x: 1470, y: 815 },
   },
 ];
 
@@ -89,7 +89,7 @@ export function cityFitBounds(area: { w: number }): Rect {
 }
 
 /** The tower's "A" sign, covered by the Zain Group plate. */
-export const HQ_SIGN = { x: 1037, y: 752, w: 30, h: 32 } as const;
+export const HQ_SIGN = { x: 1028, y: 1073, w: 32, h: 34 } as const;
 
 export function hotspotFor(division: DivisionId): CityHotspot {
   const h = CITY_HOTSPOTS.find((s) => s.division === division);
