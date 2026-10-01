@@ -30,8 +30,13 @@ export interface KanbanTask {
   current_run_started_at?: number | null;
   link_counts?: { parents: number; children: number };
   comment_count?: number;
-  /** Children done / total; null when the task has no children. */
+  /**
+   * Hermes' children done / total; null when the task has no children. Inverted for mandates,
+   * whose subtasks are parents: use `dependencyProgress` instead.
+   */
   progress?: { done: number; total: number } | null;
+  /** Added by the Zain server to mandates: subtasks (the mandate's parents) done / total. */
+  dependencyProgress?: { done: number; total: number };
   warnings?: { count: number; highest_severity: string | null } | null;
 }
 

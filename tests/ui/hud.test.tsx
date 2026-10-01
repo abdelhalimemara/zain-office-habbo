@@ -9,11 +9,12 @@ import { board, mockFetch, renderUi, resetStore, rosterEntries, task } from "./h
 
 const routes = {
   [API.board]: board([
-    task({ id: "a", status: "review" }),
-    task({ id: "b", status: "review", tenant: "zain-tech" }),
+    task({ id: "a", status: "review", assignee: "zain-studio-vp" }),
+    task({ id: "b", status: "review", tenant: "zain-tech", assignee: "zain-tech-vp" }),
+    task({ id: "s", status: "review", tenant: "zain-tech", assignee: "zain-tech-qa" }),
     task({ id: "c", status: "running" }),
   ]),
-  [API.health]: { ok: true, hermes: "reachable", telegram: "disconnected", board: "zain-group" },
+  [API.health]: { ok: true, hermes: "reachable", telegram: "disconnected", reviewDispatch: "off", board: "zain-group" },
   [API.roster]: { agents: rosterEntries },
 };
 
@@ -27,6 +28,26 @@ describe("Hud", () => {
     expect(await screen.findByTitle("Hermes: reachable")).toBeInTheDocument();
     expect(screen.getByTitle("Telegram: disconnected")).toBeInTheDocument();
     expect(screen.getByText("ZAIN GROUP")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("counts mandates of locally hired VPs from the merged roster", async () => {
+    const hiredVp = { profile: "zain-tech-vp2", title: "VP Platform", division: "tech" as const, rank: "vp" as const, reportsTo: "default", skills: [], hired: true, model: null };
+    mockFetch({
+      ...routes,
+      [API.board]: board([task({ id: "h", status: "review", tenant: "zain-tech", assignee: "zain-tech-vp2" })]),
+      [API.roster]: { agents: [...rosterEntries, hiredVp] },
+    });
+    renderUi(<Hud />);
+    expect(await screen.findByRole("button", { name: "Approvals, 1 pending" })).toBeInTheDocument();
+  });
+
+  it("warns when the Hermes review agent can approve mandates", async () => {
+    mockFetch({ ...routes, [API.health]: { ok: true, hermes: "reachable", telegram: "connected", reviewDispatch: "on", board: "zain-group" } });
+    renderUi(<Hud />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Hermes review agent is on: it can approve mandates before HQ sees them.",
+    );
   });
 
   it("shows the breadcrumb on a floor and navigates back to the city", async () => {

@@ -3,6 +3,7 @@ import { getDivision } from "@shared/divisions";
 import { pendingApprovals } from "@shared/flow";
 import { useBoard, useHealth } from "../api/hooks";
 import { useUiStore } from "../state/store";
+import { useRosterAgents } from "./common";
 
 type DotState = "ok" | "warn" | "bad" | "unknown";
 
@@ -25,7 +26,8 @@ export function Hud() {
   const openPanel = useUiStore((s) => s.openPanel);
   const board = useBoard();
   const health = useHealth();
-  const approvals = board.data ? pendingApprovals(board.data).length : 0;
+  const { agents } = useRosterAgents();
+  const approvals = board.data ? pendingApprovals(board.data, agents).length : 0;
   const division = view.kind === "floor" ? view.division : undefined;
   const d = division ? getDivision(division) : undefined;
   const hermes = health.data?.hermes;
@@ -72,6 +74,11 @@ export function Hud() {
           Hire
         </button>
       </div>
+      {health.data?.reviewDispatch === "on" && (
+        <p className="zui-banner zui-banner--warn" role="alert">
+          Hermes review agent is on: it can approve mandates before HQ sees them.
+        </p>
+      )}
     </header>
   );
 }

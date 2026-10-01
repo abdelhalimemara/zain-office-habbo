@@ -2,8 +2,9 @@ import type { HeadcountCatalogResponse, HeadcountDepartment } from "../../../sha
 import { ROSTER } from "../../../shared/roster";
 import type { FetchLike } from "../hermes/client";
 
-const TREE_URL = "https://api.github.com/repos/cbrock84/headcount/git/trees/main?recursive=1";
-const RAW_BASE = "https://raw.githubusercontent.com/cbrock84/headcount/main/plugins";
+/** Pinned so a hire installs reviewed skill text, not whatever `main` holds today. */
+export const HEADCOUNT_REF = "98d1c17d480f606060102a781f9a8601690685f7";
+const REPO = "cbrock84/headcount";
 const SKILL_PATH = /^plugins\/([a-z0-9-]+)\/skills\/([a-z0-9-]+)\/SKILL\.md$/;
 const SKILL_ID = /^([a-z0-9-]+):([a-z0-9-]+)$/;
 const CACHE_MS = 60 * 60 * 1000;
@@ -11,6 +12,8 @@ const TIMEOUT_MS = 10_000;
 
 export interface HeadcountSourceOptions {
   fetchImpl?: FetchLike;
+  /** Git ref for the tree and raw SKILL.md URLs; defaults to HEADCOUNT_REF. */
+  ref?: string;
   now?: () => number;
 }
 
@@ -54,17 +57,20 @@ function toDepartments(byDept: Map<string, Set<string>>): HeadcountDepartment[] 
 export class HeadcountSource {
   private readonly fetchImpl: FetchLike;
   private readonly now: () => number;
+  private readonly ref: string;
   private cached: { at: number; catalog: HeadcountCatalogResponse } | undefined;
 
   constructor(options: HeadcountSourceOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init));
     this.now = options.now ?? Date.now;
+    this.ref = encodeURIComponent(options.ref || HEADCOUNT_REF);
   }
 
   async catalog(): Promise<HeadcountCatalogResponse> {
     if (this.cached && this.now() - this.cached.at < CACHE_MS) return this.cached.catalog;
     try {
-      const res = await this.get(TREE_URL, { Accept: "application/vnd.github+json" });
+      const url = `https://api.github.com/repos/${REPO}/git/trees/${this.ref}?recursive=1`;
+      const res = await this.get(url, { Accept: "application/vnd.github+json" });
       const data = (await res.json()) as { tree?: unknown };
       if (!Array.isArray(data.tree)) throw new Error("GitHub tree response has no tree");
       const departments = parseTree(data.tree);
@@ -86,7 +92,8 @@ export class HeadcountSource {
   async skillMarkdown(id: string): Promise<string> {
     const parsed = parseSkillId(id);
     if (!parsed) throw new Error(`invalid headcount skill id ${id}`);
-    const res = await this.get(`${RAW_BASE}/${parsed.department}/skills/${parsed.skill}/SKILL.md`, {});
+    const url = `https://raw.githubusercontent.com/${REPO}/${this.ref}/plugins/${parsed.department}/skills/${parsed.skill}/SKILL.md`;
+    const res = await this.get(url, {});
     return res.text();
   }
 

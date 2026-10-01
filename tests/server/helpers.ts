@@ -1,5 +1,6 @@
 import { createApp } from "../../server/src/app";
-import { HeadcountSource } from "../../server/src/headcount/catalog";
+import type { GuardOptions } from "../../server/src/guard";
+import { HEADCOUNT_REF, HeadcountSource } from "../../server/src/headcount/catalog";
 import { HermesClient, type FetchLike } from "../../server/src/hermes/client";
 import { memoryHireStore, type HireStore } from "../../server/src/org/hireStore";
 import type { KanbanTask } from "../../shared/hermes";
@@ -88,24 +89,27 @@ export function githubFetch(options: { down?: boolean } = {}) {
     return { path: `plugins/${dept}/skills/${skill}/SKILL.md`, type: "blob" };
   });
   return mockFetch({
-    "GET /repos/cbrock84/headcount/git/trees/main": () =>
+    [`GET /repos/cbrock84/headcount/git/trees/${HEADCOUNT_REF}`]: () =>
       options.down ? json({ message: "rate limited" }, 403) : { tree: [{ path: "README.md", type: "blob" }, ...tree] },
     ...Object.fromEntries(
       tree.map(({ path }) => [
-        `GET /cbrock84/headcount/main/${path}`,
+        `GET /cbrock84/headcount/${HEADCOUNT_REF}/${path}`,
         () => new Response(skillMarkdown(path.split("/")[3]!)),
       ]),
     ),
   });
 }
 
-export function setup(routes: Record<string, Handler>, options: { hires?: HireStore; githubDown?: boolean } = {}) {
+export function setup(
+  routes: Record<string, Handler>,
+  options: { hires?: HireStore; githubDown?: boolean; guard?: GuardOptions } = {},
+) {
   const hermesFetch = mockFetch({ ...hermesBase, ...routes });
   const gh = githubFetch({ down: options.githubDown });
   const hermes = new HermesClient({ baseUrl: "http://hermes.test", fetchImpl: hermesFetch.fetchImpl });
   const headcount = new HeadcountSource({ fetchImpl: gh.fetchImpl });
   const hires = options.hires ?? memoryHireStore();
-  const app = createApp({ hermes, headcount, hires });
+  const app = createApp({ hermes, headcount, hires, guard: options.guard });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,

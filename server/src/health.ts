@@ -8,19 +8,31 @@ function telegramState(status: HermesStatus): HealthResponse["telegram"] {
   return state === "connected" ? "connected" : "disconnected";
 }
 
+/** Read-only mirror of kanban_db_dispatch.review_dispatch_enabled: absent means on, else truthiness. */
+async function reviewDispatch(hermes: HermesClient): Promise<HealthResponse["reviewDispatch"]> {
+  try {
+    const kanban = (await hermes.config()).kanban ?? {};
+    if (!("review_dispatch" in kanban)) return "on";
+    return kanban.review_dispatch ? "on" : "off";
+  } catch {
+    return "unknown";
+  }
+}
+
 export async function health(hermes: HermesClient): Promise<HealthResponse> {
+  const down = { ok: false, telegram: "unknown", reviewDispatch: "unknown", board: KANBAN_BOARD } as const;
   let status: HermesStatus;
   try {
     status = await hermes.status();
   } catch {
-    return { ok: false, hermes: "unreachable", telegram: "unknown", board: KANBAN_BOARD };
+    return { ...down, hermes: "unreachable" };
   }
   const telegram = telegramState(status);
   try {
     await hermes.boardSlugs();
-    return { ok: true, hermes: "reachable", telegram, board: KANBAN_BOARD };
   } catch (err) {
     const unauthorized = err instanceof HermesError && (err.status === 401 || err.status === 403);
-    return { ok: false, hermes: unauthorized ? "unauthorized" : "unreachable", telegram, board: KANBAN_BOARD };
+    return { ...down, hermes: unauthorized ? "unauthorized" : "unreachable", telegram };
   }
+  return { ok: true, hermes: "reachable", telegram, reviewDispatch: await reviewDispatch(hermes), board: KANBAN_BOARD };
 }

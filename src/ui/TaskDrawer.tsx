@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { divisionForTenant } from "@shared/divisions";
-import { AWAITING_APPROVAL } from "@shared/flow";
+import { AWAITING_APPROVAL, subtaskProgress } from "@shared/flow";
 import { useAddComment, useTaskDetail } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { ApprovalActions } from "./ApprovalActions";
@@ -38,8 +38,11 @@ export function TaskDrawer({ id }: { id: string }) {
   const { data, error, isPending } = useTaskDetail(id);
   const { agents } = useRosterAgents();
   const closePanel = useUiStore((s) => s.closePanel);
+  const openPanel = useUiStore((s) => s.openPanel);
   const task = data?.task;
   const division = divisionForTenant(task?.tenant);
+  const subtasks = data?.subtasks ?? [];
+  const progress = task?.dependencyProgress ?? (subtasks.length ? subtaskProgress(subtasks) : undefined);
 
   return (
     <Panel title={task?.title ?? "Task"} accent={division?.color} onClose={closePanel}>
@@ -64,15 +67,31 @@ export function TaskDrawer({ id }: { id: string }) {
             )}
             <dt>Priority</dt>
             <dd>P{task.priority}</dd>
-            {task.progress && (
+            {progress && (
               <>
                 <dt>Subtasks</dt>
                 <dd>
-                  {task.progress.done}/{task.progress.total} done
+                  {progress.done}/{progress.total} subtasks done
                 </dd>
               </>
             )}
           </dl>
+          {subtasks.length > 0 && (
+            <>
+              <h3 className="zui-subheading">Subtasks</h3>
+              <ul className="zui-subtasks" aria-label="Subtasks">
+                {subtasks.map((s) => (
+                  <li key={s.id} className="zui-subtask">
+                    <button type="button" className="zui-link" onClick={() => openPanel({ kind: "task", id: s.id })}>
+                      {s.title}
+                    </button>{" "}
+                    <span className={`zui-status-pill zui-status-pill--${s.status}`}>{s.status}</span>{" "}
+                    <AgentChip profile={s.assignee} agents={agents} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           {task.body && <h3 className="zui-subheading">Brief</h3>}
           <Text>{task.body}</Text>
           {task.latest_summary && <h3 className="zui-subheading">Latest summary</h3>}

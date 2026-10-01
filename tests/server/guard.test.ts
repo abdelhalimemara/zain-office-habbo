@@ -1,14 +1,19 @@
+import { guardOptions } from "../../server/src/app";
+import type { GuardOptions } from "../../server/src/guard";
 import { KANBAN, setup, task } from "./helpers";
 
 const board = { columns: [], tenants: [], assignees: [], latest_event_id: 0, now: 1 };
 const mandate = { division: "tech", title: "Ship it" };
 
-function app() {
-  return setup({
-    [`GET ${KANBAN}/board`]: () => board,
-    [`POST ${KANBAN}/tasks`]: () => ({ task: task({ id: "t_new", status: "triage" }) }),
-    [`POST ${KANBAN}/tasks/t_new/home-subscribe/telegram`]: () => ({ ok: true }),
-  });
+function app(guard?: GuardOptions) {
+  return setup(
+    {
+      [`GET ${KANBAN}/board`]: () => board,
+      [`POST ${KANBAN}/tasks`]: () => ({ task: task({ id: "t_new", status: "triage" }) }),
+      [`POST ${KANBAN}/tasks/t_new/home-subscribe/telegram`]: () => ({ ok: true }),
+    },
+    { guard },
+  );
 }
 
 describe("local-only guard", () => {
@@ -39,7 +44,16 @@ describe("local-only guard", () => {
     },
   );
 
-  it.each(["https://attacker.com", "http://localhost.attacker.com", "http://127.0.0.1.evil:8787", "null"])(
+  it.each([
+    "https://attacker.com",
+    "http://localhost.attacker.com",
+    "http://127.0.0.1.evil:8787",
+    "null",
+    "http://localhost:3000",
+    "http://127.0.0.1",
+    "https://localhost:5173",
+    "http://localhost:5173/",
+  ])(
     "refuses a write from Origin %j",
     async (origin) => {
       const { send, hermesFetch } = app();
@@ -65,5 +79,23 @@ describe("local-only guard", () => {
       "Sec-Fetch-Site": "same-origin",
     });
     expect(res.status).toBe(201);
+  });
+
+  it.each(["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8787", "http://localhost:8787"])(
+    "accepts writes from the Vite and server origin %s",
+    async (origin) => {
+      expect((await app().send("POST", "/api/mandates", mandate, { Origin: origin })).status).toBe(201);
+    },
+  );
+
+  it("follows the configured server port and ZAIN_ALLOWED_ORIGINS", async () => {
+    const guard = guardOptions(9000, { ZAIN_ALLOWED_ORIGINS: " http://127.0.0.1:4173/ ,http://localhost:4174" });
+    const { send } = app(guard);
+    const post = async (origin: string) => (await send("POST", "/api/mandates", mandate, { Origin: origin })).status;
+    expect(await post("http://localhost:9000")).toBe(201);
+    expect(await post("http://localhost:5173")).toBe(201);
+    expect(await post("http://127.0.0.1:4173")).toBe(201);
+    expect(await post("http://localhost:4174")).toBe(201);
+    expect(await post("http://localhost:8787")).toBe(403);
   });
 });

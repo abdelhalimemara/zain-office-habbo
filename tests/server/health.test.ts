@@ -7,13 +7,33 @@ const status = (telegram?: string) => ({
 
 describe("GET /api/health", () => {
   it("is ok when Hermes is reachable and authorized", async () => {
-    const { send } = setup({ "GET /api/status": () => status("connected") });
+    const { send } = setup({
+      "GET /api/status": () => status("connected"),
+      "GET /api/config": () => ({ kanban: { review_dispatch: false } }),
+    });
     expect(await (await send("GET", "/api/health")).json()).toEqual({
       ok: true,
       hermes: "reachable",
       telegram: "connected",
+      reviewDispatch: "off",
       board: "zain-group",
     });
+  });
+
+  it.each([
+    [{ kanban: { review_dispatch: true } }, "on"],
+    [{ kanban: { auto_decompose: true } }, "on"],
+    [{}, "on"],
+    [{ kanban: { review_dispatch: 0 } }, "off"],
+  ])("reads review dispatch from Hermes config %j as %s, without writing", async (config, expected) => {
+    const { send, hermesFetch } = setup({ "GET /api/status": () => status("connected"), "GET /api/config": () => config });
+    expect((await (await send("GET", "/api/health")).json()).reviewDispatch).toBe(expected);
+    expect(hermesFetch.calls.filter((c) => c.method !== "GET")).toEqual([]);
+  });
+
+  it("reports review dispatch unknown when the config cannot be read", async () => {
+    const { send } = setup({ "GET /api/status": () => status("connected"), "GET /api/config": () => json({ detail: "x" }, 500) });
+    expect(await (await send("GET", "/api/health")).json()).toMatchObject({ ok: true, reviewDispatch: "unknown" });
   });
 
   it("reports telegram disconnected or unknown", async () => {
@@ -40,6 +60,7 @@ describe("GET /api/health", () => {
       ok: false,
       hermes: "unreachable",
       telegram: "unknown",
+      reviewDispatch: "unknown",
       board: "zain-group",
     });
   });

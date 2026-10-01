@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { DIVISION_IDS } from "../../../shared/divisions";
 import { ROSTER, type RosterAgent } from "../../../shared/roster";
@@ -13,6 +14,7 @@ export function memoryHireStore(initial: RosterAgent[] = []): HireStore {
   return {
     list: async () => [...hires],
     save: async (agent) => {
+      if (ROSTER.some((a) => a.profile === agent.profile)) return;
       const i = hires.findIndex((h) => h.profile === agent.profile);
       if (i >= 0) hires[i] = agent;
       else hires.push(agent);
@@ -50,16 +52,23 @@ export function fileHireStore(root: string): HireStore {
     return Array.isArray(data) ? data.filter(isRosterAgent) : [];
   }
 
+  async function write(agent: RosterAgent): Promise<void> {
+    const hires = (await read()).filter((h) => h.profile !== agent.profile);
+    hires.push(agent);
+    await mkdir(dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+    await writeFile(tmp, `${JSON.stringify(hires, null, 2)}\n`, "utf8");
+    await rename(tmp, file);
+  }
+
+  let queue: Promise<void> = Promise.resolve();
   return {
     list: read,
-    save: async (agent) => {
-      if (ROSTER.some((a) => a.profile === agent.profile)) return;
-      const hires = (await read()).filter((h) => h.profile !== agent.profile);
-      hires.push(agent);
-      await mkdir(dirname(file), { recursive: true });
-      const tmp = `${file}.tmp`;
-      await writeFile(tmp, `${JSON.stringify(hires, null, 2)}\n`, "utf8");
-      await rename(tmp, file);
+    save: (agent) => {
+      if (ROSTER.some((a) => a.profile === agent.profile)) return Promise.resolve();
+      const saved = queue.then(() => write(agent));
+      queue = saved.catch(() => undefined);
+      return saved;
     },
   };
 }

@@ -13,6 +13,7 @@ function detail(status: "review" | "running"): TaskDetailResponse {
     comments: [{ id: 1, task_id: "t1", author: "zain-tech-qa", body: evil, created_at: 0 }],
     parents: [],
     children: [],
+    subtasks: [],
   };
 }
 

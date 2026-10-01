@@ -11,7 +11,7 @@ export function ApprovalsInbox() {
   const { agents } = useRosterAgents();
   const openPanel = useUiStore((s) => s.openPanel);
   const closePanel = useUiStore((s) => s.closePanel);
-  const pending = board.data ? pendingApprovals(board.data) : [];
+  const pending = board.data ? pendingApprovals(board.data, agents) : [];
   const groups = DIVISIONS.map((d) => ({ d, tasks: pending.filter((t) => t.tenant === d.tenant) }));
   const other = pending.filter((t) => !DIVISIONS.some((d) => d.tenant === t.tenant));
 

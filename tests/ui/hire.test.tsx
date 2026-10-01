@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { API, type HireResponse } from "@shared/api";
 import { HireDialog } from "../../src/ui/HireDialog";
-import { deriveProfile, PROFILE_PATTERN } from "../../src/ui/hireForm";
+import { PROFILE_PATTERN } from "@shared/hireRules";
+import { deriveProfile } from "../../src/ui/hireForm";
 import { mockFetch, renderUi, resetStore, rosterEntries } from "./helpers";
 
 const catalog = {

@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { DIVISIONS, getDivision, type DivisionId } from "@shared/divisions";
+import { hireFieldErrors, type HireFieldErrors } from "@shared/hireRules";
 import type { Rank } from "@shared/roster";
 import { useHire } from "../api/hooks";
 import { useUiStore, type HirePrefill } from "../state/store";
 import { divisionManager, ErrorNote, RANK_LABEL, useRosterAgents } from "./common";
-import { deriveProfile, validateHire, type HireFormErrors } from "./hireForm";
+import { deriveProfile } from "./hireForm";
 import { Dialog } from "./Panel";
 import { SkillPicker } from "./SkillPicker";
 
@@ -22,7 +23,7 @@ export function HireDialog({ division: initialDivision, prefill }: Props) {
   const [profileOverride, setProfileOverride] = useState<string | null>(prefill?.profile ?? null);
   const [reportsOverride, setReportsOverride] = useState<string | null>(prefill?.reportsTo ?? null);
   const [skills, setSkills] = useState<string[]>(prefill?.skills ? [...prefill.skills] : []);
-  const [errors, setErrors] = useState<HireFormErrors>({});
+  const [errors, setErrors] = useState<HireFieldErrors>({});
   const hire = useHire();
   const { agents } = useRosterAgents();
   const closePanel = useUiStore((s) => s.closePanel);
@@ -33,7 +34,7 @@ export function HireDialog({ division: initialDivision, prefill }: Props) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const found = validateHire({ title, profile, skills });
+    const found = hireFieldErrors({ title, profile, skills });
     setErrors(found);
     if (Object.keys(found).length > 0) return;
     hire.mutate({ profile, title: title.trim(), division, rank, reportsTo, skills });
@@ -60,11 +61,11 @@ export function HireDialog({ division: initialDivision, prefill }: Props) {
     );
   }
 
-  const field = (name: keyof HireFormErrors) => ({
+  const field = (name: keyof HireFieldErrors) => ({
     "aria-invalid": errors[name] ? true : undefined,
     "aria-describedby": errors[name] ? `hire-${name}-error` : undefined,
   });
-  const fieldError = (name: keyof HireFormErrors) =>
+  const fieldError = (name: keyof HireFieldErrors) =>
     errors[name] && (
       <p id={`hire-${name}-error`} className="zui-error">
         {errors[name]}
