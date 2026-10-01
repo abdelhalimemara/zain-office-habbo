@@ -1,11 +1,13 @@
 import { createApp } from "../../server/src/app";
 import type { GuardOptions } from "../../server/src/guard";
+import { fileBriefs, type BriefReader } from "../../server/src/org/privateBriefs";
 import { CeoWake, type ExecFileLike } from "../../server/src/telegram/ceoWake";
 import { HEADCOUNT_REF, HeadcountSource } from "../../server/src/headcount/catalog";
 import { HermesClient, type FetchLike } from "../../server/src/hermes/client";
 import { memoryHireStore, type HireStore } from "../../server/src/org/hireStore";
 import type { KanbanTask } from "../../shared/hermes";
 import { ROSTER } from "../../shared/roster";
+import { SKILL_SOURCES, skillSourceFor } from "../../shared/skillSources";
 
 export const TOKEN = "tok-secret-123";
 export const KANBAN = "/api/plugins/kanban";
@@ -84,7 +86,7 @@ function skillMarkdown(skill: string): string {
 
 export function githubFetch(options: { down?: boolean } = {}) {
   const tree = [
-    ...new Set(ROSTER.flatMap((a) => a.skills)),
+    ...new Set(ROSTER.flatMap((a) => a.skills).filter((id) => !skillSourceFor(id))),
     "security:incident-response",
   ].map((id) => {
     const [dept, skill] = id.split(":");
@@ -98,6 +100,11 @@ export function githubFetch(options: { down?: boolean } = {}) {
         `GET /cbrock84/headcount/${HEADCOUNT_REF}/${path}`,
         () => new Response(skillMarkdown(path.split("/")[3]!)),
       ]),
+    ),
+    ...Object.fromEntries(
+      SKILL_SOURCES.flatMap((source) =>
+        source.skills.map((skill) => [`GET /${source.repo}/${source.ref}/${source.skillPath(skill)}`, () => new Response(skillMarkdown(skill))]),
+      ),
     ),
   });
 }
@@ -119,11 +126,20 @@ export function mockExec(fail: (args: readonly string[]) => boolean = () => fals
   return { execFile, calls };
 }
 
+/** Tests never read the real `.zain/board` briefs: this root has none. */
+export const NO_BRIEFS = fileBriefs("/nonexistent/zain-test-root");
+
 export const TELEGRAM_HOME = { platform: "telegram", chat_id: "6606232800", thread_id: "", name: "Home" };
 
 export function setup(
   routes: Record<string, Handler>,
-  options: { hires?: HireStore; githubDown?: boolean; guard?: GuardOptions; exec?: ReturnType<typeof mockExec> } = {},
+  options: {
+    hires?: HireStore;
+    githubDown?: boolean;
+    guard?: GuardOptions;
+    exec?: ReturnType<typeof mockExec>;
+    briefs?: BriefReader;
+  } = {},
 ) {
   const hermesFetch = mockFetch({ ...hermesBase, ...routes });
   const gh = githubFetch({ down: options.githubDown });
@@ -132,7 +148,8 @@ export function setup(
   const hires = options.hires ?? memoryHireStore();
   const exec = options.exec ?? mockExec();
   const ceoWake = new CeoWake({ hermes, execFile: exec.execFile, hermesBin: "/opt/hermes/bin/hermes", log: () => undefined });
-  const app = createApp({ hermes, headcount, hires, ceoWake, guard: options.guard });
+  const briefs = options.briefs ?? NO_BRIEFS;
+  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, guard: options.guard });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
@@ -143,5 +160,5 @@ export function setup(
       },
       body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
     });
-  return { app, send, hermes, headcount, hires, hermesFetch, gh, exec, ceoWake };
+  return { app, send, hermes, headcount, hires, hermesFetch, gh, exec, ceoWake, briefs };
 }

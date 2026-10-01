@@ -1,4 +1,13 @@
-import { agentActivity, divisionStats, isMandate, pendingApprovals, splitMandateBody, waitingSubtaskReviews } from "../../shared/flow";
+import {
+  agentActivity,
+  boardConsultations,
+  divisionStats,
+  isBoardTask,
+  isMandate,
+  pendingApprovals,
+  splitMandateBody,
+  waitingSubtaskReviews,
+} from "../../shared/flow";
 import type { KanbanBoard, KanbanTask, TaskStatus } from "../../shared/hermes";
 import { TASK_STATUSES } from "../../shared/hermes";
 
@@ -85,5 +94,20 @@ describe("splitMandateBody", () => {
     expect(splitMandateBody("Just a brief\n---\nmore")).toEqual({ brief: "Just a brief\n---\nmore", instructions: null });
     expect(splitMandateBody("brief\n---")).toEqual({ brief: "brief\n---", instructions: null });
     expect(splitMandateBody("x\n --- \n**Instructions for VP**")).toEqual({ brief: "x\n --- \n**Instructions for VP**", instructions: null });
+  });
+});
+
+describe("board consultations", () => {
+  it("never treats board consultations as mandates or HQ approvals, and lists them newest first", () => {
+    const b3 = board([
+      { ...task("b_old", "review", "zain-board-hormozi", "zain-hq"), created_at: 1 },
+      { ...task("b_new", "running", "zain-board-hormozi", "zain-hq"), created_at: 5 },
+      task("m1", "review", "zain-hq-coo", "zain-hq"),
+    ]);
+    expect(isMandate(task("x", "review", "zain-board-hormozi"))).toBe(false);
+    expect(isBoardTask(task("x", "review", "zain-board-hormozi"))).toBe(true);
+    expect(isBoardTask(task("x", "review", "zain-hq-coo"))).toBe(false);
+    expect(pendingApprovals(b3).map((t) => t.id)).toEqual(["m1"]);
+    expect(boardConsultations(b3).map((t) => t.id)).toEqual(["b_new", "b_old"]);
   });
 });

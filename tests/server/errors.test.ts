@@ -5,7 +5,7 @@ import { HermesClient } from "../../server/src/hermes/client";
 import { CeoWake } from "../../server/src/telegram/ceoWake";
 import { HERMES_DOWN, HERMES_SESSION_REJECTED } from "../../server/src/http";
 import { memoryHireStore } from "../../server/src/org/hireStore";
-import { KANBAN, TOKEN, dashboardHtml, json, setup } from "./helpers";
+import { KANBAN, NO_BRIEFS, TOKEN, dashboardHtml, json, setup } from "./helpers";
 
 const get = (app: ReturnType<typeof createApp>, path: string) => app.request(path, { headers: { Host: "127.0.0.1:8787" } });
 
@@ -23,7 +23,7 @@ describe("user-facing Hermes errors", () => {
         throw new TypeError("fetch failed");
       },
     });
-    const app = createApp({ hermes, headcount: new HeadcountSource(), hires: memoryHireStore(), ceoWake: new CeoWake({ hermes }) });
+    const app = createApp({ hermes, headcount: new HeadcountSource(), hires: memoryHireStore(), ceoWake: new CeoWake({ hermes }), briefs: NO_BRIEFS });
     const res = await get(app, "/api/board");
     expect(res.status).toBe(502);
     const text = await res.text();

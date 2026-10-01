@@ -1,6 +1,7 @@
+import { BOARD_MEMBERS } from "./board";
 import type { DivisionId } from "./divisions";
 
-export type Rank = "ceo" | "vp" | "lead" | "specialist";
+export type Rank = "board" | "ceo" | "vp" | "lead" | "specialist";
 
 export interface RosterAgent {
   /** Hermes profile name. */
@@ -8,9 +9,9 @@ export interface RosterAgent {
   title: string;
   division: DivisionId;
   rank: Rank;
-  /** Profile this agent reports to; null for the CEO. */
+  /** Profile this agent reports to; null for the CEO and the board, who advise rather than report. */
   reportsTo: string | null;
-  /** Headcount skills as `department:skill`. */
+  /** Skill ids: headcount `department:skill` or `<source>:skill` (see skillSources.ts). */
   skills: string[];
   /** Reviewer-class (headcount security / legal-risk): may block work it reviews. */
   reviewer?: boolean;
@@ -100,7 +101,20 @@ const tech: RosterAgent[] = [
     skills: ["security:security-architecture-review", "security:threat-modeling"] },
 ];
 
-export const ROSTER: readonly RosterAgent[] = [...hq, ...studio, ...growth, ...labs, ...tech];
+const board: RosterAgent[] = BOARD_MEMBERS.map((m) => ({
+  profile: m.profile,
+  title: m.title ?? `Board · ${m.name}`,
+  division: "hq",
+  rank: "board",
+  reportsTo: null,
+  skills: m.skills,
+}));
+
+export const ROSTER: readonly RosterAgent[] = [...hq, ...board, ...studio, ...growth, ...labs, ...tech];
+
+export function boardMembers(roster: readonly RosterAgent[] = ROSTER): RosterAgent[] {
+  return roster.filter((a) => a.rank === "board");
+}
 
 export function agentsInDivision(division: DivisionId, roster: readonly RosterAgent[] = ROSTER): RosterAgent[] {
   return roster.filter((a) => a.division === division);

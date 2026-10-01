@@ -1,5 +1,6 @@
 import type { HeadcountCatalogResponse, HeadcountDepartment } from "../../../shared/api";
 import { ROSTER } from "../../../shared/roster";
+import { SKILL_SOURCES, skillSourceFor, type SkillSource } from "../../../shared/skillSources";
 import type { FetchLike } from "../hermes/client";
 
 /** Pinned so a hire installs reviewed skill text, not whatever `main` holds today. */
@@ -35,9 +36,19 @@ export function parseTree(tree: { path?: unknown; type?: unknown }[]): Headcount
   return toDepartments(byDept);
 }
 
+/** Registered sources show up as one "department" each, listing only their reviewed skills. */
+export function sourceDepartments(): HeadcountDepartment[] {
+  return SKILL_SOURCES.map((s) => ({ id: s.id, skills: [...s.skills].sort() }));
+}
+
+export function rawSourceUrl(source: SkillSource, skill: string): string {
+  return `https://raw.githubusercontent.com/${source.repo}/${encodeURIComponent(source.ref)}/${source.skillPath(skill)}`;
+}
+
 export function rosterFallback(): HeadcountDepartment[] {
   const byDept = new Map<string, Set<string>>();
   for (const id of ROSTER.flatMap((a) => a.skills)) {
+    if (skillSourceFor(id)) continue;
     const parsed = parseSkillId(id);
     if (!parsed) continue;
     const skills = byDept.get(parsed.department) ?? new Set<string>();
@@ -53,7 +64,10 @@ function toDepartments(byDept: Map<string, Set<string>>): HeadcountDepartment[] 
     .map(([id, skills]) => ({ id, skills: [...skills].sort() }));
 }
 
-/** The cbrock84/headcount skill library: catalog from the GitHub tree, SKILL.md from raw. */
+/**
+ * The cbrock84/headcount skill library (catalog from the GitHub tree, SKILL.md from raw) plus the
+ * registered skill sources, each pinned to a reviewed commit.
+ */
 export class HeadcountSource {
   private readonly fetchImpl: FetchLike;
   private readonly now: () => number;
@@ -67,7 +81,12 @@ export class HeadcountSource {
   }
 
   async catalog(): Promise<HeadcountCatalogResponse> {
-    if (this.cached && this.now() - this.cached.at < CACHE_MS) return this.cached.catalog;
+    const headcount = (await this.headcountDepartments()).filter((d) => !SKILL_SOURCES.some((s) => s.id === d.id));
+    return { departments: [...headcount, ...sourceDepartments()] };
+  }
+
+  private async headcountDepartments(): Promise<HeadcountDepartment[]> {
+    if (this.cached && this.now() - this.cached.at < CACHE_MS) return this.cached.catalog.departments;
     try {
       const url = `https://api.github.com/repos/${REPO}/git/trees/${this.ref}?recursive=1`;
       const res = await this.get(url, { Accept: "application/vnd.github+json" });
@@ -76,23 +95,29 @@ export class HeadcountSource {
       const departments = parseTree(data.tree);
       if (departments.length === 0) throw new Error("GitHub tree has no headcount skills");
       this.cached = { at: this.now(), catalog: { departments } };
-      return this.cached.catalog;
+      return departments;
     } catch {
-      return { departments: rosterFallback() };
+      return rosterFallback();
     }
   }
 
   async hasSkill(id: string): Promise<boolean> {
     const parsed = parseSkillId(id);
     if (!parsed) return false;
-    const { departments } = await this.catalog();
+    const source = skillSourceFor(id);
+    if (source) return source.skills.includes(parsed.skill);
+    const departments = await this.headcountDepartments();
     return departments.some((d) => d.id === parsed.department && d.skills.includes(parsed.skill));
   }
 
   async skillMarkdown(id: string): Promise<string> {
     const parsed = parseSkillId(id);
-    if (!parsed) throw new Error(`invalid headcount skill id ${id}`);
-    const url = `https://raw.githubusercontent.com/${REPO}/${this.ref}/plugins/${parsed.department}/skills/${parsed.skill}/SKILL.md`;
+    if (!parsed) throw new Error(`invalid skill id ${id}`);
+    const source = skillSourceFor(id);
+    if (source && !source.skills.includes(parsed.skill)) throw new Error(`${id} is not a reviewed ${source.id} skill`);
+    const url = source
+      ? rawSourceUrl(source, parsed.skill)
+      : `https://raw.githubusercontent.com/${REPO}/${this.ref}/plugins/${parsed.department}/skills/${parsed.skill}/SKILL.md`;
     const res = await this.get(url, {});
     return res.text();
   }

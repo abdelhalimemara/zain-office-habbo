@@ -30,6 +30,7 @@ export const ACTIVITY_LABEL: Record<AgentActivity, string> = {
 };
 
 export const RANK_LABEL: Record<RosterEntry["rank"], string> = {
+  board: "Board",
   ceo: "CEO",
   vp: "VP",
   lead: "Lead",

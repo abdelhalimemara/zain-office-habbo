@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ApproveRequest, CreateMandateRequest, HireRequest } from "@shared/api";
+import type { ApproveRequest, BoardConsultRequest, CreateMandateRequest, HireRequest } from "@shared/api";
 import { api } from "./client";
 
 export const queryKeys = {
@@ -68,6 +68,14 @@ export function useReopen() {
       void qc.invalidateQueries({ queryKey: queryKeys.board });
       void qc.invalidateQueries({ queryKey: queryKeys.task(id) });
     },
+  });
+}
+
+export function useBoardConsult() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BoardConsultRequest) => api.boardConsult(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.board }),
   });
 }
 

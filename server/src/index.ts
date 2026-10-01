@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { DEFAULT_PORT, createApp, defaultClients, guardOptions } from "./app";
 import { fileHireStore } from "./org/hireStore";
+import { fileBriefs } from "./org/privateBriefs";
 import { Reconciler } from "./org/reconcile";
 
 const HOST = "127.0.0.1";
@@ -16,6 +17,7 @@ const reconciler = new Reconciler({ hermes: clients.hermes, hires, ceoWake: clie
 const app = createApp({
   ...clients,
   hires,
+  briefs: fileBriefs(process.cwd()),
   guard: guardOptions(port, process.env),
   reconcilerStatus: () => reconciler.status(),
 });

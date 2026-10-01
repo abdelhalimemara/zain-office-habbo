@@ -1,4 +1,4 @@
-import { HEADCOUNT_REF, HeadcountSource, parseTree, rosterFallback } from "../../server/src/headcount/catalog";
+import { HEADCOUNT_REF, HeadcountSource, parseTree, rosterFallback, sourceDepartments } from "../../server/src/headcount/catalog";
 import { hermesSkillName, toHermesSkill } from "../../server/src/headcount/skillFile";
 import { ROSTER } from "../../shared/roster";
 import { githubFetch, json, mockFetch, setup } from "./helpers";
@@ -37,9 +37,10 @@ describe("headcount catalog", () => {
   it("falls back to the skills referenced in ROSTER when GitHub is unreachable", async () => {
     const { send } = setup({}, { githubDown: true });
     const { departments } = await (await send("GET", "/api/headcount/catalog")).json();
-    expect(departments).toEqual(rosterFallback());
+    expect(departments).toEqual([...rosterFallback(), ...sourceDepartments()]);
     const all = departments.flatMap((d: { id: string; skills: string[] }) => d.skills.map((s) => `${d.id}:${s}`));
     expect(new Set(all)).toEqual(new Set(ROSTER.flatMap((a) => a.skills)));
+    expect(rosterFallback().some((d) => d.id === "hormozi")).toBe(false);
   });
 
   it("pins the tree and SKILL.md to the reviewed commit, overridable per source", async () => {
@@ -66,7 +67,7 @@ describe("headcount catalog", () => {
     });
     const source = new HeadcountSource({ fetchImpl: m.fetchImpl });
     await source.catalog();
-    expect(await source.catalog()).toEqual({ departments: [{ id: "x", skills: ["y"] }] });
+    expect(await source.catalog()).toEqual({ departments: [{ id: "x", skills: ["y"] }, ...sourceDepartments()] });
   });
 });
 

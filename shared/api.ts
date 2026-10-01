@@ -19,6 +19,7 @@ export const API = {
   reject: (id: string) => `/api/approvals/${encodeURIComponent(id)}/reject`,
   reopen: (id: string) => `/api/tasks/${encodeURIComponent(id)}/reopen`,
   unblock: (id: string) => `/api/tasks/${encodeURIComponent(id)}/unblock`,
+  boardConsult: "/api/board/consult",
   roster: "/api/roster",
   hire: "/api/hire",
   headcountCatalog: "/api/headcount/catalog",
@@ -109,6 +110,20 @@ export interface UnblockRequest {
 /** Approve / reject / reopen / unblock → 200; approve and reject answer 409 when the task is not in `review`. */
 export interface ApprovalResponse {
   task: KanbanTask;
+}
+
+/** Ask the board: one task per member. `members` defaults to every hired board member. */
+export interface BoardConsultRequest {
+  question: string;
+  members?: string[];
+  relatedTaskId?: string;
+}
+
+/** 201: one "Board consultation" task per member; each wakes the CEO on Telegram when possible. */
+export interface BoardConsultResponse {
+  tasks: KanbanTask[];
+  /** True when every task will wake the CEO on Telegram. */
+  telegramSubscribed: boolean;
 }
 
 export interface RosterEntry extends RosterAgent {

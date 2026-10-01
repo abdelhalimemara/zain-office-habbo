@@ -71,6 +71,9 @@ export function Hud() {
           Approvals
           {approvals > 0 && <span className="zui-count zui-count--alert" aria-hidden="true">{approvals}</span>}
         </button>
+        <button type="button" className="zui-btn" onClick={() => openPanel({ kind: "board" })}>
+          Board
+        </button>
         <button type="button" className="zui-btn zui-btn--primary" onClick={() => openPanel({ kind: "mandate", division })}>
           New mandate
         </button>

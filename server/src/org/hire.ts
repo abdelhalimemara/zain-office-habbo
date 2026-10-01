@@ -1,21 +1,25 @@
 import type { HireResponse, HireStep } from "../../../shared/api";
 import { DIVISION_IDS, type DivisionId } from "../../../shared/divisions";
 import { hireFieldErrors } from "../../../shared/hireRules";
+import { findBoardMember } from "../../../shared/board";
 import { CEO_PROFILE, ROSTER, type RosterAgent } from "../../../shared/roster";
 import type { HermesClient } from "../hermes/client";
 import { HermesError } from "../hermes/client";
 import type { HeadcountSource } from "../headcount/catalog";
-import { SKILL_CATEGORY, toHermesSkill } from "../headcount/skillFile";
+import { toHermesSkill } from "../headcount/skillFile";
 import { badRequest, optionalString } from "../http";
 import { fullRoster, type HireStore } from "./hireStore";
-import { profileDescription, soulFor } from "./persona";
+import { profileDescription, soulText } from "./persona";
+import type { BriefReader } from "./privateBriefs";
 
-const RANKS = ["vp", "lead", "specialist"] as const;
+const RANKS = ["board", "vp", "lead", "specialist"] as const;
+const BOARD_PROFILE = /^zain-board-[a-z0-9-]+$/;
 
 export interface HireDeps {
   hermes: HermesClient;
   headcount: HeadcountSource;
   hires: HireStore;
+  briefs: BriefReader;
 }
 
 function stringField(body: Record<string, unknown>, field: string): string {
@@ -34,6 +38,24 @@ function assertMatchesRoster(agent: RosterAgent): void {
   }
 }
 
+/** Board seats advise rather than report, and each one is defined in shared/board.ts. */
+function boardReportsTo(profile: string, body: Record<string, unknown>): null {
+  if (!BOARD_PROFILE.test(profile)) throw badRequest("board profiles must match zain-board-*");
+  if (!findBoardMember(profile)) throw badRequest(`${profile} is not a board seat defined in shared/board.ts`);
+  if (body.reportsTo !== undefined && body.reportsTo !== null) throw badRequest("reportsTo must be null for the board");
+  return null;
+}
+
+async function managerReportsTo(profile: string, body: Record<string, unknown>, hires: HireStore): Promise<string> {
+  if (BOARD_PROFILE.test(profile)) throw badRequest("zain-board-* profiles must be hired with rank board");
+  const reportsTo = optionalString(body, "reportsTo", 64);
+  const roster = await fullRoster(hires);
+  if (!reportsTo || reportsTo === profile || !roster.some((a) => a.profile === reportsTo)) {
+    throw badRequest("reportsTo must name an existing roster agent");
+  }
+  return reportsTo;
+}
+
 export async function parseHireRequest(
   body: Record<string, unknown>,
   deps: Pick<HireDeps, "headcount" | "hires">,
@@ -42,19 +64,15 @@ export async function parseHireRequest(
   const title = stringField(body, "title").trim();
   const skills = body.skills;
   if (!Array.isArray(skills) || !skills.every((s) => typeof s === "string")) {
-    throw badRequest("skills must be an array of headcount skill ids");
+    throw badRequest("skills must be an array of skill ids");
   }
   const errors = hireFieldErrors({ profile, title, skills });
   const first = (["profile", "title", "skills"] as const).find((k) => errors[k]);
   if (first) throw badRequest(`${first}: ${errors[first]}`);
   if (!DIVISION_IDS.includes(body.division as DivisionId)) throw badRequest("division is not a Zain division");
   const rank = body.rank;
-  if (!RANKS.includes(rank as (typeof RANKS)[number])) throw badRequest("rank must be vp, lead or specialist");
-  const reportsTo = optionalString(body, "reportsTo", 64);
-  const roster = await fullRoster(deps.hires);
-  if (!reportsTo || reportsTo === profile || !roster.some((a) => a.profile === reportsTo)) {
-    throw badRequest("reportsTo must name an existing roster agent");
-  }
+  if (!RANKS.includes(rank as (typeof RANKS)[number])) throw badRequest("rank must be board, vp, lead or specialist");
+  const reportsTo = rank === "board" ? boardReportsTo(profile, body) : await managerReportsTo(profile, body, deps.hires);
   if (body.reviewer !== undefined && typeof body.reviewer !== "boolean") throw badRequest("reviewer must be a boolean");
   const agent: RosterAgent = {
     profile,
@@ -67,7 +85,7 @@ export async function parseHireRequest(
   };
   assertMatchesRoster(agent);
   for (const id of agent.skills) {
-    if (!(await deps.headcount.hasSkill(id))) throw badRequest(`unknown headcount skill ${id}`);
+    if (!(await deps.headcount.hasSkill(id))) throw badRequest(`unknown skill ${id}`);
   }
   return agent;
 }
@@ -96,7 +114,7 @@ async function step(
 async function installSkill(deps: HireDeps, profile: string, id: string): Promise<void> {
   const skill = toHermesSkill(id, await deps.headcount.skillMarkdown(id));
   try {
-    await deps.hermes.createSkill({ ...skill, category: SKILL_CATEGORY, profile });
+    await deps.hermes.createSkill({ ...skill, profile });
   } catch (err) {
     if (err instanceof HermesError && err.status === 400 && /already exists/i.test(err.detail)) return;
     throw err;
@@ -122,7 +140,9 @@ export async function hire(agent: RosterAgent, deps: HireDeps): Promise<HireResp
 
   await deps.hires.save(agent);
   const roster = await fullRoster(deps.hires);
-  await step(steps, "write-soul", agent.profile, () => deps.hermes.writeSoul(agent.profile, soulFor(agent, roster)));
+  await step(steps, "write-soul", agent.profile, async () =>
+    deps.hermes.writeSoul(agent.profile, await soulText(agent, roster, deps.briefs)),
+  );
   await step(steps, "describe", agent.profile, () => deps.hermes.setDescription(agent.profile, description));
   for (const id of agent.skills) {
     await step(steps, "install-skill", id, () => installSkill(deps, agent.profile, id));

@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { KANBAN_BOARD } from "../../../shared/divisions";
 import { CEO_PROFILE } from "../../../shared/roster";
+import { CONSULTATION_PREFIX } from "../org/boardPersona";
 import type { HermesClient } from "../hermes/client";
 
 export const START_MARKER = "<!-- zain-hq:approvals:start -->";
@@ -27,6 +28,12 @@ export function approvalsSection(port: number): string {
     `\`curl -sS -X POST ${api}/tasks/<id>/unblock ${json} -d '{"instructions":"<their words>"}'\``,
     "",
     "**completed** — one short line: \"✅ <title> is done.\"",
+    "",
+    "### Board consultations",
+    "",
+    `- A completed task titled "${CONSULTATION_PREFIX}…" is advice, not a mandate: relay it in ≤8 lines — the advisor's name, the bottom line, the vote if any and the top 3 actions — then say the full advice is in Zain HQ.`,
+    `- When the user asks to consult the board ("ask Hormozi …", "what does the board think …"): \`curl -sS -X POST ${api}/board/consult ${json} -d '{"question":"<their question>","members":["zain-board-hormozi"]}'\`. Omit \`members\` to ask the whole board. JSON-escape the question.`,
+    "- Board members are AI advisors modelled on public figures: never present their words as the real people's.",
     "",
     "Rules:",
     "- Use only task ids that came from a wake message in this conversation. If several are pending and the reply is ambiguous, ask which one by title. Echo the title when you confirm.",

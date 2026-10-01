@@ -29,8 +29,9 @@ export function HireDialog({ division: initialDivision, prefill }: Props) {
   const closePanel = useUiStore((s) => s.closePanel);
   const d = getDivision(division);
   const profile = profileOverride ?? deriveProfile(division, title);
-  const reportsTo = reportsOverride ?? divisionManager(division, agents).profile;
-  const bosses = agents.filter((a) => a.rank !== "specialist" && a.profile !== profile);
+  const isBoard = rank === "board";
+  const reportsTo = isBoard ? null : (reportsOverride ?? divisionManager(division, agents).profile);
+  const bosses = agents.filter((a) => a.rank !== "specialist" && a.rank !== "board" && a.profile !== profile);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -92,8 +93,8 @@ export function HireDialog({ division: initialDivision, prefill }: Props) {
             <label className="zui-label" htmlFor="hire-rank">
               Rank
             </label>
-            <select id="hire-rank" className="zui-input" value={rank} onChange={(e) => setRank(e.target.value as Rank)}>
-              {RANKS.map((r) => (
+            <select id="hire-rank" className="zui-input" value={rank} onChange={(e) => setRank(e.target.value as Rank)} disabled={isBoard}>
+              {(isBoard ? (["board"] as Rank[]) : RANKS).map((r) => (
                 <option key={r} value={r}>
                   {RANK_LABEL[r]}
                 </option>
@@ -118,17 +119,23 @@ export function HireDialog({ division: initialDivision, prefill }: Props) {
           {...field("profile")}
         />
         {fieldError("profile")}
-        <label className="zui-label" htmlFor="hire-reports">
-          Reports to
-        </label>
-        <select id="hire-reports" className="zui-input" value={reportsTo} onChange={(e) => setReportsOverride(e.target.value)}>
-          {!bosses.some((b) => b.profile === reportsTo) && <option value={reportsTo}>{reportsTo}</option>}
-          {bosses.map((b) => (
-            <option key={b.profile} value={b.profile}>
-              {b.title} ({b.profile})
-            </option>
-          ))}
-        </select>
+        {reportsTo === null ? (
+          <p className="zui-hint">Board seat: advises the CEO and founder; reports to no one.</p>
+        ) : (
+          <>
+            <label className="zui-label" htmlFor="hire-reports">
+              Reports to
+            </label>
+            <select id="hire-reports" className="zui-input" value={reportsTo} onChange={(e) => setReportsOverride(e.target.value)}>
+              {!bosses.some((b) => b.profile === reportsTo) && <option value={reportsTo}>{reportsTo}</option>}
+              {bosses.map((b) => (
+                <option key={b.profile} value={b.profile}>
+                  {b.title} ({b.profile})
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <SkillPicker value={skills} onChange={setSkills} error={errors.skills} />
         <ErrorNote error={hire.error} />
         <div className="zui-row">

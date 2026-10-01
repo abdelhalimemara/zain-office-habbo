@@ -3,14 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { API, type HireResponse } from "@shared/api";
 import { HireDialog } from "../../src/ui/HireDialog";
-import { PROFILE_PATTERN } from "@shared/hireRules";
+import { MAX_SKILLS, PROFILE_PATTERN } from "@shared/hireRules";
 import { deriveProfile } from "../../src/ui/hireForm";
 import { mockFetch, renderUi, resetStore, rosterEntries } from "./helpers";
 
 const catalog = {
   departments: [
     { id: "marketing", skills: ["brand-voice", "visual-content", "video-content"] },
-    { id: "technology", skills: Array.from({ length: 16 }, (_, i) => `skill-${i}`) },
+    { id: "technology", skills: Array.from({ length: 21 }, (_, i) => `skill-${i}`) },
   ],
 };
 
@@ -67,16 +67,16 @@ describe("HireDialog", () => {
     expect(screen.getByLabelText("Reports to")).toHaveValue("zain-tech-vp");
   });
 
-  it("caps skill selection at 15 and supports search", async () => {
+  it("caps skill selection at MAX_SKILLS and supports search", async () => {
     setup();
     const tech = await screen.findByRole("group", { name: "technology" });
     const boxes = within(tech).getAllByRole("checkbox");
-    for (const box of boxes.slice(0, 15)) await userEvent.click(box);
-    expect(screen.getByText("(15/15)")).toBeInTheDocument();
-    expect(boxes[15]).toBeDisabled();
+    for (const box of boxes.slice(0, MAX_SKILLS)) await userEvent.click(box);
+    expect(screen.getByText(`(${MAX_SKILLS}/${MAX_SKILLS})`)).toBeInTheDocument();
+    expect(boxes[MAX_SKILLS]).toBeDisabled();
     expect(within(screen.getByRole("group", { name: "marketing" })).getByLabelText("brand-voice")).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Remove technology:skill-0" }));
-    expect(boxes[15]).toBeEnabled();
+    expect(boxes[MAX_SKILLS]).toBeEnabled();
 
     await userEvent.type(screen.getByLabelText("Search headcount catalog"), "video");
     expect(screen.queryByRole("group", { name: "technology" })).not.toBeInTheDocument();

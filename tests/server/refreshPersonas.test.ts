@@ -1,7 +1,7 @@
 import { memoryHireStore } from "../../server/src/org/hireStore";
 import { refreshPersonas } from "../../server/src/org/refreshPersonas";
 import { ROSTER } from "../../shared/roster";
-import { json, setup } from "./helpers";
+import { NO_BRIEFS, json, setup } from "./helpers";
 
 const profile = (name: string) => ({ name, is_default: name === "default", model: "m", provider: "p", description: "", skill_count: 1 });
 
@@ -21,7 +21,7 @@ describe("refreshPersonas", () => {
   it("dry run only reads, one line per profile, never the CEO", async () => {
     const lines: string[] = [];
     const { hermes, hermesFetch } = hermesWith(["default", "zain-hq-coo", "zain-tech-qa"]);
-    expect(await refreshPersonas({ hermes, hires: memoryHireStore(), apply: false, log: (l) => lines.push(l) })).toBe(0);
+    expect(await refreshPersonas({ hermes, hires: memoryHireStore(), briefs: NO_BRIEFS, apply: false, log: (l) => lines.push(l) })).toBe(0);
     expect(hermesFetch.calls.filter((c) => c.method !== "GET")).toEqual([]);
     expect(lines).toHaveLength(ROSTER.length - 1);
     expect(lines).toContain("would refresh zain-hq-coo (COO): SOUL + description");
@@ -35,7 +35,7 @@ describe("refreshPersonas", () => {
     const hires = memoryHireStore([
       { profile: "zain-hq-analyst", title: "HQ Analyst", division: "hq", rank: "specialist", reportsTo: "zain-hq-coo", skills: [] },
     ]);
-    expect(await refreshPersonas({ hermes, hires, apply: true, log: (l) => lines.push(l) })).toBe(0);
+    expect(await refreshPersonas({ hermes, hires, briefs: NO_BRIEFS, apply: true, log: (l) => lines.push(l) })).toBe(0);
     const writes = hermesFetch.calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.path}`);
     expect(writes).toEqual([
       "PUT /api/profiles/zain-hq-coo/soul",
@@ -52,7 +52,7 @@ describe("refreshPersonas", () => {
   it("reports a failed profile and keeps going", async () => {
     const lines: string[] = [];
     const { hermes, hermesFetch } = hermesWith(["zain-hq-coo", "zain-tech-qa"], "zain-hq-coo");
-    expect(await refreshPersonas({ hermes, hires: memoryHireStore(), apply: true, log: (l) => lines.push(l) })).toBe(1);
+    expect(await refreshPersonas({ hermes, hires: memoryHireStore(), briefs: NO_BRIEFS, apply: true, log: (l) => lines.push(l) })).toBe(1);
     expect(lines).toContain("FAILED zain-hq-coo: disk full");
     expect(lines).toContain("refreshed zain-tech-qa");
     expect(hermesFetch.called("PUT /api/profiles/zain-hq-coo/description")).toHaveLength(0);
