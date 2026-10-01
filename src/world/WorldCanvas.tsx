@@ -19,7 +19,7 @@ export interface WorldCanvasProps {
   onError?(error: unknown): void;
 }
 
-export const WORLD_UNAVAILABLE_MESSAGE = "The 3D office can't start in this browser: WebGL is unavailable. Panels still work.";
+export const WORLD_UNAVAILABLE_MESSAGE = "The office view can't start in this browser: WebGL is unavailable. Panels still work.";
 
 const fallbackStyle = {
   position: "absolute",
