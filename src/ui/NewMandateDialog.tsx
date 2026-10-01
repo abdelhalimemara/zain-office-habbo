@@ -8,17 +8,17 @@ import { Dialog } from "./Panel";
 export const TITLE_MAX = 200;
 export const BRIEF_MAX = 20000;
 const PRIORITIES = [
-  { value: 0, label: "Low" },
-  { value: 1, label: "Normal" },
-  { value: 2, label: "High" },
-  { value: 3, label: "Urgent" },
+  { value: -1, label: "Low" },
+  { value: 0, label: "Normal" },
+  { value: 1, label: "High" },
+  { value: 2, label: "Urgent" },
 ];
 
 export function NewMandateDialog({ division: initial }: { division?: DivisionId }) {
   const [division, setDivision] = useState<DivisionId>(initial ?? "studio");
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
-  const [priority, setPriority] = useState(1);
+  const [priority, setPriority] = useState(0);
   const [titleError, setTitleError] = useState<string | null>(null);
   const create = useCreateMandate();
   const { agents } = useRosterAgents();

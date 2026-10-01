@@ -37,13 +37,13 @@ describe("NewMandateDialog", () => {
     await userEvent.selectOptions(screen.getByLabelText("Division"), "labs");
     await userEvent.type(screen.getByLabelText("Title"), "  Launch referral program ");
     await userEvent.type(screen.getByLabelText(/Brief/), "Target 50 partners");
-    await userEvent.selectOptions(screen.getByLabelText("Priority"), "3");
+    await userEvent.selectOptions(screen.getByLabelText("Priority"), "2");
     await userEvent.click(screen.getByRole("button", { name: "Send mandate" }));
 
     expect(await screen.findByRole("heading", { name: "Mandate sent" })).toBeInTheDocument();
     expect(screen.getByText(/Telegram updates are off/)).toBeInTheDocument();
     expect(fetch.calls("POST", API.mandates)).toEqual([
-      { body: { division: "labs", title: "Launch referral program", body: "Target 50 partners", priority: 3 } },
+      { body: { division: "labs", title: "Launch referral program", body: "Target 50 partners", priority: 2 } },
     ]);
   });
 

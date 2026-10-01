@@ -38,7 +38,7 @@ export function ApprovalActions({ taskId }: { taskId: string }) {
         id={fieldId}
         className="zui-input"
         rows={2}
-        maxLength={20000}
+        maxLength={2000}
         value={text}
         onChange={(e) => {
           setText(e.target.value);
