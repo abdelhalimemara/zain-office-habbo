@@ -1,0 +1,232 @@
+import { KANBAN_BOARD } from "../../../shared/divisions";
+import type {
+  CreateTaskInput,
+  HermesProfile,
+  KanbanBoard,
+  KanbanComment,
+  KanbanTask,
+  UpdateTaskInput,
+} from "../../../shared/hermes";
+
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+export interface HermesClientOptions {
+  baseUrl?: string;
+  fetchImpl?: FetchLike;
+  token?: string;
+  timeoutMs?: number;
+}
+
+/** A Hermes response with a non-2xx status; `detail` is Hermes' own message. */
+export class HermesError extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(`Hermes ${status}: ${detail}`);
+  }
+}
+
+/** Hermes could not be reached at all (connection refused, timeout, malformed dashboard). */
+export class HermesUnreachableError extends Error {}
+
+export interface HermesTaskDetail {
+  task: KanbanTask;
+  comments: KanbanComment[];
+  links: { parents: string[]; children: string[] };
+}
+
+export interface HermesStatus {
+  gateway_platforms?: Record<string, { state?: string | null } | undefined> | null;
+}
+
+export interface ProfileCreateInput {
+  name: string;
+  clone_from: string;
+  clone_channels: boolean;
+  description: string;
+}
+
+export interface SkillCreateInput {
+  name: string;
+  content: string;
+  category: string;
+  profile: string;
+}
+
+const TOKEN_PATTERN = /SESSION_TOKEN__="([^"]+)"/;
+const KANBAN = "/api/plugins/kanban";
+
+export class HermesClient {
+  readonly baseUrl: string;
+  private readonly fetchImpl: FetchLike;
+  private readonly timeoutMs: number;
+  private readonly fixedToken: string | undefined;
+  private token: Promise<string> | undefined;
+  private boardReady: Promise<void> | undefined;
+
+  constructor(options: HermesClientOptions = {}) {
+    this.baseUrl = (options.baseUrl ?? "http://127.0.0.1:9119").replace(/\/+$/, "");
+    this.fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init));
+    this.timeoutMs = options.timeoutMs ?? 15_000;
+    this.fixedToken = options.token || undefined;
+  }
+
+  async status(): Promise<HermesStatus> {
+    const res = await this.send("/api/status", { method: "GET" });
+    return (await this.parse(res)) as HermesStatus;
+  }
+
+  async listProfiles(): Promise<HermesProfile[]> {
+    const data = await this.request<{ profiles: HermesProfile[] }>("GET", "/api/profiles");
+    return data.profiles;
+  }
+
+  async createProfile(input: ProfileCreateInput): Promise<void> {
+    await this.request("POST", "/api/profiles", input);
+  }
+
+  async writeSoul(profile: string, content: string): Promise<void> {
+    await this.request("PUT", `/api/profiles/${encodeURIComponent(profile)}/soul`, { content });
+  }
+
+  async setDescription(profile: string, description: string): Promise<void> {
+    await this.request("PUT", `/api/profiles/${encodeURIComponent(profile)}/description`, { description });
+  }
+
+  async createSkill(input: SkillCreateInput): Promise<void> {
+    await this.request("POST", "/api/skills", input);
+  }
+
+  async ensureBoard(): Promise<void> {
+    this.boardReady ??= this.createBoardIfMissing().catch((err: unknown) => {
+      this.boardReady = undefined;
+      throw err;
+    });
+    return this.boardReady;
+  }
+
+  async board(): Promise<KanbanBoard> {
+    await this.ensureBoard();
+    return this.request<KanbanBoard>("GET", this.kanban("/board"));
+  }
+
+  async task(id: string): Promise<HermesTaskDetail> {
+    await this.ensureBoard();
+    return this.request<HermesTaskDetail>("GET", this.kanban(`/tasks/${encodeURIComponent(id)}`));
+  }
+
+  async createTask(input: CreateTaskInput): Promise<KanbanTask> {
+    await this.ensureBoard();
+    const data = await this.request<{ task: KanbanTask }>("POST", this.kanban("/tasks"), input);
+    return data.task;
+  }
+
+  async updateTask(id: string, input: UpdateTaskInput): Promise<KanbanTask> {
+    await this.ensureBoard();
+    const data = await this.request<{ task: KanbanTask }>("PATCH", this.kanban(`/tasks/${encodeURIComponent(id)}`), input);
+    return data.task;
+  }
+
+  async addComment(id: string, body: string, author: string): Promise<void> {
+    await this.ensureBoard();
+    await this.request("POST", this.kanban(`/tasks/${encodeURIComponent(id)}/comments`), { body, author });
+  }
+
+  /** False when the platform has no home channel configured (Hermes answers 404). */
+  async subscribeHome(id: string, platform: string): Promise<boolean> {
+    const path = this.kanban(`/tasks/${encodeURIComponent(id)}/home-subscribe/${encodeURIComponent(platform)}`);
+    try {
+      await this.request("POST", path);
+      return true;
+    } catch (err) {
+      if (err instanceof HermesError && err.status === 404) return false;
+      throw err;
+    }
+  }
+
+  async request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+    const res = await this.authorized(method, path, body);
+    return (await this.parse(res)) as T;
+  }
+
+  async boardSlugs(): Promise<string[]> {
+    const { boards } = await this.request<{ boards: { slug: string }[] }>("GET", `${KANBAN}/boards`);
+    return boards.map((b) => b.slug);
+  }
+
+  private async createBoardIfMissing(): Promise<void> {
+    if ((await this.boardSlugs()).includes(KANBAN_BOARD)) return;
+    await this.request("POST", `${KANBAN}/boards`, {
+      slug: KANBAN_BOARD,
+      name: "Zain Group",
+      description: "Zain Group divisions: HQ mandates, division work and approvals.",
+      color: "#F2C230",
+      switch: false,
+    });
+  }
+
+  private kanban(path: string): string {
+    return `${KANBAN}${path}?board=${encodeURIComponent(KANBAN_BOARD)}`;
+  }
+
+  private async authorized(method: string, path: string, body: unknown): Promise<Response> {
+    const first = await this.send(path, this.init(method, await this.currentToken(), body));
+    if (first.status !== 401 || this.fixedToken) return first;
+    this.token = undefined;
+    return this.send(path, this.init(method, await this.currentToken(), body));
+  }
+
+  private init(method: string, token: string, body: unknown): RequestInit {
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    return { method, headers, body: body === undefined ? undefined : JSON.stringify(body) };
+  }
+
+  private async currentToken(): Promise<string> {
+    if (this.fixedToken) return this.fixedToken;
+    this.token ??= this.scrapeToken().catch((err: unknown) => {
+      this.token = undefined;
+      throw err;
+    });
+    return this.token;
+  }
+
+  private async scrapeToken(): Promise<string> {
+    const res = await this.send("/", { method: "GET" });
+    if (!res.ok) throw new HermesError(res.status, "could not load the Hermes dashboard to obtain a session token");
+    const match = TOKEN_PATTERN.exec(await res.text());
+    if (!match?.[1]) throw new HermesError(401, "Hermes dashboard did not expose a session token");
+    return match[1];
+  }
+
+  private async send(path: string, init: RequestInit): Promise<Response> {
+    try {
+      return await this.fetchImpl(`${this.baseUrl}${path}`, { ...init, signal: AbortSignal.timeout(this.timeoutMs) });
+    } catch (err) {
+      const reason = err instanceof Error ? err.name : "unknown error";
+      throw new HermesUnreachableError(`Hermes unreachable at ${this.baseUrl} (${reason})`);
+    }
+  }
+
+  private async parse(res: Response): Promise<unknown> {
+    const text = await res.text();
+    const data = text ? safeJson(text) : null;
+    if (!res.ok) throw new HermesError(res.status, detailOf(data) ?? res.statusText ?? "request failed");
+    return data;
+  }
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function detailOf(data: unknown): string | undefined {
+  if (!data || typeof data !== "object" || !("detail" in data)) return undefined;
+  const { detail } = data as { detail: unknown };
+  return typeof detail === "string" ? detail : JSON.stringify(detail);
+}
