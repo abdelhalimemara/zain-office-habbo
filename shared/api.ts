@@ -1,7 +1,9 @@
 /**
  * Contract between the web app (src/) and the local server (server/).
  * The server owns the Hermes session token; the browser never sees it.
- * All kanban calls are pinned to KANBAN_BOARD.
+ * All kanban calls are pinned to KANBAN_BOARD. Timestamps are unix seconds (passed through from Hermes).
+ * Errors are non-2xx with ApiError: 400 invalid, 404, 409 wrong state, 413 body > 128KB, 415 non-JSON,
+ * 403 foreign host/origin, 502 Hermes unreachable or token rejected.
  */
 import type { DivisionId } from "./divisions";
 import type { KanbanBoard, KanbanComment, KanbanTask } from "./hermes";
@@ -36,6 +38,12 @@ export interface TaskDetailResponse {
   children: string[];
 }
 
+/** POST taskComments → 201 TaskDetailResponse (refreshed). */
+export interface AddCommentRequest {
+  body: string;
+}
+
+/** Integer in -100..100; 0 is normal. */
 export interface CreateMandateRequest {
   division: DivisionId;
   title: string;
@@ -57,6 +65,11 @@ export interface RejectRequest {
   reason: string;
 }
 
+/** Approve / reject → 200; 409 when the task is not in `review`. */
+export interface ApprovalResponse {
+  task: KanbanTask;
+}
+
 export interface RosterEntry extends RosterAgent {
   /** True when the Hermes profile exists. */
   hired: boolean;
@@ -76,6 +89,7 @@ export interface HireStep {
   error?: string;
 }
 
+/** Always 200; check `ok` and each step. */
 export interface HireResponse {
   ok: boolean;
   profile: string;
