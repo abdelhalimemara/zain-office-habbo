@@ -2,12 +2,19 @@ import { CEO_PROFILE, ROSTER } from "../../../shared/roster";
 import { defaultClients } from "../app";
 import { hire } from "../org/hire";
 import { fileHireStore } from "../org/hireStore";
+import { refreshPersonas } from "../org/refreshPersonas";
 import { hermesSkillName } from "../headcount/skillFile";
 
 async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
   const { hermes, headcount } = defaultClients(process.env);
   const hires = fileHireStore(process.cwd());
+  if (process.argv.includes("--refresh-personas")) {
+    const failed = await refreshPersonas({ hermes, hires, apply });
+    if (!apply) console.log("\nDry run. Re-run with --refresh-personas --apply to rewrite each SOUL and description above.");
+    if (failed) process.exitCode = 1;
+    return;
+  }
   const existing = new Set((await hermes.listProfiles()).map((p) => p.name));
   const pending = ROSTER.filter((a) => a.profile !== CEO_PROFILE && !existing.has(a.profile));
 
