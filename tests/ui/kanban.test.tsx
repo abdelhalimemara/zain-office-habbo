@@ -20,6 +20,7 @@ const tasks = [
   task({ id: "c2", title: "Tagline drafts", assignee: "zain-studio-copy", status: "todo" }),
   task({ id: "c4", title: "Moodboard", assignee: "zain-studio-art", status: "triage" }),
   task({ id: "r1", title: "Rebrand review", assignee: "zain-studio-vp", status: "review" }),
+  task({ id: "s1", title: "Copy self-review", assignee: "zain-studio-copy", status: "review" }),
   task({ id: "c3", title: "Approved deck", assignee: "zain-studio-vp", status: "done", completed_at: 5 }),
   task({ id: "g1", title: "Growth ads", tenant: "zain-growth", assignee: "zain-growth-paid", status: "running" }),
 ];
@@ -55,6 +56,15 @@ describe("lanes", () => {
     expect(defaultLane(groupByLane(tasks))).toBe("awaiting");
     expect(defaultLane(groupByLane([]))).toBe("inbox");
   });
+
+  it("keeps Awaiting HQ for mandates; a specialist's review task reads as blocked", () => {
+    const g = groupByLane(tasks, rosterEntries);
+    expect(g.awaiting.map((t) => t.id)).toEqual(["r1"]);
+    expect(g.blocked.map((t) => t.id)).toEqual(["s1"]);
+    expect(defaultLane(groupByLane([task({ id: "s", status: "review", assignee: "zain-studio-copy" })]))).toBe("blocked");
+    const hiredVp = { ...rosterEntries[0]!, profile: "zain-studio-vp2", division: "studio" as const, rank: "vp" as const };
+    expect(groupByLane([task({ id: "m", status: "review", assignee: "zain-studio-vp2" })], [hiredVp]).awaiting).toHaveLength(1);
+  });
 });
 
 describe("KanbanPanel on desktop", () => {
@@ -77,7 +87,10 @@ describe("KanbanPanel on desktop", () => {
     const ready = screen.getByRole("region", { name: "Ready (0)" });
     expect(ready).toHaveClass("zui-lane--collapsed");
     expect(within(ready).queryByRole("list")).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Blocked (0)" })).toHaveClass("zui-lane--collapsed");
+    const blocked = screen.getByRole("region", { name: "Blocked (1)" });
+    expect(within(blocked).getByText("Copy self-review")).toBeInTheDocument();
+    expect(within(blocked).getByText("review")).toHaveClass("zui-tag");
+    expect(within(screen.getByRole("region", { name: "Awaiting HQ (1)" })).queryByText("Copy self-review")).not.toBeInTheDocument();
     expect(screen.queryByText("Growth ads")).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
   });
@@ -145,7 +158,7 @@ describe("KanbanPanel on a phone", () => {
       "Inbox 2",
       "Ready 0",
       "Working 2",
-      "Blocked 0",
+      "Blocked 1",
       "Awaiting HQ 1",
       "Done 1",
     ]);

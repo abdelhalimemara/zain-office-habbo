@@ -1,4 +1,4 @@
-import { agentActivity, divisionStats, isMandate, pendingApprovals } from "../../shared/flow";
+import { agentActivity, divisionStats, isMandate, pendingApprovals, splitMandateBody, waitingSubtaskReviews } from "../../shared/flow";
 import type { KanbanBoard, KanbanTask, TaskStatus } from "../../shared/hermes";
 import { TASK_STATUSES } from "../../shared/hermes";
 
@@ -56,5 +56,34 @@ describe("flow", () => {
   it("counts division stats by tenant", () => {
     expect(divisionStats(b, "zain-studio")).toEqual({ working: 1, blocked: 1, awaitingApproval: 1, queued: 1, done: 1 });
     expect(divisionStats(b, "zain-growth").working).toBe(1);
+  });
+
+  it("lists specialists' review tasks separately from HQ approvals", () => {
+    const b2 = board([...allOf(b), task("s1", "review", "zain-studio-copy")]);
+    expect(waitingSubtaskReviews(b2).map((t) => t.id)).toEqual(["s1"]);
+  });
+});
+
+describe("splitMandateBody", () => {
+  const instructions = "**Instructions for VP Studio (`zain-studio-vp`)**\n\nThis is an HQ mandate.";
+
+  it("splits HQ's brief from the VP instructions", () => {
+    expect(splitMandateBody(`Rebrand the site\n\n  keep spacing\n\n---\n${instructions}`)).toEqual({
+      brief: "Rebrand the site\n\n  keep spacing",
+      instructions,
+    });
+  });
+
+  it("keeps a --- inside the brief and splits at the instructions heading", () => {
+    expect(splitMandateBody(`Part one\n---\nPart two\n\n---\n${instructions}`)).toEqual({
+      brief: "Part one\n---\nPart two",
+      instructions,
+    });
+  });
+
+  it("returns the whole body when there are no instructions", () => {
+    expect(splitMandateBody("Just a brief\n---\nmore")).toEqual({ brief: "Just a brief\n---\nmore", instructions: null });
+    expect(splitMandateBody("brief\n---")).toEqual({ brief: "brief\n---", instructions: null });
+    expect(splitMandateBody("x\n --- \n**Instructions for VP**")).toEqual({ brief: "x\n --- \n**Instructions for VP**", instructions: null });
   });
 });

@@ -33,7 +33,22 @@ describe("ApprovalsInbox", () => {
     expect(screen.getByText("Delivered 3 concepts")).toBeInTheDocument();
     expect(screen.getByText("Migrated")).toBeInTheDocument();
     expect(screen.queryByText("Still running")).not.toBeInTheDocument();
-    expect(screen.queryByText("Specialist self-review")).not.toBeInTheDocument();
+    const studio = screen.getByRole("heading", { name: "Zain Studio" }).closest("section")!;
+    expect(within(studio).queryByText("Specialist self-review")).not.toBeInTheDocument();
+  });
+
+  it("lists specialists' review tasks in a collapsed secondary section with the same actions", async () => {
+    const fetch = setup({ [`POST ${API.approve("s")}`]: { ok: true } });
+    const summary = await screen.findByText("Subtasks waiting for review (1)");
+    const section = summary.closest("details")!;
+    expect(section).not.toHaveAttribute("open");
+    await userEvent.click(summary);
+    expect(section).toHaveAttribute("open");
+    const item = within(section).getByText("Specialist self-review").closest("article")!;
+    await userEvent.click(within(item).getByRole("button", { name: "Approve" }));
+    expect(await within(item).findByText(/Approved/)).toBeInTheDocument();
+    expect(fetch.calls("POST", API.approve("s"))).toEqual([{ body: {} }]);
+    expect(screen.getByRole("heading", { name: "Approvals (2)" })).toBeInTheDocument();
   });
 
   it("approve calls the approve endpoint with the optional note", async () => {
