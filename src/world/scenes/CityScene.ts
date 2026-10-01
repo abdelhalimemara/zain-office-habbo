@@ -57,7 +57,10 @@ export class CityScene implements Scene {
   }
 
   private async loadImage(): Promise<void> {
-    const texture = await Assets.load<Texture>(cityUrl);
+    const texture = await Assets.load<Texture>({
+      src: cityUrl,
+      data: { alphaMode: "premultiply-alpha-on-upload", scaleMode: "linear", autoGenerateMipmaps: true },
+    });
     if (this.destroyed) return;
     texture.source.scaleMode = "linear";
     texture.source.autoGenerateMipmaps = true;
