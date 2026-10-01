@@ -161,7 +161,7 @@ describe("operations", () => {
     await page.waitFor(`!(${alert})`, "warning clears on the next health poll", 15_000);
   });
 
-  it.fails("KNOWN BUG: side panels (top: 64px) cover the review-dispatch banner, which makes the HUD 88px tall on desktop", async () => {
+  it("side panels sit below the HUD even when the review-dispatch warning makes it taller", async () => {
     const { page, hermes } = stack;
     hermes.reviewDispatch = true;
     try {
@@ -180,7 +180,7 @@ describe("operations", () => {
     }
   });
 
-  it.fails("KNOWN BUG: canvas keeps the pointer cursor after entering a floor (World.mountScene resets hover without resetting the cursor)", async () => {
+  it("canvas resets the pointer cursor after entering a floor", async () => {
     const { page } = stack;
     await page.reducedMotion(true);
     await openApp(stack);

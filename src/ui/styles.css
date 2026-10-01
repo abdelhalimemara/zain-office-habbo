@@ -166,7 +166,7 @@
 
 .zui-panel {
   position: absolute;
-  top: 64px;
+  top: calc(var(--zui-hud-bottom, 56px) + 8px);
   right: 8px;
   bottom: 8px;
   width: min(440px, calc(100vw - 16px));
@@ -483,13 +483,13 @@ textarea.zui-input { resize: vertical; }
 }
 
 @media (max-width: 699px) {
-  .zui-panel.zui-panel--wide { top: auto; right: 0; left: 0; bottom: 0; width: 100%; height: 85vh; }
+  .zui-panel,
+  .zui-panel.zui-panel--wide { top: auto; right: 0; left: 0; bottom: 0; width: 100%; height: 75vh; }
 }
 
 @media (max-width: 640px) {
   .zui-hud { top: 0; left: 0; right: 0; }
   .zui-hud__actions { margin-left: 0; }
-  .zui-panel { top: auto; right: 0; left: 0; bottom: 0; width: 100%; height: 75vh; }
   .zui-grid2 { grid-template-columns: 1fr; }
   .zui-backdrop { padding: 0; }
   .zui-dialog { max-height: 100vh; height: 100%; }

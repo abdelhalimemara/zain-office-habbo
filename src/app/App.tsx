@@ -4,6 +4,7 @@ import { findAgent } from "../../shared/roster";
 import { useBoard, useRoster } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { UiRoot } from "../ui/UiRoot";
+import { useHudBottom } from "../ui/useHudBottom";
 import { WorldCanvas } from "../world/WorldCanvas";
 import { useViewport } from "./useViewport";
 import { isManager, rosterOrFallback, toWorldAgents, toWorldStats, worldInsets } from "./worldModel";
@@ -19,7 +20,8 @@ export function App() {
   const openPanel = useUiStore((s) => s.openPanel);
   const panelKind = useUiStore((s) => s.panel?.kind ?? null);
   const viewport = useViewport();
-  const insets = useMemo(() => worldInsets(panelKind, viewport), [panelKind, viewport]);
+  const hudBottom = useHudBottom();
+  const insets = useMemo(() => worldInsets(panelKind, viewport, hudBottom), [panelKind, viewport, hudBottom]);
 
   const roster = useMemo(() => rosterOrFallback(rosterData?.agents), [rosterData]);
   const agents = useMemo(() => toWorldAgents(roster, board), [roster, board]);

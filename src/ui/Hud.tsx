@@ -1,9 +1,11 @@
+import { useRef } from "react";
 import type { HealthResponse } from "@shared/api";
 import { getDivision } from "@shared/divisions";
 import { pendingApprovals } from "@shared/flow";
 import { useBoard, useHealth } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { useRosterAgents } from "./common";
+import { usePublishHudBottom } from "./useHudBottom";
 
 type DotState = "ok" | "warn" | "bad" | "unknown";
 
@@ -32,9 +34,11 @@ export function Hud() {
   const d = division ? getDivision(division) : undefined;
   const hermes = health.data?.hermes;
   const telegram = health.data?.telegram;
+  const ref = useRef<HTMLElement>(null);
+  usePublishHudBottom(ref);
 
   return (
-    <header className="zui-hud">
+    <header className="zui-hud" ref={ref}>
       <div className="zui-hud__left">
         <span className="zui-wordmark">ZAIN GROUP</span>
         <nav aria-label="Breadcrumb" className="zui-breadcrumb">

@@ -40,15 +40,26 @@ export function toWorldStats(board: KanbanBoard | undefined): Record<DivisionId,
 
 const SIDE_PANELS = new Set(["kanban", "approvals", "agent", "task"]);
 const PHONE_MAX_WIDTH = 700;
-const HUD_HEIGHT = { desktop: 64, phone: 104 };
+const PHONE_SHEET_HEIGHT = 0.75;
+const PANEL_GAP = 8;
 
-/** Screen area the overlay UI covers, so the world fits into what stays visible. */
-export function worldInsets(panelKind: string | null, viewport: { width: number; height: number }): Insets {
-  const phone = viewport.width < PHONE_MAX_WIDTH;
-  const top = phone ? HUD_HEIGHT.phone : HUD_HEIGHT.desktop;
+function panelWidth(panelKind: string, viewportWidth: number): number {
+  const width = panelKind === "kanban" ? Math.min(720, viewportWidth * 0.52) : Math.min(440, viewportWidth - 16);
+  return Math.round(width + PANEL_GAP);
+}
+
+/** Screen area the overlay UI covers (HUD bottom edge in css px), so the world fits into what stays visible. */
+export function worldInsets(
+  panelKind: string | null,
+  viewport: { width: number; height: number },
+  hudBottom: number,
+): Insets {
+  const top = Math.round(hudBottom + PANEL_GAP);
   if (!panelKind || !SIDE_PANELS.has(panelKind)) return { top, right: 0, bottom: 0, left: 0 };
-  if (phone) return { top, right: 0, bottom: Math.round(viewport.height * 0.85), left: 0 };
-  return { top, right: Math.round(Math.min(720, viewport.width * 0.52)), bottom: 0, left: 0 };
+  if (viewport.width < PHONE_MAX_WIDTH) {
+    return { top, right: 0, bottom: Math.round(viewport.height * PHONE_SHEET_HEIGHT), left: 0 };
+  }
+  return { top, right: panelWidth(panelKind, viewport.width), bottom: 0, left: 0 };
 }
 
 export function isManager(agent: Pick<RosterAgent, "rank"> | undefined): boolean {
