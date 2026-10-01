@@ -2,8 +2,12 @@
 // the headcount source, so GitHub is answered from this fixture, and every other non-loopback request
 // (and the real Hermes port) is refused so a test can never leak to the network or the user's Hermes.
 
-const TREE_URL = "https://api.github.com/repos/cbrock84/headcount/";
-const RAW_URL = "https://raw.githubusercontent.com/cbrock84/headcount/";
+// Must match HEADCOUNT_REF in server/src/headcount/catalog.ts; any other ref answers 404, so an
+// unpinned fetch shows up as a failed install-skill step in the hire scenario.
+const PINNED_REF = "98d1c17d480f606060102a781f9a8601690685f7";
+const TREE_URL = `https://api.github.com/repos/cbrock84/headcount/git/trees/${PINNED_REF}?`;
+const RAW_URL = `https://raw.githubusercontent.com/cbrock84/headcount/${PINNED_REF}/`;
+const GITHUB = /^https:\/\/(api\.github\.com|raw\.githubusercontent\.com)\//;
 const SKILL_FILE = /plugins\/([a-z0-9-]+)\/skills\/([a-z0-9-]+)\/SKILL\.md$/;
 const LOOPBACK = /^http:\/\/(127\.0\.0\.1|localhost):(\d+)\//;
 const REAL_HERMES_PORT = "9119";
@@ -34,6 +38,7 @@ globalThis.fetch = async (input, init) => {
     const md = `---\nname: ${skill}\ndescription: Use for ${skill} work in ${dept}.\n---\n\n# ${skill}\n\n${E2E_SKILL_MARKER} ${dept}:${skill}\n`;
     return new Response(md, { headers: { "Content-Type": "text/markdown" } });
   }
+  if (GITHUB.test(url)) return new Response(JSON.stringify({ message: "Not Found (unpinned ref)" }), { status: 404 });
   const loopback = LOOPBACK.exec(url);
   if (!loopback || loopback[2] === REAL_HERMES_PORT) {
     throw new TypeError(`e2e network stub refused ${url}`);

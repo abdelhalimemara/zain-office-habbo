@@ -52,6 +52,10 @@ export class FakeHermes {
   /** Whether a Telegram home channel exists (home-subscribe answers 404 when false). */
   homeChannel = true;
   telegramState: string | null = "connected";
+  /** kanban.review_dispatch in GET /api/config; undefined leaves the key out (Hermes' default: on). */
+  reviewDispatch: boolean | undefined = false;
+  /** Task id → ids of its parents (the tasks it waits on). */
+  readonly parents = new Map<string, string[]>();
   private server: Server | null = null;
   private seq = 0;
   private eventId = 0;
@@ -101,6 +105,43 @@ export class FakeHermes {
     return task;
   }
 
+  /** Test hook: kanban_link(parent_id, child_id) — the child waits on the parent. */
+  link(parentId: string, childId: string): void {
+    const parent = this.requireTask(parentId);
+    const child = this.requireTask(childId);
+    this.parents.set(childId, [...(this.parents.get(childId) ?? []), parentId]);
+    child.link_counts = { parents: (child.link_counts?.parents ?? 0) + 1, children: child.link_counts?.children ?? 0 };
+    parent.link_counts = { parents: parent.link_counts?.parents ?? 0, children: (parent.link_counts?.children ?? 0) + 1 };
+    this.eventId++;
+  }
+
+  /**
+   * Test hook: what the VP does per the mandate protocol — kanban_create team subtasks, link each as
+   * a parent of the mandate, then kanban_block(kind="dependency").
+   */
+  fanOut(mandateId: string, subtasks: { title: string; assignee: string }[]): KanbanTask[] {
+    const mandate = this.requireTask(mandateId);
+    const created = subtasks.map((s) => this.newTask({ ...s, tenant: mandate.tenant, created_by: mandate.assignee }));
+    for (const t of created) this.link(t.id, mandateId);
+    this.setStatus(mandateId, "blocked");
+    return created;
+  }
+
+  /** Test hook: kanban_complete; a dependency-blocked child resumes (→ ready) once all its parents are done. */
+  complete(id: string, result: string): void {
+    this.setStatus(id, "done", { result });
+    for (const [child, parents] of this.parents) {
+      if (!parents.includes(id)) continue;
+      const task = this.requireTask(child);
+      if (task.status === "blocked" && parents.every((p) => this.tasks.get(p)?.status === "done")) task.status = "ready";
+    }
+  }
+
+  /** Test hook: kanban_request_review writes the summary only, not `result`. */
+  requestReview(id: string, summary: string): void {
+    this.setStatus(id, "review", { latest_summary: summary });
+  }
+
   called(method: string, path: string | RegExp): FakeCall[] {
     return this.calls.filter((c) => c.method === method && (typeof path === "string" ? c.path === path : path.test(c.path)));
   }
@@ -124,7 +165,7 @@ export class FakeHermes {
       assignee: input.assignee ?? null,
       status: input.triage ? "triage" : input.assignee ? "ready" : "todo",
       priority: input.priority ?? 0,
-      created_by: "zain-hq",
+      created_by: input.created_by ?? "zain-hq",
       created_at: this.now(),
       started_at: null,
       completed_at: null,
@@ -181,6 +222,10 @@ export class FakeHermes {
     }
     if (call.auth !== `Bearer ${this.token}`) return fail(401, "Unauthorized");
     const body = (call.body ?? {}) as Record<string, unknown>;
+
+    if (path === "/api/config" && method === "GET") {
+      return ok({ model: "claude-sonnet-5-5", kanban: this.reviewDispatch === undefined ? {} : { review_dispatch: this.reviewDispatch } });
+    }
 
     if (path === "/api/profiles" && method === "GET") return ok({ profiles: this.profiles });
     if (path === "/api/profiles" && method === "POST") {
@@ -252,7 +297,13 @@ export class FakeHermes {
     if (!task) return fail(404, `task ${id} not found`);
 
     if (!m[2] && method === "GET") {
-      return ok({ task, comments: this.comments.get(id) ?? [], links: { parents: [], children: [] } });
+      const parents = this.parents.get(id) ?? [];
+      const children = [...this.parents].filter(([, ps]) => ps.includes(id)).map(([child]) => child);
+      const linkTasks = [...parents, ...children].flatMap((l) => {
+        const t = this.tasks.get(l);
+        return t ? [{ id: t.id, title: t.title, status: t.status }] : [];
+      });
+      return ok({ task, comments: this.comments.get(id) ?? [], links: { parents, children }, link_tasks: linkTasks });
     }
     if (!m[2] && method === "PATCH") return this.patch(task, body);
     if (m[2] === "/comments" && method === "POST") {

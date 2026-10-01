@@ -29,6 +29,7 @@ export interface Stack {
 function childEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, ...extra, FORCE_COLOR: "0", NO_COLOR: "1" };
   delete env.HERMES_SESSION_TOKEN;
+  delete env.HEADCOUNT_REF;
   delete env.NODE_ENV;
   delete env.VITEST;
   delete env.VITEST_WORKER_ID;
@@ -56,24 +57,27 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
   try {
     await hermes.start();
     const serverPort = await freePort();
+    let webPort = await freePort();
+    while (webPort === serverPort) webPort = await freePort();
+    const webUrl = `http://127.0.0.1:${webPort}`;
     const server = launch("server", join(BIN, "tsx"), [join(ROOT, "server", "src", "index.ts")], {
       cwd: serverCwd,
       env: childEnv({
         HERMES_URL: hermes.url,
         ZAIN_SERVER_PORT: String(serverPort),
         NODE_OPTIONS: `--import=${NETWORK_STUB}`,
+        // The guard only trusts :5173 and its own port; the random Vite port must be listed.
+        ZAIN_ALLOWED_ORIGINS: webUrl,
       }),
     });
     procs.push(server);
     const serverUrl = `http://127.0.0.1:${serverPort}`;
 
-    const webPort = await freePort();
     const web = launch("vite", join(BIN, "vite"), ["--port", String(webPort), "--strictPort", "--clearScreen", "false"], {
       cwd: ROOT,
       env: childEnv({ ZAIN_SERVER_PORT: String(serverPort) }),
     });
     procs.push(web);
-    const webUrl = `http://127.0.0.1:${webPort}`;
 
     await waitForHttp(`${serverUrl}/api/health`, server);
     await waitForHttp(`${webUrl}/`, web);
