@@ -47,6 +47,13 @@ export interface HermesStatus {
   gateway_platforms?: Record<string, { state?: string | null } | undefined> | null;
 }
 
+export interface HomeChannel {
+  platform: string;
+  chat_id: string;
+  thread_id: string;
+  name: string;
+}
+
 export interface ProfileCreateInput {
   name: string;
   clone_from: string;
@@ -95,6 +102,17 @@ export class HermesClient {
 
   async createProfile(input: ProfileCreateInput): Promise<void> {
     await this.request("POST", "/api/profiles", input);
+  }
+
+  async readSoul(profile: string): Promise<string> {
+    const data = await this.request<{ content: string }>("GET", `/api/profiles/${encodeURIComponent(profile)}/soul`);
+    return data.content ?? "";
+  }
+
+  /** Gateway platforms with a home channel (set by /sethome in the messenger). */
+  async homeChannels(): Promise<HomeChannel[]> {
+    const data = await this.request<{ home_channels?: HomeChannel[] }>("GET", `${KANBAN}/home-channels`);
+    return data.home_channels ?? [];
   }
 
   async writeSoul(profile: string, content: string): Promise<void> {
@@ -154,18 +172,6 @@ export class HermesClient {
     await this.ensureBoard();
     const edge = `&parent_id=${encodeURIComponent(parent)}&child_id=${encodeURIComponent(child)}`;
     await this.request("DELETE", `${this.kanban("/links")}${edge}`);
-  }
-
-  /** False when the platform has no home channel configured (Hermes answers 404). */
-  async subscribeHome(id: string, platform: string): Promise<boolean> {
-    const path = this.kanban(`/tasks/${encodeURIComponent(id)}/home-subscribe/${encodeURIComponent(platform)}`);
-    try {
-      await this.request("POST", path);
-      return true;
-    } catch (err) {
-      if (err instanceof HermesError && err.status === 404) return false;
-      throw err;
-    }
   }
 
   async request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {

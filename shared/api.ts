@@ -18,6 +18,7 @@ export const API = {
   approve: (id: string) => `/api/approvals/${encodeURIComponent(id)}/approve`,
   reject: (id: string) => `/api/approvals/${encodeURIComponent(id)}/reject`,
   reopen: (id: string) => `/api/tasks/${encodeURIComponent(id)}/reopen`,
+  unblock: (id: string) => `/api/tasks/${encodeURIComponent(id)}/unblock`,
   roster: "/api/roster",
   hire: "/api/hire",
   headcountCatalog: "/api/headcount/catalog",
@@ -32,6 +33,8 @@ export interface HealthResponse {
    * `review` task and may approve mandates before HQ sees them.
    */
   reviewDispatch: "on" | "off" | "unknown";
+  /** `ready` when Telegram has a home channel, so the CEO can be woken for approvals; set via /sethome. */
+  telegramApprovals: "ready" | "needs-sethome" | "unknown";
   board: string;
   /** Present when the server runs the dependency reconciler (it does outside tests). */
   reconciler?: ReconcilerStatus;
@@ -77,9 +80,13 @@ export interface CreateMandateRequest {
 
 export interface CreateMandateResponse {
   task: KanbanTask;
-  /** False when no Telegram home channel is configured; the mandate is still created. */
+  /** True when Telegram will wake the CEO on this mandate's review, block and completion. */
   telegramSubscribed: boolean;
+  /** Why not, when telegramSubscribed is false; the mandate is still created. */
+  telegramReason?: WakeReason;
 }
+
+export type WakeReason = "no-home-channel" | "cli-failed" | "invalid-task-id" | "hermes-unavailable";
 
 export interface ApproveRequest {
   note?: string;
@@ -94,7 +101,12 @@ export interface ReopenRequest {
   instructions: string;
 }
 
-/** Approve / reject / reopen → 200; approve and reject answer 409 when the task is not in `review`. */
+/** Unblock a `blocked` mandate with instructions for its VP (1..4000 chars) → 200 ApprovalResponse; 409 otherwise. */
+export interface UnblockRequest {
+  instructions: string;
+}
+
+/** Approve / reject / reopen / unblock → 200; approve and reject answer 409 when the task is not in `review`. */
 export interface ApprovalResponse {
   task: KanbanTask;
 }

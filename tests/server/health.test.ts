@@ -1,4 +1,4 @@
-import { KANBAN, TOKEN, dashboardHtml, json, setup } from "./helpers";
+import { KANBAN, TELEGRAM_HOME, TOKEN, dashboardHtml, json, setup } from "./helpers";
 
 const status = (telegram?: string) => ({
   version: "1",
@@ -10,14 +10,25 @@ describe("GET /api/health", () => {
     const { send } = setup({
       "GET /api/status": () => status("connected"),
       "GET /api/config": () => ({ kanban: { review_dispatch: false } }),
+      [`GET ${KANBAN}/home-channels`]: () => ({ home_channels: [TELEGRAM_HOME] }),
     });
     expect(await (await send("GET", "/api/health")).json()).toEqual({
       ok: true,
       hermes: "reachable",
       telegram: "connected",
       reviewDispatch: "off",
+      telegramApprovals: "ready",
       board: "zain-group",
     });
+  });
+
+  it.each([
+    [() => ({ home_channels: [] }), "needs-sethome"],
+    [() => ({ home_channels: [{ ...TELEGRAM_HOME, platform: "discord" }] }), "needs-sethome"],
+    [() => json({ detail: "x" }, 500), "unknown"],
+  ])("reports Telegram approvals from the home channels (%#)", async (homes, expected) => {
+    const { send } = setup({ "GET /api/status": () => status("connected"), [`GET ${KANBAN}/home-channels`]: homes });
+    expect((await (await send("GET", "/api/health")).json()).telegramApprovals).toBe(expected);
   });
 
   it.each([
@@ -61,6 +72,7 @@ describe("GET /api/health", () => {
       hermes: "unreachable",
       telegram: "unknown",
       reviewDispatch: "unknown",
+      telegramApprovals: "unknown",
       board: "zain-group",
     });
   });

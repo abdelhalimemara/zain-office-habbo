@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run --config tests/e2e/vitest.config.ts",
-    "seed:roster": "tsx server/src/scripts/seedRoster.ts"
+    "seed:roster": "tsx server/src/scripts/seedRoster.ts",
+    "ceo:approvals": "tsx server/src/scripts/ceoApprovals.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

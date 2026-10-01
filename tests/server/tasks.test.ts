@@ -1,5 +1,5 @@
 import { memoryHireStore } from "../../server/src/org/hireStore";
-import { KANBAN, TOKEN, json, setup, task, type Handler } from "./helpers";
+import { KANBAN, TELEGRAM_HOME, TOKEN, json, setup, task, type Handler } from "./helpers";
 
 const TASK = `${KANBAN}/tasks/t_abc`;
 
@@ -142,13 +142,14 @@ describe("POST /api/mandates", () => {
       { profile: "zain-tech-data", title: "Data Engineer", division: "tech", rank: "specialist", reportsTo: "zain-tech-vp", skills: [] },
       { profile: "zain-growth-intern", title: "Growth Intern", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp", skills: [] },
     ]);
-    const { send, hermesFetch } = setup(
-      { [`POST ${KANBAN}/tasks`]: () => created, [`POST ${KANBAN}/tasks/t_new/home-subscribe/telegram`]: () => ({ ok: true }) },
+    const { send, hermesFetch, exec } = setup(
+      { [`POST ${KANBAN}/tasks`]: () => created, [`GET ${KANBAN}/home-channels`]: () => ({ home_channels: [TELEGRAM_HOME] }) },
       { hires },
     );
     const res = await send("POST", "/api/mandates", { division: "tech", title: "  Ship the client portal ", body: "Brief here", priority: 2 });
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ task: created.task, telegramSubscribed: true });
+    expect(exec.calls.map((c) => c.args[4])).toEqual(["t_new"]);
 
     const payload = hermesFetch.called(`POST ${KANBAN}/tasks`)[0]!;
     expect(payload.query.get("board")).toBe("zain-group");
@@ -172,13 +173,13 @@ describe("POST /api/mandates", () => {
   });
 
   it("routes HQ mandates to the COO and still succeeds without a telegram home channel", async () => {
-    const { send, hermesFetch } = setup({
+    const { send, hermesFetch, exec } = setup({
       [`POST ${KANBAN}/tasks`]: () => created,
-      [`POST ${KANBAN}/tasks/t_new/home-subscribe/telegram`]: () => json({ detail: "No home channel" }, 404),
     });
     const res = await send("POST", "/api/mandates", { division: "hq", title: "Quarterly close" });
     expect(res.status).toBe(201);
-    expect((await res.json()).telegramSubscribed).toBe(false);
+    expect(await res.json()).toMatchObject({ telegramSubscribed: false, telegramReason: "no-home-channel" });
+    expect(exec.calls).toEqual([]);
     const sent = hermesFetch.called(`POST ${KANBAN}/tasks`)[0]!.body as Record<string, unknown>;
     expect(sent).toMatchObject({ assignee: "zain-hq-coo", tenant: "zain-hq", priority: 0 });
     expect(sent.body).not.toContain("`default`");

@@ -5,12 +5,12 @@ import { API } from "@shared/api";
 import { NewMandateDialog } from "../../src/ui/NewMandateDialog";
 import { mockFetch, renderUi, resetStore, rosterEntries, task } from "./helpers";
 
-function setup(telegramSubscribed: boolean) {
+function setup(telegramSubscribed: boolean, telegramReason?: string) {
   const fetch = mockFetch({
     [API.roster]: { agents: rosterEntries },
     [`POST ${API.mandates}`]: (init: RequestInit | undefined) => {
       const body = JSON.parse(String(init?.body));
-      return { task: task({ id: "m9", title: body.title, status: "triage" }), telegramSubscribed };
+      return { task: task({ id: "m9", title: body.title, status: "triage" }), telegramSubscribed, telegramReason };
     },
   });
   renderUi(<NewMandateDialog division="growth" />);
@@ -33,7 +33,7 @@ describe("NewMandateDialog", () => {
   });
 
   it("posts the mandate payload and reports the telegram result", async () => {
-    const fetch = setup(false);
+    const fetch = setup(false, "no-home-channel");
     await userEvent.selectOptions(screen.getByLabelText("Division"), "labs");
     await userEvent.type(screen.getByLabelText("Title"), "  Launch referral program ");
     await userEvent.type(screen.getByLabelText(/Brief/), "Target 50 partners");
@@ -41,16 +41,23 @@ describe("NewMandateDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "Send mandate" }));
 
     expect(await screen.findByRole("heading", { name: "Mandate sent" })).toBeInTheDocument();
-    expect(screen.getByText(/Telegram updates are off/)).toBeInTheDocument();
+    expect(screen.getByText(/Telegram won't notify the CEO yet: send \/sethome/)).toBeInTheDocument();
     expect(fetch.calls("POST", API.mandates)).toEqual([
       { body: { division: "labs", title: "Launch referral program", body: "Target 50 partners", priority: 2 } },
     ]);
   });
 
-  it("confirms telegram subscription when available", async () => {
+  it("confirms Telegram will notify the CEO when subscribed", async () => {
     setup(true);
     await userEvent.type(screen.getByLabelText("Title"), "Q4 plan");
     await userEvent.click(screen.getByRole("button", { name: "Send mandate" }));
-    expect(await screen.findByText(/You'll get Telegram updates/)).toBeInTheDocument();
+    expect(await screen.findByText(/Telegram will notify the CEO when it needs your approval/)).toBeInTheDocument();
+  });
+
+  it("explains a failed subscription will be retried", async () => {
+    setup(false, "cli-failed");
+    await userEvent.type(screen.getByLabelText("Title"), "Q4 plan");
+    await userEvent.click(screen.getByRole("button", { name: "Send mandate" }));
+    expect(await screen.findByText(/subscribing failed. Zain HQ retries in the background/)).toBeInTheDocument();
   });
 });

@@ -14,7 +14,7 @@ const routes = {
     task({ id: "s", status: "review", tenant: "zain-tech", assignee: "zain-tech-qa" }),
     task({ id: "c", status: "running" }),
   ]),
-  [API.health]: { ok: true, hermes: "reachable", telegram: "disconnected", reviewDispatch: "off", board: "zain-group" },
+  [API.health]: { ok: true, hermes: "reachable", telegram: "disconnected", reviewDispatch: "off", telegramApprovals: "ready", board: "zain-group" },
   [API.roster]: { agents: rosterEntries },
 };
 
@@ -40,6 +40,21 @@ describe("Hud", () => {
     });
     renderUi(<Hud />);
     expect(await screen.findByRole("button", { name: "Approvals, 1 pending" })).toBeInTheDocument();
+  });
+
+  it("asks for /sethome when Telegram approvals are off, and hides it when ready", async () => {
+    mockFetch({ ...routes, [API.health]: { ok: true, hermes: "reachable", telegram: "connected", reviewDispatch: "off", telegramApprovals: "needs-sethome", board: "zain-group" } });
+    renderUi(<Hud />);
+    expect(await screen.findByText(/Telegram approvals are off: send/)).toHaveTextContent(
+      "Telegram approvals are off: send /sethome to your Hermes bot in Telegram.",
+    );
+  });
+
+  it("shows no Telegram banner when approvals are ready", async () => {
+    mockFetch(routes);
+    renderUi(<Hud />);
+    expect(await screen.findByTitle("Hermes: reachable")).toBeInTheDocument();
+    expect(screen.queryByText(/Telegram approvals are off/)).not.toBeInTheDocument();
   });
 
   it("warns when the Hermes review agent can approve mandates", async () => {
