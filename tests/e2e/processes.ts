@@ -3,7 +3,17 @@ import { createServer } from "node:net";
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Ports the live app or the real Hermes may be using; tests must never bind or call them. */
+const RESERVED = new Set([5173, 8787, 9119]);
+
 export async function freePort(): Promise<number> {
+  for (;;) {
+    const port = await anyPort();
+    if (!RESERVED.has(port)) return port;
+  }
+}
+
+async function anyPort(): Promise<number> {
   const server = createServer();
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const address = server.address();
