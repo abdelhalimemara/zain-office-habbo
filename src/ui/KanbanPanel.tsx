@@ -108,7 +108,14 @@ export function KanbanPanel({ division }: { division: DivisionId }) {
       </section>
       <ErrorNote error={board.error} />
       {board.isPending && <p className="zui-hint">Loading board…</p>}
-      {phone ? (
+      {board.data && LANES.every((l) => groups[l.id].length === 0) ? (
+        <div className="zui-empty">
+          <p>No work in {d.name} yet.</p>
+          <p className="zui-hint">
+            Send a mandate and {manager.title} will split it across the team, then bring the result back to HQ for approval.
+          </p>
+        </div>
+      ) : phone ? (
         <LaneTabs groups={groups} agents={agents} now={now} />
       ) : (
         <div className="zui-kanban">

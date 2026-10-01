@@ -23,7 +23,13 @@ describe("camera", () => {
     expect(fitScale(content, full(1400, 836), 1)).toBe(1.5);
     expect(fitScale(content, full(1400, 836), 2)).toBe(3);
     expect(fitScale(content, full(1000, 1000), 2)).toBe(2);
-    expect(fitScale(content, full(300, 200), 1)).toBe(1);
+    expect(fitScale(content, full(300, 200), 1)).toBe(0.75);
+  });
+
+  it("shrinks below 1x to fit beside an open side panel on DPR-1 screens", () => {
+    const s = fitScale(content, full(680, 836), 1);
+    expect(s).toBeLessThan(1);
+    expect(content.w * s).toBeLessThanOrEqual(680);
   });
 
   it("fills 75-90% of the limiting dimension at DPR 1", () => {
@@ -45,7 +51,8 @@ describe("camera", () => {
     expect(stepZoom(1.5, 1)).toBe(1.75);
     expect(stepZoom(1.6, -1)).toBe(1.5);
     expect(stepZoom(8, 1)).toBe(8);
-    expect(clampScale(0)).toBe(1);
+    expect(stepZoom(0.5, -1)).toBe(0.5);
+    expect(clampScale(0)).toBe(0.5);
     expect(clampScale(99)).toBe(8);
   });
 

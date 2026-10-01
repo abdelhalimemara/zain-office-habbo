@@ -1,8 +1,8 @@
 import type { Rect } from "./iso";
 
-export const MIN_SCALE = 1;
+export const MIN_SCALE = 0.5;
 export const MAX_SCALE = 8;
-export const ZOOM_LEVELS = [1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 5, 6, 8] as const;
+export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 5, 6, 8] as const;
 const FILL = 0.88;
 const INTEGER_TOLERANCE = 0.85;
 /** Phones: never shrink art below this many css px per art px; the user pans instead. */

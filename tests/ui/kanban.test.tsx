@@ -82,6 +82,12 @@ describe("KanbanPanel on desktop", () => {
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
   });
 
+  it("shows an empty state instead of lanes when the division has no work", async () => {
+    open(tasks.filter((t) => t.tenant === "zain-growth"));
+    expect(await screen.findByText("No work in Zain Studio yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /Inbox/ })).not.toBeInTheDocument();
+  });
+
   it("tags cards with their raw status only in multi-status lanes", async () => {
     open();
     const inbox = await screen.findByRole("region", { name: "Inbox (2)" });
