@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zain HQ world preview</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0d1d38; font: 12px system-ui, sans-serif; color: #dfe3e8; }
+      #bar { position: fixed; top: 8px; left: 8px; z-index: 2; display: flex; gap: 4px; flex-wrap: wrap; }
+      #bar button { background: #1b2a44; color: #dfe3e8; border: 1px solid #36507a; padding: 4px 8px; cursor: pointer; }
+      #log { position: fixed; bottom: 8px; left: 8px; z-index: 2; }
+      #stage { position: absolute; inset: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="bar"></div>
+    <div id="log"></div>
+    <div id="stage"></div>
+    <script type="module" src="./preview.ts"></script>
+  </body>
+</html>

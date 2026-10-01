@@ -1,0 +1,72 @@
+import { DIVISION_IDS, type DivisionId } from "../../../shared/divisions";
+import type { AgentActivity, DivisionStats } from "../../../shared/flow";
+import { ROSTER } from "../../../shared/roster";
+import { World, type WorldAgent, type WorldView } from "../index";
+
+const ACTIVITIES: AgentActivity[] = ["working", "blocked", "awaiting-approval", "queued", "idle"];
+const params = new URLSearchParams(location.search);
+
+function mockAgents(): WorldAgent[] {
+  return ROSTER.map((a, i) => ({
+    profile: a.profile,
+    title: a.title,
+    division: a.division,
+    rank: a.rank,
+    activity: ACTIVITIES[i % ACTIVITIES.length]!,
+    bubble: i % 3 === 0 ? "Q4 launch brief" : undefined,
+    hired: i % 7 !== 6,
+  }));
+}
+
+function mockStats(): Record<DivisionId, DivisionStats> {
+  const out = {} as Record<DivisionId, DivisionStats>;
+  DIVISION_IDS.forEach((d, i) => {
+    out[d] = { working: 2 + i, blocked: i % 2, awaitingApproval: i % 3 === 0 ? 0 : i, queued: 3, done: 10 };
+  });
+  return out;
+}
+
+const stage = document.getElementById("stage")!;
+const report = (msg: unknown) => {
+  document.getElementById("log")!.textContent = `ERROR: ${msg instanceof Error ? `${msg.message} ${msg.stack}` : String(msg)}`;
+};
+window.addEventListener("error", (e) => report(e.error ?? e.message));
+window.addEventListener("unhandledrejection", (e) => report(e.reason));
+const log = document.getElementById("log")!;
+const bar = document.getElementById("bar")!;
+let agents = mockAgents();
+
+const world = await World.create(stage, {
+  onSelectBuilding: (d) => {
+    log.textContent = `building: ${d}`;
+    world.setView({ kind: "floor", division: d });
+  },
+  onSelectAgent: (p) => {
+    log.textContent = `agent: ${p}`;
+    world.setSelectedAgent(p);
+  },
+});
+
+const initial: WorldView = params.get("view") && params.get("view") !== "city"
+  ? { kind: "floor", division: params.get("view") as DivisionId }
+  : { kind: "city" };
+world.setView(initial);
+world.setAgents(agents);
+world.setDivisionStats(mockStats());
+if (params.get("select")) world.setSelectedAgent(params.get("select"));
+
+const button = (label: string, fn: () => void) => {
+  const b = document.createElement("button");
+  b.textContent = label;
+  b.onclick = fn;
+  bar.appendChild(b);
+};
+button("city", () => world.setView({ kind: "city" }));
+for (const d of DIVISION_IDS) button(d, () => world.setView({ kind: "floor", division: d }));
+button("shuffle", () => {
+  agents = agents.map((a) => ({ ...a, activity: ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)]! }));
+  world.setAgents(agents);
+});
+button("destroy", () => world.destroy());
+
+Object.assign(window, { world });
