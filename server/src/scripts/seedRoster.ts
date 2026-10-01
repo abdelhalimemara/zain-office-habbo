@@ -2,6 +2,7 @@ import { CEO_PROFILE, ROSTER } from "../../../shared/roster";
 import { defaultClients } from "../app";
 import { hire } from "../org/hire";
 import { fileHireStore } from "../org/hireStore";
+import { fileBriefs } from "../org/privateBriefs";
 import { refreshPersonas } from "../org/refreshPersonas";
 import { hermesSkillName } from "../headcount/skillFile";
 
@@ -9,8 +10,9 @@ async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
   const { hermes, headcount } = defaultClients(process.env);
   const hires = fileHireStore(process.cwd());
+  const briefs = fileBriefs(process.cwd());
   if (process.argv.includes("--refresh-personas")) {
-    const failed = await refreshPersonas({ hermes, hires, apply });
+    const failed = await refreshPersonas({ hermes, hires, apply, briefs });
     if (!apply) console.log("\nDry run. Re-run with --refresh-personas --apply to rewrite each SOUL and description above.");
     if (failed) process.exitCode = 1;
     return;
@@ -29,7 +31,7 @@ async function main(): Promise<void> {
 
   let failed = 0;
   for (const agent of pending) {
-    const result = await hire(agent, { hermes, headcount, hires });
+    const result = await hire(agent, { hermes, headcount, hires, briefs });
     const failures = result.steps.filter((s) => !s.ok);
     if (failures.length) failed++;
     console.log(`${result.ok ? "hired" : "PARTIAL"} ${agent.profile}`);

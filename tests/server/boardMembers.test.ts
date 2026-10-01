@@ -8,7 +8,7 @@ import { approvalsSection } from "../../server/src/telegram/ceoSoul";
 import { BOARD_MEMBERS, findBoardMember } from "../../shared/board";
 import { ROSTER, findAgent } from "../../shared/roster";
 import { SKILL_SOURCES } from "../../shared/skillSources";
-import { json, setup, type Handler } from "./helpers";
+import { NO_BRIEFS, json, setup, type Handler } from "./helpers";
 
 const hormozi = findBoardMember("zain-board-hormozi")!;
 const source = SKILL_SOURCES.find((s) => s.id === "hormozi")!;
@@ -145,7 +145,7 @@ describe("refreshPersonas", () => {
       [`PUT /api/profiles/${hormozi.profile}/soul`]: () => ({ ok: true }),
       [`PUT /api/profiles/${hormozi.profile}/description`]: () => ({ ok: true }),
     });
-    expect(await refreshPersonas({ hermes, hires: memoryHireStore(), apply: true, log: () => undefined })).toBe(0);
+    expect(await refreshPersonas({ hermes, hires: memoryHireStore(), briefs: NO_BRIEFS, apply: true, log: () => undefined })).toBe(0);
     expect((hermesFetch.called(`PUT /api/profiles/${hormozi.profile}/soul`)[0]!.body as { content: string }).content).toBe(boardSoul(hormozi));
     expect(hermesFetch.called(`PUT /api/profiles/${hormozi.profile}/description`)[0]!.body).toEqual({ description: boardDescription(hormozi) });
   });

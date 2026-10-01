@@ -13,6 +13,7 @@ import { UiRoot } from "../../src/ui/UiRoot";
 import { board, mockFetch, NOW, renderUi, resetStore, rosterEntries, task } from "./helpers";
 
 const HORMOZI = "zain-board-hormozi";
+const ALWALEED = "zain-board-alwaleed";
 const hormozi = findBoardMember(HORMOZI)!;
 const vacantBoard = rosterEntries.map((a) => (a.rank === "board" ? { ...a, hired: false } : a));
 
@@ -48,12 +49,13 @@ describe("BoardPanel", () => {
     const fetch = routes(rosterEntries, { [`POST ${API.boardConsult}`]: { tasks: [task({ id: "b9" })], telegramSubscribed: true } });
     renderUi(<BoardPanel />);
     expect(await screen.findByRole("checkbox", { name: /Alex Hormozi/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Alwaleed bin Talal/ })).toBeChecked();
     await userEvent.type(screen.getByLabelText("Question"), "Should we raise prices 30%?");
     await userEvent.type(screen.getByLabelText(/Related task/), "t_2ce68fe1");
     await userEvent.click(screen.getByRole("button", { name: "Consult the board" }));
     expect(await screen.findByText(/Sent to 1 advisor. The CEO will relay the advice on Telegram./)).toBeInTheDocument();
     expect(fetch.calls("POST", API.boardConsult)).toEqual([
-      { body: { question: "Should we raise prices 30%?", members: [HORMOZI], relatedTaskId: "t_2ce68fe1" } },
+      { body: { question: "Should we raise prices 30%?", members: [HORMOZI, ALWALEED], relatedTaskId: "t_2ce68fe1" } },
     ]);
   });
 
@@ -64,6 +66,7 @@ describe("BoardPanel", () => {
     expect(screen.getByText("Write a question for the board.")).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Question"), "x");
     await userEvent.click(screen.getByRole("checkbox", { name: /Alex Hormozi/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /Alwaleed bin Talal/ }));
     await userEvent.click(screen.getByRole("button", { name: "Consult the board" }));
     expect(screen.getByText("Pick at least one hired advisor.")).toBeInTheDocument();
     expect(fetch.calls("POST", API.boardConsult)).toEqual([]);

@@ -1,13 +1,15 @@
 import { CEO_PROFILE, ROSTER } from "../../../shared/roster";
 import { HermesError, type HermesClient } from "../hermes/client";
 import { fullRoster, type HireStore } from "./hireStore";
-import { profileDescription, soulFor } from "./persona";
+import { profileDescription, soulText } from "./persona";
+import type { BriefReader } from "./privateBriefs";
 import type { Log } from "./reconcile";
 
 export interface RefreshOptions {
   hermes: HermesClient;
   hires: HireStore;
   apply: boolean;
+  briefs: BriefReader;
   log?: Log;
 }
 
@@ -21,7 +23,7 @@ function reason(err: unknown): string {
  * protocol changes reach agents hired earlier. Never creates profiles, installs skills or touches
  * the CEO. Returns the number of profiles that failed.
  */
-export async function refreshPersonas({ hermes, hires, apply, log = console.log }: RefreshOptions): Promise<number> {
+export async function refreshPersonas({ hermes, hires, apply, briefs, log = console.log }: RefreshOptions): Promise<number> {
   const existing = new Set((await hermes.listProfiles()).map((p) => p.name));
   const roster = await fullRoster(hires);
   let failed = 0;
@@ -36,7 +38,7 @@ export async function refreshPersonas({ hermes, hires, apply, log = console.log 
       continue;
     }
     try {
-      await hermes.writeSoul(agent.profile, soulFor(agent, roster));
+      await hermes.writeSoul(agent.profile, await soulText(agent, roster, briefs));
       await hermes.setDescription(agent.profile, profileDescription(agent));
       log(`refreshed ${agent.profile}`);
     } catch (err) {

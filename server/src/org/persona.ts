@@ -3,6 +3,7 @@ import { CEO_PROFILE, agentsInDivision, findAgent, type RosterAgent } from "../.
 import { findBoardMember } from "../../../shared/board";
 import { humanize } from "../headcount/skillFile";
 import { boardDescription, boardSoul } from "./boardPersona";
+import type { BriefReader } from "./privateBriefs";
 
 function bossLabel(agent: RosterAgent, roster: readonly RosterAgent[]): string {
   if (!agent.reportsTo) return "nobody";
@@ -44,6 +45,13 @@ function fanOutProtocol(division: Division, team: readonly string[]): string[] {
     "",
     "Never complete the mandate yourself (`kanban_complete`), and never assign work outside your team. When HQ requests changes, read their comment and repeat from step 1 for what is missing.",
   ];
+}
+
+/** soulFor, plus a board member's private brief read from disk when its seat has one. */
+export async function soulText(agent: RosterAgent, roster: readonly RosterAgent[], briefs: BriefReader): Promise<string> {
+  const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
+  if (member?.privateBrief) return boardSoul(member, await briefs(member.profile));
+  return soulFor(agent, roster);
 }
 
 export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): string {

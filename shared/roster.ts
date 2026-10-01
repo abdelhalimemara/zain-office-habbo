@@ -103,7 +103,7 @@ const tech: RosterAgent[] = [
 
 const board: RosterAgent[] = BOARD_MEMBERS.map((m) => ({
   profile: m.profile,
-  title: `Board · ${m.name}`,
+  title: m.title ?? `Board · ${m.name}`,
   division: "hq",
   rank: "board",
   reportsTo: null,

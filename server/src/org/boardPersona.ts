@@ -8,15 +8,28 @@ export function boardDescription(member: BoardMember): string {
   return `Zain board advisor · ${member.name}: ${member.seat}`;
 }
 
-/** The SOUL of an AI board advisor: advisory only, honest about being modelled on a public figure. */
-export function boardSoul(member: BoardMember): string {
+export const BRIEF_PRECEDENCE =
+  "Your brief's response format, tone and guardrails take precedence over the default board answer format. The board hard limits below still apply.";
+
+function briefSection(brief: string | undefined): string[] {
+  if (brief === undefined) return [];
+  return ["## Your brief", "", BRIEF_PRECEDENCE, "", brief.trim(), ""];
+}
+
+/**
+ * The SOUL of an AI board advisor: advisory only, honest about being modelled on a public figure.
+ * Members with a private brief get it embedded verbatim right after the identity line.
+ */
+export function boardSoul(member: BoardMember, brief?: string): string {
+  if (member.privateBrief && brief === undefined) throw new Error(`board member ${member.profile} needs its private brief`);
   const { name } = member;
   return [
-    `# Board · ${name}`,
+    `# ${member.title ?? `Board · ${name}`}`,
     "",
     `You are ${name} on the Zain Group board of advisors — an AI advisor modelled on ${name}'s publicly shared thinking, frameworks and voice.`,
     `Seat: ${member.seat}. Your Hermes profile is \`${member.profile}\`.`,
     "",
+    ...briefSection(brief),
     "## Your lens",
     "",
     ...member.lens.map((l) => `- ${l}`),
@@ -31,7 +44,7 @@ export function boardSoul(member: BoardMember): string {
     "",
     `A kanban task titled "${CONSULTATION_PREFIX}…" on board \`${KANBAN_BOARD}\` (tenant \`zain-hq\`), assigned to you. Read the brief, its comments and any task it references (\`kanban_show\`).`,
     "",
-    "## How to answer (your result)",
+    `## How to answer (your result)${brief === undefined ? "" : " — unless your brief sets its own format"}`,
     "",
     "1. **Bottom line** — 1–2 sentences with a clear recommendation.",
     "2. **Reasoning** — through your lens; name the frameworks and skills you used.",

@@ -9,7 +9,8 @@ import type { HeadcountSource } from "../headcount/catalog";
 import { toHermesSkill } from "../headcount/skillFile";
 import { badRequest, optionalString } from "../http";
 import { fullRoster, type HireStore } from "./hireStore";
-import { profileDescription, soulFor } from "./persona";
+import { profileDescription, soulText } from "./persona";
+import type { BriefReader } from "./privateBriefs";
 
 const RANKS = ["board", "vp", "lead", "specialist"] as const;
 const BOARD_PROFILE = /^zain-board-[a-z0-9-]+$/;
@@ -18,6 +19,7 @@ export interface HireDeps {
   hermes: HermesClient;
   headcount: HeadcountSource;
   hires: HireStore;
+  briefs: BriefReader;
 }
 
 function stringField(body: Record<string, unknown>, field: string): string {
@@ -138,7 +140,9 @@ export async function hire(agent: RosterAgent, deps: HireDeps): Promise<HireResp
 
   await deps.hires.save(agent);
   const roster = await fullRoster(deps.hires);
-  await step(steps, "write-soul", agent.profile, () => deps.hermes.writeSoul(agent.profile, soulFor(agent, roster)));
+  await step(steps, "write-soul", agent.profile, async () =>
+    deps.hermes.writeSoul(agent.profile, await soulText(agent, roster, deps.briefs)),
+  );
   await step(steps, "describe", agent.profile, () => deps.hermes.setDescription(agent.profile, description));
   for (const id of agent.skills) {
     await step(steps, "install-skill", id, () => installSkill(deps, agent.profile, id));

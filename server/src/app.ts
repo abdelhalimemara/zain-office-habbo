@@ -8,6 +8,7 @@ import { health } from "./health";
 import { CeoWake } from "./telegram/ceoWake";
 import { HttpError, errorResponse, optionalString, readJsonObject, requiredString, taskIdParam } from "./http";
 import { boardWithProgress } from "./org/board";
+import type { BriefReader } from "./org/privateBriefs";
 import { consultBoard, parseConsult } from "./org/consult";
 import { hire, parseHireRequest } from "./org/hire";
 import { fullRoster, type HireStore } from "./org/hireStore";
@@ -19,6 +20,8 @@ export interface AppDeps {
   headcount: HeadcountSource;
   hires: HireStore;
   ceoWake: CeoWake;
+  /** Board members' private briefs, read only when writing their SOUL. */
+  briefs: BriefReader;
   guard?: GuardOptions;
   /** Status of the background dependency reconciler, when one runs alongside the app. */
   reconcilerStatus?: () => ReconcilerStatus;
@@ -97,7 +100,7 @@ export function createApp(deps: AppDeps): Hono {
 
   app.post("/api/hire", async (c) => {
     const agent = await parseHireRequest(await readJsonObject(c), { headcount, hires });
-    const result = await hire(agent, { hermes, headcount, hires });
+    const result = await hire(agent, { hermes, headcount, hires, briefs: deps.briefs });
     return c.json(result);
   });
 
