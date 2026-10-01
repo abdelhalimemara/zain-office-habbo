@@ -122,14 +122,16 @@ describe("HQ mandate → VP fan-out → approval", () => {
     await page.waitFor("__e2e.text('.zui-panel h2') === 'Approvals (1)'", "approvals inbox");
     expect(await page.eval("__e2e.text('.zui-panel')")).toContain(ROLL_UP);
     await stack.shot("approvals");
-    await page.type(".zui-approval textarea", "Ship it");
-    await page.click(".zui-approval button", "Approve");
+    await page.click(".zui-approval button", "Approve & close");
+    await page.waitFor("!!document.querySelector('.zui-approval [role=group][aria-label=\"Confirm close\"]')", "close confirmation");
+    expect(hermes.tasks.get(id)!.status).toBe("review");
+    await page.click(".zui-approval [role=group] button", "Confirm");
     await until(() => hermes.tasks.get(id)!.status === "done", "mandate done in Hermes");
 
     expect(hermes.tasks.get(id)!.result).toBe(ROLL_UP);
     const patch = hermes.called("PATCH", `${TASKS}/${id}`)[0]!.body as UpdateTaskInput;
-    expect(patch).toEqual({ status: "done", summary: "Approved by HQ: Ship it", result: ROLL_UP });
-    expect(hermes.comments.get(id)).toEqual([expect.objectContaining({ author: "zain-hq-ui", body: "Approved by HQ: Ship it" })]);
+    expect(patch).toEqual({ status: "done", summary: "Approved by HQ", result: ROLL_UP });
+    expect(hermes.comments.get(id)).toEqual([expect.objectContaining({ author: "zain-hq-ui", body: "Approved by HQ" })]);
     await page.waitFor("__e2e.text('.zui-panel h2') === 'Approvals (0)'", "inbox empties");
     expect(await approvalsBadge(page)).toBeNull();
     expect(realErrors(page)).toEqual([]);
@@ -151,7 +153,7 @@ describe("HQ mandate → VP fan-out → approval", () => {
     await page.press("Escape");
   });
 
-  it("reject path: a reason is required, then the mandate goes back to the VP", async () => {
+  it("send back path: instructions are required, then the mandate goes back to the VP", async () => {
     const { page, hermes } = stack;
     const task = hermes.seedTask({ title: "Q4 rebrand deck", tenant: "zain-studio", assignee: "zain-studio-vp", status: "review", latest_summary: "Deck v1 ready" });
     await openApp(stack);
@@ -159,13 +161,13 @@ describe("HQ mandate → VP fan-out → approval", () => {
     await page.click(".zui-hud button", "Approvals, 1 pending");
     await page.waitFor("__e2e.text('.zui-panel h2') === 'Approvals (1)'", "approvals inbox");
 
-    await page.click(".zui-approval button", "Request changes");
-    await page.waitFor("__e2e.text('.zui-approval .zui-error') === 'A reason is required to request changes.'", "inline reason error");
+    await page.click(".zui-approval button", "Send back to VP");
+    await page.waitFor("__e2e.text('.zui-approval .zui-error') === 'Write instructions for VP Studio to send this back.'", "inline instructions error");
     expect(await page.eval("document.querySelector('.zui-approval textarea').getAttribute('aria-invalid')")).toBe("true");
     expect(hermes.called("PATCH", `${TASKS}/${task.id}`)).toHaveLength(0);
 
     await page.type(".zui-approval textarea", "Needs an Arabic version of every slide");
-    await page.click(".zui-approval button", "Request changes");
+    await page.click(".zui-approval button", "Send back to VP");
     await until(() => hermes.tasks.get(task.id)!.status === "ready", "mandate reopened");
     expect(hermes.tasks.get(task.id)!.assignee).toBe("zain-studio-vp");
     expect(hermes.comments.get(task.id)).toEqual([
