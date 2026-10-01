@@ -35,7 +35,7 @@ export function buildDivisionLayout(division: Exclude<DivisionId, "hq">): FloorL
   b.add("bigPlant", 7, 5);
 
   b.add("meetingTable", 10, 2, 5, 2);
-  b.chairsAround(10, 2, 5, 2);
+  b.chairsAround(10, 2, 5, 2, false);
   b.add("whiteboard", 11, 0, 3, 1, "sw");
   b.add("plant", 8, 0);
   b.add("plant", 16, 0);

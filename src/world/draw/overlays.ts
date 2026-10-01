@@ -18,12 +18,13 @@ function bubbleFrame(g: Graphics, w: number, h: number, fill: number): { x: numb
   return { x, y };
 }
 
-export function drawBubble(g: Graphics, kind: BubbleKind): void {
+/** Draws the bubble with its tail tip at (0, 0); returns its height. */
+export function drawBubble(g: Graphics, kind: BubbleKind): number {
   if (kind === "blocked") {
     const o = bubbleFrame(g, 13, 15, PAL.red);
     rect(g, o.x + 1, o.y + 1, 11, 2, 0xf27a7a);
     pixelText(g, "!", o.x + 5, o.y + 2, PAL.white, 2);
-    return;
+    return 18;
   }
   if (kind === "awaiting-approval") {
     const o = bubbleFrame(g, 17, 17, PAL.yellow);
@@ -32,10 +33,11 @@ export function drawBubble(g: Graphics, kind: BubbleKind): void {
     rect(g, o.x + 5, o.y + 5, 7, 9, PAL.white);
     rect(g, o.x + 6, o.y + 2, 5, 3, PAL.metalDark);
     pixelText(g, "?", o.x + 7, o.y + 7, PAL.outline);
-    return;
+    return 20;
   }
   const o = bubbleFrame(g, 15, 9, PAL.white);
   pixelText(g, "…", o.x + 5, o.y + 2, PAL.outline);
+  return 12;
 }
 
 export function drawZzz(g: Graphics): void {
@@ -43,7 +45,8 @@ export function drawZzz(g: Graphics): void {
   pixelText(g, "Z", 4, -5, PAL.white);
 }
 
-export function drawNameTag(g: Graphics, title: string, sub?: string): void {
+/** Draws the tag with its bottom edge at y = 0; returns its height. */
+export function drawNameTag(g: Graphics, title: string, sub?: string): number {
   const line1 = truncate(title, 120);
   const line2 = sub ? truncate(sub, 120) : "";
   const w = Math.max(measureText(line1), measureText(line2)) + 8;
@@ -52,6 +55,7 @@ export function drawNameTag(g: Graphics, title: string, sub?: string): void {
   plate(g, x, -h, w, h, 0x101218, 0x101218, 0.85);
   pixelText(g, line1, x + 4, -h + 3, PAL.white);
   if (line2) pixelText(g, line2, x + 4, -h + 10, 0xa9b4c4);
+  return h;
 }
 
 export function drawSelectArrow(g: Graphics): void {
@@ -71,26 +75,45 @@ export function drawFootRing(g: Graphics, color: number): void {
 
 export interface BadgeContent {
   working: number;
+  blocked: number;
   awaiting: number;
 }
 
-/** Returns where the bouncing "!" should sit (relative), or null when nothing awaits approval. */
-export function drawBadge(g: Graphics, c: BadgeContent): { x: number; y: number; w: number } | null {
-  const workText = String(c.working);
-  const waitText = c.awaiting > 0 ? String(c.awaiting) : "";
-  const workW = 7 + measureText(workText);
-  const waitW = waitText ? 9 + measureText(waitText) : 0;
-  const w = 6 + workW + waitW;
+export interface BadgeLayout {
+  width: number;
+  /** Where the bouncing "!" sits, or null when nothing awaits approval. */
+  bang: { x: number; y: number } | null;
+}
+
+const BADGE_GREEN = 0x3ddc84;
+
+/** Pixel tag: green working count, red blocked count (when > 0), yellow "!" awaiting count (when > 0). */
+export function drawBadge(g: Graphics, c: BadgeContent): BadgeLayout {
+  const working = String(c.working);
+  const blocked = c.blocked > 0 ? String(c.blocked) : "";
+  const awaiting = c.awaiting > 0 ? String(c.awaiting) : "";
+  const seg = (text: string, icon: number) => (text ? icon + 2 + measureText(text) : 0);
+  const parts = [seg(working, 3), seg(blocked, 3), seg(awaiting, 3)].filter((w) => w > 0);
+  const w = 6 + parts.reduce((sum, p) => sum + p, 0) + (parts.length - 1) * 4;
   const h = 11;
   const x = -Math.floor(w / 2);
   plate(g, x, -h, w, h, 0x101826, PAL.white, 0.95);
   rect(g, x + 1, -h + 1, w - 2, h - 2, 0x172238);
-  rect(g, x + 4, -h + 4, 3, 3, 0x3ddc84);
-  pixelText(g, workText, x + 9, -h + 3, PAL.white);
-  if (!waitText) return null;
-  const bx = x + 4 + workW + 2;
-  pixelText(g, waitText, bx + 5, -h + 3, PAL.yellow);
-  return { x: bx, y: -h + 3, w: waitW };
+  let cx = x + 3;
+  rect(g, cx, -h + 4, 3, 3, BADGE_GREEN);
+  pixelText(g, working, cx + 5, -h + 3, PAL.white);
+  cx += seg(working, 3) + 4;
+  if (blocked) {
+    rect(g, cx, -h + 4, 3, 3, PAL.red);
+    pixelText(g, blocked, cx + 5, -h + 3, 0xff8a8a);
+    cx += seg(blocked, 3) + 4;
+  }
+  let bang: BadgeLayout["bang"] = null;
+  if (awaiting) {
+    bang = { x: cx, y: -h + 3 };
+    pixelText(g, awaiting, cx + 5, -h + 3, PAL.yellow);
+  }
+  return { width: w, bang };
 }
 
 export function drawBang(g: Graphics): void {

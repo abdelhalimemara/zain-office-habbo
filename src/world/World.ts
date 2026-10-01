@@ -1,15 +1,40 @@
 import { Application, TextureSource, type Ticker } from "pixi.js";
 import type { DivisionId } from "../../shared/divisions";
 import type { DivisionStats } from "../../shared/flow";
-import { clampPan, clampScale, centerOn, fitScale, zoomAround } from "./camera";
+import {
+  NO_INSETS,
+  clampPan,
+  clampScale,
+  fitScale,
+  lerpCamera,
+  normalizeInsets,
+  panFor,
+  sameInsets,
+  stepZoom,
+  visibleArea,
+  zoomAround,
+  type CameraState,
+  type Insets,
+} from "./camera";
 import { diffAgents } from "./diff";
 import { PAL } from "./palette";
 import { CityScene } from "./scenes/CityScene";
 import { FloorScene } from "./scenes/FloorScene";
-import { sameHit, type Scene } from "./scenes/Scene";
+import { cursorFor, sameHit, type Scene } from "./scenes/Scene";
 import type { Hit, WorldAgent, WorldCallbacks, WorldStats, WorldView } from "./types";
 
 const CLICK_SLOP = 5;
+const REFIT_MS = 320;
+
+export interface WorldOptions {
+  insets?: Partial<Insets>;
+}
+
+interface Tween {
+  from: CameraState;
+  to: CameraState;
+  elapsed: number;
+}
 
 interface PointerState {
   x: number;
@@ -37,15 +62,23 @@ export class World {
   private reducedMotion = false;
   private destroyed = false;
   private now = 0;
+  private insets: Insets = NO_INSETS;
+  private tween: Tween | null = null;
 
   private constructor(
     private readonly container: HTMLElement,
     private readonly callbacks: WorldCallbacks,
   ) {}
 
-  static async create(container: HTMLElement, callbacks: WorldCallbacks): Promise<World> {
+  static async create(container: HTMLElement, callbacks: WorldCallbacks, options: WorldOptions = {}): Promise<World> {
     const world = new World(container, callbacks);
-    await world.init();
+    world.insets = normalizeInsets(options.insets);
+    try {
+      await world.init();
+    } catch (err) {
+      world.destroy();
+      throw err;
+    }
     return world;
   }
 
@@ -83,7 +116,7 @@ export class World {
     canvas.addEventListener("pointercancel", this.onPointerCancel);
     canvas.addEventListener("pointerleave", this.onPointerLeave);
     canvas.addEventListener("wheel", this.onWheel, { passive: false });
-    this.resizeObserver = new ResizeObserver(() => this.resize(true));
+    this.resizeObserver = new ResizeObserver(() => this.fit(false));
     this.resizeObserver.observe(this.host);
     this.app.ticker.add(this.onTick);
     this.mountScene();
@@ -113,12 +146,20 @@ export class World {
     this.scene?.setSelected(profile);
   }
 
+  /** Css pixels of the canvas covered by overlay UI; the camera re-fits into the remaining area. */
+  setInsets(insets: Partial<Insets>): void {
+    const next = normalizeInsets(insets);
+    if (sameInsets(next, this.insets)) return;
+    this.insets = next;
+    this.fit(true);
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
     this.resizeObserver?.disconnect();
     this.motionQuery?.removeEventListener("change", this.onMotionChange);
-    const canvas = this.app.canvas as HTMLCanvasElement | undefined;
+    const canvas = (this.app.renderer as unknown) ? this.app.canvas : undefined;
     if (canvas) {
       canvas.removeEventListener("pointerdown", this.onPointerDown);
       canvas.removeEventListener("pointermove", this.onPointerMove);
@@ -129,7 +170,11 @@ export class World {
       this.app.ticker?.remove(this.onTick);
       this.scene?.destroy();
       this.scene = null;
-      this.app.destroy({ removeView: true }, { children: true });
+      try {
+        this.app.destroy({ removeView: true }, { children: true });
+      } catch {
+        canvas.remove();
+      }
     }
     this.host.remove();
   }
@@ -140,36 +185,71 @@ export class World {
     const scene: Scene = this.view.kind === "city" ? new CityScene(opts) : new FloorScene(this.view.division, opts);
     this.scene = scene;
     this.hover = null;
+    this.app.canvas.style.cursor = cursorFor(null);
     this.app.stage.addChild(scene.root);
     scene.setStats(this.stats);
     scene.setAgents(this.agents, { added: [...this.agents.values()], updated: [], removed: [] });
     scene.setSelected(this.selected);
-    this.resize(true);
+    this.tween = null;
+    this.fit(false);
   }
 
   private get dpr(): number {
     return window.devicePixelRatio || 1;
   }
 
-  private resize(refit: boolean): void {
+  private viewport(): { w: number; h: number } {
+    return { w: Math.max(1, this.host.clientWidth), h: Math.max(1, this.host.clientHeight) };
+  }
+
+  private area() {
+    const v = this.viewport();
+    return visibleArea(v.w, v.h, this.insets);
+  }
+
+  private fit(animate: boolean): void {
     if (!this.scene || this.destroyed) return;
-    const cssW = Math.max(1, this.host.clientWidth);
-    const cssH = Math.max(1, this.host.clientHeight);
-    if (refit) this.scale = fitScale(this.scene.bounds(), cssW, cssH, this.dpr);
-    const artW = Math.ceil((cssW * this.dpr) / this.scale);
-    const artH = Math.ceil((cssH * this.dpr) / this.scale);
-    this.app.renderer.resize(artW, artH);
+    const area = this.area();
+    const b = this.scene.bounds();
+    const target: CameraState = {
+      scale: fitScale(b, area, this.dpr),
+      world: { x: b.x + b.w / 2, y: b.y + b.h / 2 },
+      focus: { x: area.x + area.w / 2, y: area.y + area.h / 2 },
+    };
+    if (!animate || this.reducedMotion) {
+      this.tween = null;
+      this.applyCamera(target, true);
+      return;
+    }
+    const k = this.dpr / this.scale;
+    const from: CameraState = {
+      scale: this.scale,
+      focus: target.focus,
+      world: { x: target.focus.x * k - this.pan.x, y: target.focus.y * k - this.pan.y },
+    };
+    this.tween = { from, to: target, elapsed: 0 };
+  }
+
+  private applyCamera(c: CameraState, clamp: boolean): void {
+    this.scale = c.scale;
+    this.resizeCanvas();
+    this.pan = panFor(c, this.dpr);
+    this.applyPan(clamp);
+  }
+
+  private resizeCanvas(): void {
+    const { w, h } = this.viewport();
+    const artW = Math.ceil((w * this.dpr) / this.scale);
+    const artH = Math.ceil((h * this.dpr) / this.scale);
+    if (artW !== this.app.renderer.width || artH !== this.app.renderer.height) this.app.renderer.resize(artW, artH);
     const canvas = this.app.canvas;
     canvas.style.width = `${(artW * this.scale) / this.dpr}px`;
     canvas.style.height = `${(artH * this.scale) / this.dpr}px`;
-    if (refit) this.pan = centerOn(this.scene.bounds(), artW, artH);
-    this.applyPan();
   }
 
-  private applyPan(): void {
+  private applyPan(clamp = true): void {
     if (!this.scene) return;
-    const { width, height } = this.app.renderer;
-    this.pan = clampPan(this.pan, this.scene.bounds(), width, height);
+    if (clamp) this.pan = clampPan(this.pan, this.scene.bounds(), this.area(), this.scale, this.dpr);
     this.scene.root.position.set(Math.round(this.pan.x), Math.round(this.pan.y));
   }
 
@@ -190,15 +270,17 @@ export class World {
     if (sameHit(hit, this.hover)) return;
     this.hover = hit;
     this.scene?.setHover(hit);
-    this.app.canvas.style.cursor = hit ? "pointer" : "grab";
+    this.app.canvas.style.cursor = cursorFor(hit);
   }
 
   private zoomTo(next: number, at: { x: number; y: number }): void {
     const to = clampScale(next);
+    this.tween = null;
     if (to === this.scale) return;
     this.pan = zoomAround(this.pan, at.x, at.y, this.scale, to);
     this.scale = to;
-    this.resize(false);
+    this.resizeCanvas();
+    this.applyPan();
   }
 
   private readonly onPointerDown = (e: PointerEvent): void => {
@@ -222,15 +304,16 @@ export class World {
     if (this.pointers.size === 2) {
       const dist = this.pointerSpread();
       if (this.pinchDist > 0 && (dist / this.pinchDist > 1.3 || dist / this.pinchDist < 0.77)) {
-        this.zoomTo(this.scale + (dist > this.pinchDist ? 1 : -1), this.toArt(this.pointerCenter()));
+        this.zoomTo(stepZoom(this.scale, dist > this.pinchDist ? 1 : -1), this.toArt(this.pointerCenter()));
         this.pinchDist = dist;
       }
       return;
     }
     if (!this.dragged) return;
     const k = this.dpr / this.scale;
+    this.tween = null;
     this.pan = { x: this.pan.x + dx * k, y: this.pan.y + dy * k };
-    this.app.canvas.style.cursor = "grabbing";
+    this.app.canvas.style.cursor = cursorFor(null, true);
     this.applyPan();
   };
 
@@ -258,7 +341,7 @@ export class World {
   private readonly onWheel = (e: WheelEvent): void => {
     e.preventDefault();
     if (Math.abs(e.deltaY) < 1) return;
-    this.zoomTo(this.scale + (e.deltaY < 0 ? 1 : -1), this.toArt(e));
+    this.zoomTo(stepZoom(this.scale, e.deltaY < 0 ? 1 : -1), this.toArt(e));
   };
 
   private readonly onMotionChange = (e: MediaQueryListEvent): void => {
@@ -269,6 +352,13 @@ export class World {
   private readonly onTick = (ticker: Ticker): void => {
     const dt = Math.min(100, ticker.deltaMS);
     this.now += dt;
+    if (this.tween) {
+      this.tween.elapsed += dt;
+      const t = this.tween.elapsed / REFIT_MS;
+      const done = t >= 1;
+      this.applyCamera(done ? this.tween.to : lerpCamera(this.tween.from, this.tween.to, t), done);
+      if (done) this.tween = null;
+    }
     this.scene?.update(dt, this.now);
   };
 

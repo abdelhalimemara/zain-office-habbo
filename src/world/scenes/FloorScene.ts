@@ -4,7 +4,8 @@ import type { AgentDiff } from "../diff";
 import { BACK_WALL_H, drawFloorBase, drawWall, wallBox, wallPieces } from "../draw/floor";
 import { chairBack, chairBackBox, chairSeat, chairSeatBox, drawFurniture, sortBox } from "../draw/furniture";
 import { drawRoomLabel } from "../draw/overlays";
-import { screenBounds, sortDepth, toScreen, type Box, type Ranked, type Rect } from "../iso";
+import { screenBounds, sortDepth, type Box, type Ranked, type Rect } from "../iso";
+import { placeRoomLabels } from "../labels";
 import { floorLayout } from "../layouts";
 import { NON_BLOCKING, type FloorLayout } from "../layouts/types";
 import { divisionColor } from "../palette";
@@ -78,12 +79,10 @@ export class FloorScene implements Scene, AgentHost {
       if (item.deskId) this.deskDepths.set(item.deskId, depths[i]!);
     });
 
-    for (const r of layout.rooms) {
-      if (!r.name) continue;
+    for (const { text, rect } of placeRoomLabels(layout)) {
       const g = new Graphics();
-      drawRoomLabel(g, r.name.toUpperCase(), accent);
-      const p = toScreen(r.x + r.w / 2, r.y + r.h / 2);
-      g.position.set(Math.round(p.x), Math.round(p.y) + 4);
+      drawRoomLabel(g, text, accent);
+      g.position.set(rect.x + Math.floor(rect.w / 2), rect.y + rect.h);
       g.alpha = 0.92;
       this.labels.addChild(g);
     }

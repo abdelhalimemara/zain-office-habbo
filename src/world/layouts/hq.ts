@@ -67,7 +67,7 @@ export function buildHqLayout(): FloorLayout {
 
   const [ops, care, accounts, finance, people, legal] = DEPARTMENTS;
   b.add("whiteboard", ops.x + 1, ops.y + 4, 3, 1, "sw");
-  b.add("tv", care.x + 1, care.y + 4, 2, 1, "sw");
+  b.add("tv", care.x + 4, care.y + 4, 2, 1, "sw");
   b.add("sofa", accounts.x + 1, accounts.y + 4, 3, 1, "ne");
   b.add("safe", finance.x + 1, finance.y + 4);
   b.add("filing", finance.x + 2, finance.y + 4, 1, 1, "ne");

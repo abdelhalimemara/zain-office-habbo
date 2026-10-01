@@ -141,7 +141,7 @@ export class CityScene implements Scene {
       v.badgeBase.clear();
       v.badge.visible = !!s;
       if (!s) continue;
-      v.bangAt = drawBadge(v.badgeBase, { working: s.working, awaiting: s.awaitingApproval });
+      v.bangAt = drawBadge(v.badgeBase, { working: s.working, blocked: s.blocked, awaiting: s.awaitingApproval }).bang;
       v.bang.visible = !!v.bangAt;
       if (v.bangAt) v.bang.position.set(v.bangAt.x, v.bangAt.y);
     }
