@@ -1,0 +1,86 @@
+import { HeadcountSource, parseTree, rosterFallback } from "../../server/src/headcount/catalog";
+import { hermesSkillName, toHermesSkill } from "../../server/src/headcount/skillFile";
+import { ROSTER } from "../../shared/roster";
+import { githubFetch, json, mockFetch, setup } from "./helpers";
+
+describe("headcount catalog", () => {
+  it("parses departments and skills from the GitHub tree", () => {
+    expect(
+      parseTree([
+        { path: "plugins/security/skills/threat-modeling/SKILL.md", type: "blob" },
+        { path: "plugins/security/skills/code-audit/SKILL.md", type: "blob" },
+        { path: "plugins/security/skills/code-audit/references/x.md", type: "blob" },
+        { path: "plugins/finance/skills/tax/SKILL.md", type: "blob" },
+        { path: "plugins/finance/skills/tax", type: "tree" },
+        { path: "README.md", type: "blob" },
+      ]),
+    ).toEqual([
+      { id: "finance", skills: ["tax"] },
+      { id: "security", skills: ["code-audit", "threat-modeling"] },
+    ]);
+  });
+
+  it("serves the catalog and caches it for an hour", async () => {
+    let now = 0;
+    const gh = githubFetch();
+    const source = new HeadcountSource({ fetchImpl: gh.fetchImpl, now: () => now });
+    const first = await source.catalog();
+    expect(first.departments.find((d) => d.id === "security")!.skills).toContain("incident-response");
+    now = 59 * 60 * 1000;
+    await source.catalog();
+    expect(gh.calls).toHaveLength(1);
+    now = 61 * 60 * 1000;
+    await source.catalog();
+    expect(gh.calls).toHaveLength(2);
+  });
+
+  it("falls back to the skills referenced in ROSTER when GitHub is unreachable", async () => {
+    const { send } = setup({}, { githubDown: true });
+    const { departments } = await (await send("GET", "/api/headcount/catalog")).json();
+    expect(departments).toEqual(rosterFallback());
+    const all = departments.flatMap((d: { id: string; skills: string[] }) => d.skills.map((s) => `${d.id}:${s}`));
+    expect(new Set(all)).toEqual(new Set(ROSTER.flatMap((a) => a.skills)));
+  });
+
+  it("does not cache the fallback", async () => {
+    const m = mockFetch({
+      "GET /repos/cbrock84/headcount/git/trees/main": (_c, n) =>
+        n === 1 ? json({}, 500) : { tree: [{ path: "plugins/x/skills/y/SKILL.md", type: "blob" }] },
+    });
+    const source = new HeadcountSource({ fetchImpl: m.fetchImpl });
+    await source.catalog();
+    expect(await source.catalog()).toEqual({ departments: [{ id: "x", skills: ["y"] }] });
+  });
+});
+
+describe("headcount SKILL.md conversion", () => {
+  const upstream = `---\nname: brand-voice\ndescription: Captures how a brand writes. Use this before drafting any content for a new brand or client.\n---\n\n# Brand voice\n\nBody text.\n`;
+
+  it("names skills hc-<department>-<skill> within Hermes limits", () => {
+    expect(hermesSkillName("marketing:brand-voice")).toBe("hc-marketing-brand-voice");
+    for (const id of ROSTER.flatMap((a) => a.skills)) {
+      expect(hermesSkillName(id)).toMatch(/^[a-z0-9][a-z0-9._-]{0,63}$/);
+    }
+  });
+
+  it("rewrites frontmatter to a ≤60-char description and keeps the upstream guidance in the body", () => {
+    const { name, content } = toHermesSkill("marketing:brand-voice", upstream);
+    expect(name).toBe("hc-marketing-brand-voice");
+    const [, fm, body] = content.split(/^---$/m);
+    expect(fm).toBe('\nname: hc-marketing-brand-voice\ndescription: "Brand voice (marketing)."\n');
+    expect(body).toContain("**When to use:** Captures how a brand writes.");
+    expect(body).toContain("# Brand voice\n\nBody text.");
+    expect(body).toContain("`marketing:brand-voice`");
+  });
+
+  it("shortens long skill names to fit the description budget", () => {
+    const { content } = toHermesSkill("customer-experience:customer-onboarding-and-implementation", upstream);
+    const desc = JSON.parse(/^description: (.*)$/m.exec(content)![1]!) as string;
+    expect(desc.length).toBeLessThanOrEqual(60);
+    expect(desc).toBe("Customer onboarding and implementation.");
+  });
+
+  it("rejects an empty upstream skill", () => {
+    expect(() => toHermesSkill("marketing:brand-voice", "---\nname: x\ndescription: y\n---\n\n")).toThrow(/empty/);
+  });
+});
