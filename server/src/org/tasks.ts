@@ -5,6 +5,7 @@ import type { KanbanTask } from "../../../shared/hermes";
 import { managerOf, type RosterAgent } from "../../../shared/roster";
 import { HermesError, type HermesClient } from "../hermes/client";
 import { HttpError, badRequest, optionalString, requiredString } from "../http";
+import type { CeoWake } from "../telegram/ceoWake";
 import { mandateSubtasks } from "./board";
 import { fullRoster, type HireStore } from "./hireStore";
 import { mandateBody } from "./persona";
@@ -28,6 +29,7 @@ export async function createMandate(
   req: CreateMandateRequest,
   hermes: HermesClient,
   hires: HireStore,
+  ceoWake: CeoWake,
 ): Promise<CreateMandateResponse> {
   const roster = await fullRoster(hires);
   const manager = managerOf(req.division, roster);
@@ -39,8 +41,8 @@ export async function createMandate(
     priority: req.priority ?? 0,
     triage: false,
   });
-  const telegramSubscribed = await hermes.subscribeHome(task.id, "telegram");
-  return { task, telegramSubscribed };
+  const wake = await ceoWake.subscribe(task.id);
+  return { task, telegramSubscribed: wake.subscribed, ...(wake.reason ? { telegramReason: wake.reason } : {}) };
 }
 
 export async function taskDetail(id: string, hermes: HermesClient, hires: HireStore): Promise<TaskDetailResponse> {
@@ -106,6 +108,20 @@ export async function reject(id: string, reason: string, hermes: HermesClient, h
   return repinToManager(id, reopened, roster, hermes);
 }
 
+async function requireMandate(id: string, hermes: HermesClient, hires: HireStore) {
+  const [{ task }, roster] = await Promise.all([hermes.task(id), fullRoster(hires)]);
+  if (!isMandate(task, roster)) throw new HttpError(409, `task ${id} is not a mandate`);
+  return { task, roster };
+}
+
+/** blocked → ready goes through Hermes' unblock_task, which re-gates on open parents (→ todo). */
+export async function unblock(id: string, instructions: string, hermes: HermesClient, hires: HireStore): Promise<KanbanTask> {
+  const { task } = await requireMandate(id, hermes, hires);
+  if (task.status !== "blocked") throw new HttpError(409, `mandate ${id} is ${task.status}, not blocked`);
+  await hermes.addComment(id, `HQ: ${instructions}`, UI_AUTHOR);
+  return hermes.updateTask(id, { status: "ready" });
+}
+
 const REOPENABLE = new Set(["done", "review"]);
 
 /**
@@ -115,8 +131,7 @@ const REOPENABLE = new Set(["done", "review"]);
  * a parent is unfinished, in which case `todo` waits for the parents and resumes on its own.
  */
 export async function reopen(id: string, instructions: string, hermes: HermesClient, hires: HireStore): Promise<KanbanTask> {
-  const [{ task }, roster] = await Promise.all([hermes.task(id), fullRoster(hires)]);
-  if (!isMandate(task, roster)) throw new HttpError(409, `task ${id} is not a mandate`);
+  const { task, roster } = await requireMandate(id, hermes, hires);
   if (!REOPENABLE.has(task.status)) throw new HttpError(409, `mandate ${id} is ${task.status}; only done or review mandates can be reopened`);
   await hermes.addComment(id, `HQ reopened this mandate: ${instructions}`, UI_AUTHOR);
   let reopened: KanbanTask;

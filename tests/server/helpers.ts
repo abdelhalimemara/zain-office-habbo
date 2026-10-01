@@ -1,5 +1,6 @@
 import { createApp } from "../../server/src/app";
 import type { GuardOptions } from "../../server/src/guard";
+import { CeoWake, type ExecFileLike } from "../../server/src/telegram/ceoWake";
 import { HEADCOUNT_REF, HeadcountSource } from "../../server/src/headcount/catalog";
 import { HermesClient, type FetchLike } from "../../server/src/hermes/client";
 import { memoryHireStore, type HireStore } from "../../server/src/org/hireStore";
@@ -54,6 +55,7 @@ export const dashboardHtml = (token = TOKEN) =>
   new Response(`<html><script>window.__HERMES_SESSION_TOKEN__="${token}";</script></html>`);
 
 export const hermesBase: Record<string, Handler> = {
+  [`GET ${KANBAN}/home-channels`]: () => ({ home_channels: [] }),
   "GET /": () => dashboardHtml(),
   [`GET ${KANBAN}/boards`]: () => ({ boards: [{ slug: "default" }, { slug: "zain-group" }], current: "default" }),
 };
@@ -100,16 +102,37 @@ export function githubFetch(options: { down?: boolean } = {}) {
   });
 }
 
+export interface ExecCall {
+  file: string;
+  args: readonly string[];
+  timeout: number;
+}
+
+/** A stand-in for execFile that records calls and fails when `fail` says so. */
+export function mockExec(fail: (args: readonly string[]) => boolean = () => false) {
+  const calls: ExecCall[] = [];
+  const execFile: ExecFileLike = async (file, args, { timeout }) => {
+    calls.push({ file, args, timeout });
+    if (fail(args)) throw Object.assign(new Error("exit 1"), { name: "ExecError" });
+    return { stdout: "", stderr: "" };
+  };
+  return { execFile, calls };
+}
+
+export const TELEGRAM_HOME = { platform: "telegram", chat_id: "6606232800", thread_id: "", name: "Home" };
+
 export function setup(
   routes: Record<string, Handler>,
-  options: { hires?: HireStore; githubDown?: boolean; guard?: GuardOptions } = {},
+  options: { hires?: HireStore; githubDown?: boolean; guard?: GuardOptions; exec?: ReturnType<typeof mockExec> } = {},
 ) {
   const hermesFetch = mockFetch({ ...hermesBase, ...routes });
   const gh = githubFetch({ down: options.githubDown });
   const hermes = new HermesClient({ baseUrl: "http://hermes.test", fetchImpl: hermesFetch.fetchImpl });
   const headcount = new HeadcountSource({ fetchImpl: gh.fetchImpl });
   const hires = options.hires ?? memoryHireStore();
-  const app = createApp({ hermes, headcount, hires, guard: options.guard });
+  const exec = options.exec ?? mockExec();
+  const ceoWake = new CeoWake({ hermes, execFile: exec.execFile, hermesBin: "/opt/hermes/bin/hermes", log: () => undefined });
+  const app = createApp({ hermes, headcount, hires, ceoWake, guard: options.guard });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
@@ -120,5 +143,5 @@ export function setup(
       },
       body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
     });
-  return { app, send, hermes, headcount, hires, hermesFetch, gh };
+  return { app, send, hermes, headcount, hires, hermesFetch, gh, exec, ceoWake };
 }

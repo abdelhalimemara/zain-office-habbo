@@ -12,7 +12,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 
 const clients = defaultClients(process.env);
 const hires = fileHireStore(process.cwd());
-const reconciler = new Reconciler({ hermes: clients.hermes, hires });
+const reconciler = new Reconciler({ hermes: clients.hermes, hires, ceoWake: clients.ceoWake });
 const app = createApp({
   ...clients,
   hires,

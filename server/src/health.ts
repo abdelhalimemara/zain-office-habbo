@@ -1,6 +1,7 @@
 import type { HealthResponse, ReconcilerStatus } from "../../shared/api";
 import { KANBAN_BOARD } from "../../shared/divisions";
 import { HermesError, type HermesClient, type HermesStatus } from "./hermes/client";
+import type { CeoWake } from "./telegram/ceoWake";
 
 function telegramState(status: HermesStatus): HealthResponse["telegram"] {
   const state = status.gateway_platforms?.telegram?.state;
@@ -19,12 +20,25 @@ async function reviewDispatch(hermes: HermesClient): Promise<HealthResponse["rev
   }
 }
 
-export async function health(hermes: HermesClient, reconciler?: () => ReconcilerStatus): Promise<HealthResponse> {
-  return { ...(await hermesHealth(hermes)), ...(reconciler ? { reconciler: reconciler() } : {}) };
+async function telegramApprovals(ceoWake: CeoWake | undefined): Promise<HealthResponse["telegramApprovals"]> {
+  if (!ceoWake) return "unknown";
+  try {
+    return (await ceoWake.telegramHome()) ? "ready" : "needs-sethome";
+  } catch {
+    return "unknown";
+  }
 }
 
-async function hermesHealth(hermes: HermesClient): Promise<HealthResponse> {
-  const down = { ok: false, telegram: "unknown", reviewDispatch: "unknown", board: KANBAN_BOARD } as const;
+export async function health(
+  hermes: HermesClient,
+  reconciler?: () => ReconcilerStatus,
+  ceoWake?: CeoWake,
+): Promise<HealthResponse> {
+  return { ...(await hermesHealth(hermes, ceoWake)), ...(reconciler ? { reconciler: reconciler() } : {}) };
+}
+
+async function hermesHealth(hermes: HermesClient, ceoWake: CeoWake | undefined): Promise<HealthResponse> {
+  const down = { ok: false, telegram: "unknown", reviewDispatch: "unknown", telegramApprovals: "unknown", board: KANBAN_BOARD } as const;
   let status: HermesStatus;
   try {
     status = await hermes.status();
@@ -38,5 +52,6 @@ async function hermesHealth(hermes: HermesClient): Promise<HealthResponse> {
     const unauthorized = err instanceof HermesError && (err.status === 401 || err.status === 403);
     return { ...down, hermes: unauthorized ? "unauthorized" : "unreachable", telegram };
   }
-  return { ok: true, hermes: "reachable", telegram, reviewDispatch: await reviewDispatch(hermes), board: KANBAN_BOARD };
+  const [dispatch, approvals] = await Promise.all([reviewDispatch(hermes), telegramApprovals(ceoWake)]);
+  return { ok: true, hermes: "reachable", telegram, reviewDispatch: dispatch, telegramApprovals: approvals, board: KANBAN_BOARD };
 }

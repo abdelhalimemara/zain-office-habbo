@@ -3,6 +3,7 @@ import { allTasks, isMandate } from "../../../shared/flow";
 import type { KanbanTask } from "../../../shared/hermes";
 import type { RosterAgent } from "../../../shared/roster";
 import { HermesError, type HermesClient } from "../hermes/client";
+import type { CeoWake } from "../telegram/ceoWake";
 import { fullRoster, type HireStore } from "./hireStore";
 import { UI_AUTHOR } from "./tasks";
 
@@ -93,6 +94,8 @@ export async function reconcileOnce(hermes: HermesClient, roster: readonly Roste
 export interface ReconcilerOptions {
   hermes: HermesClient;
   hires: HireStore;
+  /** When set, each run also makes sure every open mandate wakes the CEO on Telegram. */
+  ceoWake?: CeoWake;
   log?: Log;
   now?: () => number;
   intervalMs?: number;
@@ -128,12 +131,21 @@ export class Reconciler {
   }
 
   private async tick(): Promise<void> {
-    const { hermes, hires, log = console.log, now = Date.now } = this.options;
+    const { hermes, hires, ceoWake, log = console.log, now = Date.now } = this.options;
+    let roster: RosterAgent[];
     try {
-      const repaired = await reconcileOnce(hermes, await fullRoster(hires), log);
+      roster = await fullRoster(hires);
+      const repaired = await reconcileOnce(hermes, roster, log);
       this.last = { lastRunAt: Math.floor(now() / 1000), repaired };
     } catch (err) {
       log(`reconcile: run failed (${reason(err)})`);
+      return;
+    }
+    if (!ceoWake) return;
+    try {
+      await ceoWake.backfill(await hermes.board(), roster);
+    } catch (err) {
+      log(`ceo-wake: backfill failed (${reason(err)})`);
     }
   }
 }

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import type { CreateMandateResponse, WakeReason } from "@shared/api";
 import { DIVISIONS, getDivision, type DivisionId } from "@shared/divisions";
 import { useCreateMandate } from "../api/hooks";
 import { useUiStore } from "../state/store";
@@ -13,6 +14,18 @@ const PRIORITIES = [
   { value: 1, label: "High" },
   { value: 2, label: "Urgent" },
 ];
+
+const TELEGRAM_OFF: Record<WakeReason, string> = {
+  "no-home-channel": "Telegram won't notify the CEO yet: send /sethome to your Hermes bot in Telegram and Zain HQ will subscribe it.",
+  "cli-failed": "Telegram won't notify the CEO yet: subscribing failed. Zain HQ retries in the background.",
+  "hermes-unavailable": "Telegram won't notify the CEO yet: Hermes didn't answer. Zain HQ retries in the background.",
+  "invalid-task-id": "Telegram won't notify the CEO for this mandate.",
+};
+
+function telegramLine({ telegramSubscribed, telegramReason }: CreateMandateResponse): string {
+  if (telegramSubscribed) return "Telegram will notify the CEO when it needs your approval, gets blocked or is done.";
+  return TELEGRAM_OFF[telegramReason ?? "no-home-channel"];
+}
 
 export function NewMandateDialog({ division: initial }: { division?: DivisionId }) {
   const [division, setDivision] = useState<DivisionId>(initial ?? "studio");
@@ -43,11 +56,7 @@ export function NewMandateDialog({ division: initial }: { division?: DivisionId 
         <p role="status" aria-live="polite">
           “{task.title}” is with {manager.title} in {d.name}.
         </p>
-        <p className="zui-hint">
-          {create.data.telegramSubscribed
-            ? "You'll get Telegram updates as it moves."
-            : "Telegram updates are off — no home channel is configured. The mandate was still created."}
-        </p>
+        <p className="zui-hint">{telegramLine(create.data)}</p>
         <div className="zui-row">
           <button type="button" className="zui-btn zui-btn--primary" onClick={() => openPanel({ kind: "task", id: task.id })}>
             Open task

@@ -86,12 +86,4 @@ describe("HermesClient board", () => {
     await expect(hermes.ensureBoard()).rejects.toBeInstanceOf(HermesError);
     await expect(hermes.ensureBoard()).resolves.toBeUndefined();
   });
-
-  it("treats a 404 home-subscribe as not subscribed", async () => {
-    const m = mockFetch({
-      ...hermesBase,
-      [`POST ${KANBAN}/tasks/t_1/home-subscribe/telegram`]: () => json({ detail: "No home channel" }, 404),
-    });
-    await expect(client(m.fetchImpl).subscribeHome("t_1", "telegram")).resolves.toBe(false);
-  });
 });

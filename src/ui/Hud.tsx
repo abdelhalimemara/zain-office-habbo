@@ -83,6 +83,11 @@ export function Hud() {
           Hermes review agent is on: it can approve mandates before HQ sees them.
         </p>
       )}
+      {health.data?.telegramApprovals === "needs-sethome" && (
+        <p className="zui-banner zui-banner--info" role="status">
+          Telegram approvals are off: send <code>/sethome</code> to your Hermes bot in Telegram.
+        </p>
+      )}
     </header>
   );
 }

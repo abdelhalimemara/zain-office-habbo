@@ -10,7 +10,6 @@ function app(guard?: GuardOptions) {
     {
       [`GET ${KANBAN}/board`]: () => board,
       [`POST ${KANBAN}/tasks`]: () => ({ task: task({ id: "t_new", status: "triage" }) }),
-      [`POST ${KANBAN}/tasks/t_new/home-subscribe/telegram`]: () => ({ ok: true }),
     },
     { guard },
   );

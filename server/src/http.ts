@@ -40,7 +40,7 @@ export function optionalString(body: Record<string, unknown>, field: string, max
   return value === "" ? undefined : value;
 }
 
-const TASK_ID = /^[A-Za-z0-9_-]{1,64}$/;
+export const TASK_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 export function taskIdParam(c: Context): string {
   const id = c.req.param("id") ?? "";
