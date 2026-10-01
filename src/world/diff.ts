@@ -8,7 +8,7 @@ export interface AgentDiff {
 }
 
 const ACTIVITIES = new Set(["working", "blocked", "awaiting-approval", "queued", "idle"]);
-const RANKS = new Set(["ceo", "vp", "lead", "specialist"]);
+const RANKS = new Set(["board", "ceo", "vp", "lead", "specialist"]);
 
 export function isValidAgent(a: unknown): a is WorldAgent {
   if (!a || typeof a !== "object") return false;

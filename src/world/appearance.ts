@@ -4,8 +4,11 @@ import { hashString, pick } from "./hash";
 import { HAIR_COLORS, PAL, PANTS_COLORS, SKIN_TONES, divisionColor, shade } from "./palette";
 
 export const HAIR_STYLES = ["short", "spiky", "long", "bun", "bob", "buzz", "curly", "hijab"] as const;
-export type HairStyle = (typeof HAIR_STYLES)[number];
-export type Outfit = "casual" | "suit" | "ceo";
+/** Board advisors draw from a slightly older set of cuts (kept separate so other agents' looks don't shift). */
+export const BOARD_HAIR_STYLES = ["short", "receding", "buzz", "receding"] as const;
+const BOARD_HAIR_COLORS = [0xc9ccd2, 0x9a9ea5, 0x6f6b67, 0x2b2622] as const;
+export type HairStyle = (typeof HAIR_STYLES)[number] | "receding";
+export type Outfit = "casual" | "suit" | "ceo" | "board";
 
 export interface Appearance {
   skin: number;
@@ -18,12 +21,14 @@ export interface Appearance {
   shoes: number;
   tie: number;
   lapel: number;
+  glasses: boolean;
 }
 
 const SHOES = [0x2a1d14, 0x1b1b1f, 0x5a3a22, 0xe6e6e6] as const;
 
 export function appearanceFor(profile: string, division: DivisionId, rank: Rank): Appearance {
   const h = hashString(profile);
+  if (rank === "board") return boardAppearance(h);
   const accent = divisionColor(division);
   const hairStyle = pick(HAIR_STYLES, h >>> 3);
   const hairColor = hairStyle === "hijab" ? pick([0x2a2f45, 0x6b2f45, 0x31524a, 0x4a3a2a], h >>> 21) : pick(HAIR_COLORS, h >>> 9);
@@ -41,6 +46,25 @@ export function appearanceFor(profile: string, division: DivisionId, rank: Rank)
     shoes: outfit === "casual" ? pick(SHOES, h >>> 18) : 0x15151a,
     tie: outfit === "ceo" ? PAL.gold : accent,
     lapel: outfit === "ceo" ? PAL.gold : shade(suit, 0.18),
+    glasses: false,
+  };
+}
+
+/** Charcoal three-piece look with a gold lapel pin, silver-leaning hair and optional glasses. */
+function boardAppearance(h: number): Appearance {
+  const suit = 0x34363b;
+  return {
+    skin: pick(SKIN_TONES, h),
+    hair: pick(BOARD_HAIR_COLORS, h >>> 9),
+    hairStyle: pick(BOARD_HAIR_STYLES, h >>> 3),
+    outfit: "board",
+    shirt: suit,
+    shirtShade: shade(suit, -0.3),
+    pants: shade(suit, -0.2),
+    shoes: 0x15151a,
+    tie: 0x6b2737,
+    lapel: shade(suit, 0.22),
+    glasses: ((h >>> 13) & 1) === 1,
   };
 }
 

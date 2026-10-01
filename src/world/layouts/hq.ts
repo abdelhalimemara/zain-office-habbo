@@ -3,6 +3,8 @@ import { LayoutBuilder } from "./builder";
 import type { FloorLayout } from "./types";
 
 export const HQ_COLS = 30;
+/** Seats for the board of advisors along the far side of the board-room table, facing the room. */
+export const BOARD_SEATS = 5;
 export const HQ_ROWS = 24;
 
 const DEPARTMENTS = [
@@ -58,7 +60,8 @@ export function buildHqLayout(): FloorLayout {
   b.add("armchair", 12, 5, 1, 1, "ne");
   b.add("plant", 15, 6);
 
-  b.add("meetingTable", 19, 3, 8, 2);
+  const boardTable = b.add("meetingTable", 19, 3, 8, 2);
+  for (let i = 0; i < BOARD_SEATS; i++) b.tableSeat(20 + i, 2, "sw", "board", boardTable, "board");
   b.chairsAround(19, 3, 8, 2);
   b.add("tv", 21, 0, 4, 1, "sw");
   b.add("plant", 16, 0);
