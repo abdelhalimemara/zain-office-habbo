@@ -31,6 +31,17 @@ interface Reply {
 }
 
 const KANBAN = "/api/plugins/kanban";
+
+export interface FakeHomeChannel {
+  platform: string;
+  chat_id: string;
+  thread_id: string;
+  chat_type: string | null;
+  name?: string;
+}
+
+/** What `/sethome` in a private Telegram chat leaves behind (older builds record no chat_type). */
+export const TELEGRAM_HOME: FakeHomeChannel = { platform: "telegram", chat_id: "12345", thread_id: "", chat_type: null };
 const ok = (body: unknown, status = 200): Reply => ({ status, body });
 const fail = (status: number, detail: string): Reply => ({ status, body: { detail } });
 
@@ -49,11 +60,11 @@ export class FakeHermes {
   readonly descriptions = new Map<string, string>();
   readonly skills: FakeSkill[] = [];
   readonly boards: string[] = ["default"];
-  /** Whether a Telegram home channel exists (home-subscribe answers 404 when false). */
-  homeChannel = true;
   telegramState: string | null = "connected";
   /** kanban.review_dispatch in GET /api/config; undefined leaves the key out (Hermes' default: on). */
   reviewDispatch: boolean | undefined = false;
+  /** GET /api/plugins/kanban/home-channels; null = no /sethome yet. */
+  telegramHome: FakeHomeChannel | null = null;
   /** Task id → ids of its parents (the tasks it waits on). */
   readonly parents = new Map<string, string[]>();
   private server: Server | null = null;
@@ -257,6 +268,9 @@ export class FakeHermes {
       return ok({ ok: true }, 201);
     }
 
+    if (path === `${KANBAN}/home-channels` && method === "GET") {
+      return ok({ home_channels: this.telegramHome ? [{ name: "Home", ...this.telegramHome }] : [] });
+    }
     if (path === `${KANBAN}/boards` && method === "GET") {
       return ok({ boards: this.boards.map((slug) => ({ slug, name: slug })), current: "default" });
     }
@@ -290,7 +304,7 @@ export class FakeHermes {
       if (typeof body.title !== "string" || !body.title.trim()) return fail(400, "title is required");
       return ok({ task: this.newTask(body as Partial<KanbanTask> & { title: string; triage?: boolean }) }, 201);
     }
-    const m = /^\/tasks\/([^/]+)(\/comments|\/home-subscribe\/([^/]+))?$/.exec(path);
+    const m = /^\/tasks\/([^/]+)(\/comments)?$/.exec(path);
     if (!m) return fail(404, `fake Hermes has no kanban route ${method} ${path}`);
     const id = decodeURIComponent(m[1]!);
     const task = this.tasks.get(id);
@@ -318,9 +332,6 @@ export class FakeHermes {
       task.comment_count = (task.comment_count ?? 0) + 1;
       this.eventId++;
       return ok({ comment }, 201);
-    }
-    if (m[3] && method === "POST") {
-      return this.homeChannel ? ok({ ok: true, platform: m[3] }) : fail(404, `no home channel configured for ${m[3]}`);
     }
     return fail(405, `method ${method} not allowed on ${path}`);
   }

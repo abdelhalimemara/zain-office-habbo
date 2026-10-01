@@ -3,6 +3,7 @@ import { agentsInDivision } from "../../shared/roster";
 import type { CreateTaskInput, UpdateTaskInput } from "../../shared/hermes";
 import type { Page } from "./browser";
 import { clickThrough, enterBuilding, scanHits } from "./canvas";
+import { TELEGRAM_HOME } from "./fakeHermes";
 import { approvalsBadge, hudStatus, openApp, realErrors, startStack, type Stack } from "./harness";
 import { sleep, until } from "./processes";
 
@@ -45,7 +46,7 @@ async function openStudioKanban(page: Page): Promise<void> {
 describe("HQ mandate → VP fan-out → approval", () => {
   it("golden path: mandate goes to the VP, subtasks show progress, the roll-up is approved and kept as the result", async () => {
     const { page, hermes } = stack;
-    hermes.homeChannel = true;
+    hermes.telegramHome = TELEGRAM_HOME;
     await openApp(stack);
     await page.waitFor(
       `!!document.querySelector('.zui-dot-item[title="Hermes: reachable"]') && !!document.querySelector('.zui-dot-item[title="Telegram: connected"]')`,
@@ -76,10 +77,17 @@ describe("HQ mandate → VP fan-out → approval", () => {
     }
     for (const member of agentsInDivision("studio").filter((a) => a.rank !== "vp")) expect(sent.body).toContain(`\`${member.profile}\``);
     expect(sent.body).not.toMatch(/zain-(hq|growth|labs|tech)-/);
-    expect(hermes.called("POST", /\/home-subscribe\/telegram$/)).toHaveLength(1);
+    const id = [...hermes.tasks.keys()][0]!;
+    // The CEO's wake subscription goes through the hermes CLI (stubbed), not HTTP.
+    expect(stack.cliCalls()).toEqual([
+      ["kanban", "--board", "zain-group", "notify-subscribe", id, "--platform", "telegram", "--chat-id", "12345",
+        "--chat-type", "dm", "--notifier-profile", "default", "--delivery-mode", "wake"],
+    ]);
+    expect(await page.eval("__e2e.text('[role=dialog]')")).toContain(
+      "Telegram will notify the CEO when it needs your approval, gets blocked or is done.",
+    );
     await page.click("[role=dialog] button", "Close");
 
-    const id = [...hermes.tasks.keys()][0]!;
     expect(hermes.tasks.get(id)!.status).toBe("ready");
     await openStudioKanban(page);
     await page.waitFor(mandateCardHas(MANDATE), "mandate card");
