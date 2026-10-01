@@ -48,11 +48,21 @@ export function taskIdParam(c: Context): string {
   return id;
 }
 
+export const HERMES_DOWN = "Hermes isn't reachable. Is it running on this machine?";
+export const HERMES_SESSION_REJECTED = "Hermes rejected Zain HQ's session. Restart the Zain HQ server.";
+
+/** Technical detail goes to the server log only; the token never appears in either. */
 export function errorResponse(err: unknown, c: Context): Response {
   if (err instanceof HttpError) return c.json({ error: err.message }, err.status);
-  if (err instanceof HermesUnreachableError) return c.json({ error: err.message }, 502);
+  if (err instanceof HermesUnreachableError) {
+    console.warn(err.message);
+    return c.json({ error: HERMES_DOWN }, 502);
+  }
   if (err instanceof HermesError) {
-    if (err.status === 401 || err.status === 403) return c.json({ error: "Hermes rejected the session token" }, 502);
+    if (err.status === 401 || err.status === 403) {
+      console.warn(`Hermes refused the session (HTTP ${err.status})`);
+      return c.json({ error: HERMES_SESSION_REJECTED }, 502);
+    }
     const status = err.status === 404 || err.status === 409 || err.status === 400 ? err.status : 502;
     return c.json({ error: err.detail }, status);
   }

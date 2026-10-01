@@ -7,10 +7,12 @@ interface Props {
   task: KanbanTask;
   agents: readonly RosterEntry[];
   now: number;
+  /** The raw Hermes status, shown when the card's lane spans several statuses. */
+  statusTag?: string;
   onOpen: (id: string) => void;
 }
 
-export function TaskCard({ task, agents, now, onOpen }: Props) {
+export function TaskCard({ task, agents, now, statusTag, onOpen }: Props) {
   const warnings = task.warnings?.count ?? 0;
   return (
     <li>
@@ -19,6 +21,7 @@ export function TaskCard({ task, agents, now, onOpen }: Props) {
         <span className="zui-card__meta">
           <AgentChip profile={task.assignee} agents={agents} />
           {isMandate(task, agents) && <span className="zui-badge zui-badge--mandate">Mandate</span>}
+          {statusTag && <span className="zui-tag" title="Hermes status">{statusTag}</span>}
         </span>
         <span className="zui-card__meta zui-card__stats">
           {task.dependencyProgress && (
