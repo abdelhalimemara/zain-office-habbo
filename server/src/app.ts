@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import type { ReconcilerStatus } from "../../shared/api";
 import { localOnly, parseOriginList, type GuardOptions } from "./guard";
 import { HermesClient } from "./hermes/client";
 import { HeadcountSource } from "./headcount/catalog";
@@ -16,6 +17,8 @@ export interface AppDeps {
   headcount: HeadcountSource;
   hires: HireStore;
   guard?: GuardOptions;
+  /** Status of the background dependency reconciler, when one runs alongside the app. */
+  reconcilerStatus?: () => ReconcilerStatus;
 }
 
 export const DEFAULT_PORT = 8787;
@@ -37,7 +40,7 @@ export function createApp(deps: AppDeps): Hono {
   );
   app.onError(errorResponse);
 
-  app.get("/api/health", async (c) => c.json(await health(hermes)));
+  app.get("/api/health", async (c) => c.json(await health(hermes, deps.reconcilerStatus)));
 
   app.get("/api/board", async (c) => c.json(await boardWithProgress(hermes, hires)));
 

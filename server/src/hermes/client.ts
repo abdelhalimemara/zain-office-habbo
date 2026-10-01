@@ -144,6 +144,18 @@ export class HermesClient {
     await this.request("POST", this.kanban(`/tasks/${encodeURIComponent(id)}/comments`), { body, author });
   }
 
+  /** `parent` must finish before `child` can promote. */
+  async link(parent: string, child: string): Promise<void> {
+    await this.ensureBoard();
+    await this.request("POST", this.kanban("/links"), { parent_id: parent, child_id: child });
+  }
+
+  async unlink(parent: string, child: string): Promise<void> {
+    await this.ensureBoard();
+    const edge = `&parent_id=${encodeURIComponent(parent)}&child_id=${encodeURIComponent(child)}`;
+    await this.request("DELETE", `${this.kanban("/links")}${edge}`);
+  }
+
   /** False when the platform has no home channel configured (Hermes answers 404). */
   async subscribeHome(id: string, platform: string): Promise<boolean> {
     const path = this.kanban(`/tasks/${encodeURIComponent(id)}/home-subscribe/${encodeURIComponent(platform)}`);

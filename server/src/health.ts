@@ -1,4 +1,4 @@
-import type { HealthResponse } from "../../shared/api";
+import type { HealthResponse, ReconcilerStatus } from "../../shared/api";
 import { KANBAN_BOARD } from "../../shared/divisions";
 import { HermesError, type HermesClient, type HermesStatus } from "./hermes/client";
 
@@ -19,7 +19,11 @@ async function reviewDispatch(hermes: HermesClient): Promise<HealthResponse["rev
   }
 }
 
-export async function health(hermes: HermesClient): Promise<HealthResponse> {
+export async function health(hermes: HermesClient, reconciler?: () => ReconcilerStatus): Promise<HealthResponse> {
+  return { ...(await hermesHealth(hermes)), ...(reconciler ? { reconciler: reconciler() } : {}) };
+}
+
+async function hermesHealth(hermes: HermesClient): Promise<HealthResponse> {
   const down = { ok: false, telegram: "unknown", reviewDispatch: "unknown", board: KANBAN_BOARD } as const;
   let status: HermesStatus;
   try {

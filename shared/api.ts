@@ -32,6 +32,14 @@ export interface HealthResponse {
    */
   reviewDispatch: "on" | "off" | "unknown";
   board: string;
+  /** Present when the server runs the dependency reconciler (it does outside tests). */
+  reconciler?: ReconcilerStatus;
+}
+
+/** The last completed reconciler run: unix seconds (null before the first) and edges repaired in it. */
+export interface ReconcilerStatus {
+  lastRunAt: number | null;
+  repaired: number;
 }
 
 export type BoardResponse = KanbanBoard;
