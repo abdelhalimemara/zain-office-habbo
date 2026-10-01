@@ -52,6 +52,8 @@ export interface HomeChannel {
   chat_id: string;
   thread_id: string;
   name: string;
+  /** Newer Hermes builds include it; null when /sethome did not record one. */
+  chat_type?: string | null;
 }
 
 export interface ProfileCreateInput {

@@ -38,6 +38,21 @@ describe("ceoWakeArgs", () => {
     ]);
   });
 
+  it("sends dm for a Telegram DM home whose chat_type is null, as the live home channel is", () => {
+    const live = { ...TELEGRAM_HOME, chat_type: null };
+    expect(telegramChatType(live)).toBe("dm");
+    const args = ceoWakeArgs("t_2ce68fe1", live);
+    expect(args.slice(args.indexOf("--chat-type"), args.indexOf("--chat-type") + 2)).toEqual(["--chat-type", "dm"]);
+  });
+
+  it("uses the home channel's chat_type when the CLI accepts it, otherwise infers it", () => {
+    expect(telegramChatType({ ...TELEGRAM_HOME, chat_type: "group" })).toBe("group");
+    expect(telegramChatType({ ...TELEGRAM_HOME, chat_type: " Channel " })).toBe("channel");
+    expect(telegramChatType({ ...TELEGRAM_HOME, chat_type: "forum", chat_id: "-1001", thread_id: "7" })).toBe("thread");
+    expect(telegramChatType({ ...TELEGRAM_HOME, chat_type: "private" })).toBe("dm");
+    expect(telegramChatType({ ...TELEGRAM_HOME, chat_type: "" })).toBe("dm");
+  });
+
   it("passes the topic thread and infers group or thread chat types", () => {
     const topic = { ...TELEGRAM_HOME, chat_id: "-1001234", thread_id: "42" };
     expect(ceoWakeArgs("t_1", topic)).toEqual(expect.arrayContaining(["--thread-id", "42", "--chat-type", "thread"]));
@@ -59,6 +74,14 @@ describe("CeoWake.subscribe", () => {
     expect(await w.subscribe(id)).toEqual({ subscribed: false, reason: "invalid-task-id" });
     expect(exec.calls).toEqual([]);
     expect(hermesFetch.called(`GET ${KANBAN}/home-channels`)).toEqual([]);
+  });
+
+  it("subscribes from a live-shaped home channel with chat_type null", async () => {
+    const live = { ...TELEGRAM_HOME, chat_type: null, subscribed: false };
+    const { wake: w, exec } = wake({ [`GET ${KANBAN}/home-channels`]: homes([live]) });
+    expect(await w.subscribe("t_abc")).toEqual({ subscribed: true });
+    expect(exec.calls[0]!.args).toContain("dm");
+    expect(exec.calls[0]!.args).not.toContain("null");
   });
 
   it("does not exec without a Telegram home channel", async () => {

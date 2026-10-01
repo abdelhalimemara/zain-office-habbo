@@ -29,12 +29,19 @@ const CLI_TIMEOUT_MS = 20_000;
 const FINISHED = new Set(["done", "archived"]);
 const defaultExecFile: ExecFileLike = promisify(nodeExecFile);
 
+const CLI_CHAT_TYPES = new Set(["dm", "group", "channel", "thread"]);
+
 /**
- * Hermes' home-channels endpoint has no chat type, so it is inferred the way Telegram encodes
- * it: users have positive ids, groups negative; a topic thread is its own type. The CLI only
- * accepts dm | group | channel | thread (kanban_parser.py notify-subscribe --chat-type).
+ * The wake rebuilds the CEO's session key from the subscription's chat_type, and build_session_key
+ * keys a DM differently from a group or thread (kanban_watchers_notifier.py wake, gateway/session.py),
+ * so it must match the real chat. The CLI accepts only dm | group | channel | thread
+ * (kanban_parser.py notify-subscribe). Use the home channel's own value when it is one of those;
+ * when it is null or unknown, infer it the way Telegram encodes chats: a topic thread is "thread",
+ * group ids are negative, and a user's private chat (the adapter's "private" → "dm") is positive.
  */
-export function telegramChatType(home: HomeChannel): "dm" | "group" | "thread" {
+export function telegramChatType(home: HomeChannel): "dm" | "group" | "channel" | "thread" {
+  const given = home.chat_type?.trim().toLowerCase();
+  if (given && CLI_CHAT_TYPES.has(given)) return given as "dm" | "group" | "channel" | "thread";
   if (home.thread_id) return "thread";
   return home.chat_id.startsWith("-") ? "group" : "dm";
 }
