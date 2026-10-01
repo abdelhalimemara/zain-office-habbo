@@ -123,14 +123,3 @@ export function pointInPolygon(p: Pt, poly: readonly Pt[]): boolean {
   }
   return inside;
 }
-
-/** Screen-space silhouette of an extruded footprint (6 points). */
-export function boxHull(b: Box): Pt[] {
-  const top = toScreen(b.x0, b.y0, b.h);
-  const right = toScreen(b.x1, b.y0);
-  const rightUp = toScreen(b.x1, b.y0, b.h);
-  const bottom = toScreen(b.x1, b.y1);
-  const left = toScreen(b.x0, b.y1);
-  const leftUp = toScreen(b.x0, b.y1, b.h);
-  return [top, rightUp, right, bottom, left, leftUp];
-}

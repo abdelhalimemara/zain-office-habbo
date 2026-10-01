@@ -8,7 +8,7 @@ import { screenBounds, sortDepth, type Box, type Ranked, type Rect } from "../is
 import { placeRoomLabels } from "../labels";
 import { floorLayout } from "../layouts";
 import { NON_BLOCKING, type FloorLayout } from "../layouts/types";
-import { divisionColor } from "../palette";
+import { PAL, divisionColor } from "../palette";
 import { loungeSpot } from "../pathing";
 import { assignSeats, rosterOrder } from "../seating";
 import type { Hit, WorldAgent, WorldStats } from "../types";
@@ -26,6 +26,8 @@ export class FloorScene implements Scene, AgentHost {
   readonly objects = new Container();
   readonly overlay = new Container();
   readonly layout: FloorLayout;
+  readonly style = "pixel" as const;
+  readonly background = PAL.sky;
   statics: Ranked[] = [];
   reducedMotion: boolean;
   private readonly base = new Graphics();

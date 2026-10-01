@@ -17,6 +17,8 @@ export interface WorldAgent {
 export interface WorldCallbacks {
   onSelectBuilding(division: DivisionId): void;
   onSelectAgent(profile: string): void;
+  /** Css colour behind the active scene (light for the city render, navy for floors). */
+  onBackgroundChange?(color: string): void;
 }
 
 export type WorldStats = Record<DivisionId, DivisionStats>;

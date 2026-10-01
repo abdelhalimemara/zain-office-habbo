@@ -38,18 +38,6 @@ export const PAL = {
   screenOn: 0x7fe3ff,
   red: 0xe24a4a,
   yellow: 0xf7d046,
-  road: 0x3a3f47,
-  roadLine: 0xe8e8e0,
-  sidewalk: 0xc9ccd1,
-  sidewalkB: 0xbcc0c6,
-  curb: 0x8d929a,
-  plaza: 0xd9dce0,
-  plazaB: 0xcdd1d6,
-  grassA: 0x5da34b,
-  grassB: 0x67ae52,
-  water: 0x2f7fc1,
-  waterLight: 0x5aa6e0,
-  sand: 0xe0c98f,
 } as const;
 
 export const SKIN_TONES = [0xf5d0b0, 0xe8b48a, 0xc98e62, 0xa86d45, 0x7a4a2c] as const;
@@ -71,4 +59,8 @@ export function shade(color: number, factor: number): number {
     return Math.max(0, Math.min(255, Math.round(out)));
   };
   return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
+export function cssColor(color: number): string {
+  return `#${color.toString(16).padStart(6, "0").toUpperCase()}`;
 }

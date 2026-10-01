@@ -48,7 +48,7 @@ const world = await World.create(stage, {
     log.textContent = `agent: ${p}`;
     world.setSelectedAgent(p);
   },
-}, { insets });
+}, { insets, debugHotspots: params.get("debug") === "hotspots" });
 
 const initial: WorldView = params.get("view") && params.get("view") !== "city"
   ? { kind: "floor", division: params.get("view") as DivisionId }

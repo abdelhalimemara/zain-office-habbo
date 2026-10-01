@@ -1,6 +1,5 @@
 import { DIVISION_IDS } from "../../shared/divisions";
 import { agentsInDivision } from "../../shared/roster";
-import { CITY_BUILDINGS, CITY_PROPS, CITY_SIZE, PED_LOOPS, cityTileAt, pointOnLoop } from "../../src/world/layouts/city";
 import { FACING_VEC, NON_BLOCKING, floorLayout, roomAt } from "../../src/world/layouts";
 import { findPath, loungeTiles } from "../../src/world/pathing";
 
@@ -60,39 +59,5 @@ describe.each(DIVISION_IDS.map((d) => [d]))("floor layout %s", (division) => {
     const lounge = loungeTiles(layout);
     expect(lounge.length).toBeGreaterThan(8);
     for (const s of layout.seats) expect(findPath(layout, s, lounge[0]!), s.id).not.toBeNull();
-  });
-});
-
-describe("city layout", () => {
-  it("places one building per division without overlap, on plaza or grass", () => {
-    expect(new Set(CITY_BUILDINGS.map((b) => b.division))).toEqual(new Set(DIVISION_IDS));
-    const seen = new Set<string>();
-    for (const b of CITY_BUILDINGS) {
-      for (let y = b.y; y < b.y + b.d; y++) {
-        for (let x = b.x; x < b.x + b.w; x++) {
-          expect(seen.has(`${x},${y}`)).toBe(false);
-          seen.add(`${x},${y}`);
-          expect(["plaza", "grass"]).toContain(cityTileAt(x, y));
-        }
-      }
-    }
-    for (const p of CITY_PROPS) {
-      for (let y = p.y; y < p.y + p.d; y++) {
-        for (let x = p.x; x < p.x + p.w; x++) {
-          expect(seen.has(`${x},${y}`), `${p.kind} ${x},${y}`).toBe(false);
-          seen.add(`${x},${y}`);
-          expect(x < CITY_SIZE && y < CITY_SIZE).toBe(true);
-        }
-      }
-    }
-  });
-
-  it("walks pedestrians on sidewalks", () => {
-    for (const loop of PED_LOOPS) {
-      for (let t = 0; t < 1; t += 0.01) {
-        const p = pointOnLoop(loop, t);
-        expect(cityTileAt(Math.floor(p.x), Math.floor(p.y))).toBe("sidewalk");
-      }
-    }
   });
 });
