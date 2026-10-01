@@ -16,3 +16,7 @@ coverage/
 playwright-report/
 test-results/
 .DS_Store
+
+# Local agent worktrees and runtime data
+.worktrees/
+.zain/
