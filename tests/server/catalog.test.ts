@@ -1,4 +1,4 @@
-import { HeadcountSource, parseTree, rosterFallback } from "../../server/src/headcount/catalog";
+import { HEADCOUNT_REF, HeadcountSource, parseTree, rosterFallback } from "../../server/src/headcount/catalog";
 import { hermesSkillName, toHermesSkill } from "../../server/src/headcount/skillFile";
 import { ROSTER } from "../../shared/roster";
 import { githubFetch, json, mockFetch, setup } from "./helpers";
@@ -42,9 +42,26 @@ describe("headcount catalog", () => {
     expect(new Set(all)).toEqual(new Set(ROSTER.flatMap((a) => a.skills)));
   });
 
+  it("pins the tree and SKILL.md to the reviewed commit, overridable per source", async () => {
+    const urls: string[] = [];
+    const fetchImpl = async (url: string) => {
+      urls.push(url);
+      return url.includes("api.github.com") ? json({ tree: [{ path: "plugins/x/skills/y/SKILL.md", type: "blob" }] }) : new Response("md");
+    };
+    await new HeadcountSource({ fetchImpl }).catalog();
+    await new HeadcountSource({ fetchImpl }).skillMarkdown("x:y");
+    await new HeadcountSource({ fetchImpl, ref: "v2" }).skillMarkdown("x:y");
+    expect(urls).toEqual([
+      `https://api.github.com/repos/cbrock84/headcount/git/trees/${HEADCOUNT_REF}?recursive=1`,
+      `https://raw.githubusercontent.com/cbrock84/headcount/${HEADCOUNT_REF}/plugins/x/skills/y/SKILL.md`,
+      "https://raw.githubusercontent.com/cbrock84/headcount/v2/plugins/x/skills/y/SKILL.md",
+    ]);
+    expect(HEADCOUNT_REF).toBe("98d1c17d480f606060102a781f9a8601690685f7");
+  });
+
   it("does not cache the fallback", async () => {
     const m = mockFetch({
-      "GET /repos/cbrock84/headcount/git/trees/main": (_c, n) =>
+      [`GET /repos/cbrock84/headcount/git/trees/${HEADCOUNT_REF}`]: (_c, n) =>
         n === 1 ? json({}, 500) : { tree: [{ path: "plugins/x/skills/y/SKILL.md", type: "blob" }] },
     });
     const source = new HeadcountSource({ fetchImpl: m.fetchImpl });

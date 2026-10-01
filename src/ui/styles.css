@@ -264,6 +264,7 @@
 }
 .zui-column__list,
 .zui-chips,
+.zui-subtasks,
 .zui-comments,
 .zui-steps {
   list-style: none;
@@ -397,6 +398,8 @@
 textarea.zui-input { resize: vertical; }
 .zui-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .zui-error { color: #ff8d90; margin: 0; font-size: 13px; }
+.zui-banner { flex-basis: 100%; margin: 0; padding: 4px 8px; font: 600 13px var(--font-body); }
+.zui-banner--warn { background: var(--warn); color: #1b1b1b; }
 .zui-status { margin: 0; min-height: 1em; color: var(--ok); font-size: 13px; }
 .zui-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 

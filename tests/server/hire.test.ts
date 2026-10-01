@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileHireStore, fullRoster, memoryHireStore } from "../../server/src/org/hireStore";
@@ -40,7 +40,8 @@ describe("POST /api/hire validation", () => {
     [{ skills: [] }, "skills"],
     [{ skills: Array.from({ length: 16 }, (_, i) => `technology:s${i}`) }, "skills"],
     [{ skills: ["technology:not-a-skill"] }, "unknown headcount skill"],
-    [{ skills: ["api-design"] }, "unknown headcount skill"],
+    [{ skills: ["api-design"] }, "department:skill"],
+    [{ skills: "technology:api-design" }, "skills"],
     [{ reviewer: "yes" }, "reviewer"],
   ])("rejects %j", async (patch, message) => {
     const { send, hermesFetch } = setup(hermesRoutes());
@@ -75,7 +76,9 @@ describe("POST /api/hire", () => {
     expect(soul).toContain("Data Engineer");
     expect(soul).toContain("Zain Tech");
     expect(soul).toContain("VP Tech (`zain-tech-vp`)");
-    expect(soul).toContain("`review`");
+    expect(soul).toContain("kanban_complete");
+    expect(soul).toMatch(/Do not request review from HQ/);
+    expect(soul).not.toContain("kanban_link");
     expect(soul).not.toContain("Reviewer authority");
 
     const desc = (hermesFetch.called("PUT /api/profiles/zain-tech-data/description")[0]!.body as { description: string }).description;
@@ -97,10 +100,14 @@ describe("POST /api/hire", () => {
     );
     await send("POST", "/api/hire", { ...request, profile: "zain-tech-cto2", rank: "vp", reportsTo: "default", reviewer: true });
     const soul = (hermesFetch.called("PUT /api/profiles/zain-tech-cto2/soul")[0]!.body as { content: string }).content;
-    expect(soul).toContain("You own decomposition");
-    expect(soul).toContain("You own the roll-up");
+    expect(soul).toContain('tenant="zain-tech"');
+    expect(soul).toContain("kanban_link(parent_id=<subtask id>, child_id=<this mandate's id>)");
+    expect(soul).toContain('kanban_block(kind="dependency"');
+    expect(soul).toContain("kanban_request_review");
+    expect(soul).toMatch(/Never complete the mandate yourself/);
     expect(soul).toContain("may block");
     expect(soul).toContain("`zain-tech-fullstack`");
+    expect(soul).not.toMatch(/zain-(growth|studio|labs|hq)-/);
     expect(soul).toContain("the CEO");
   });
 
@@ -142,6 +149,40 @@ describe("POST /api/hire", () => {
   });
 });
 
+describe("hiring canonical roster positions", () => {
+  const qa = ROSTER.find((a) => a.profile === "zain-tech-qa")!;
+  const qaRoutes = hermesRoutes({ "PUT /api/profiles/zain-tech-qa/soul": () => ({}), "PUT /api/profiles/zain-tech-qa/description": () => ({}) });
+
+  it.each([
+    [{ title: "Chief Hacker" }, "title"],
+    [{ division: "growth" }, "division"],
+    [{ rank: "vp" }, "rank"],
+    [{ reportsTo: "default" }, "reportsTo"],
+  ])("rejects %j as a mismatch with the roster", async (patch, field) => {
+    const { send, hermesFetch } = setup(qaRoutes);
+    const res = await send("POST", "/api/hire", { ...qa, skills: ["technology:code-review"], ...patch });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(new RegExp(`roster position.*${field}`));
+    expect(hermesFetch.calls.filter((c) => c.method !== "GET")).toHaveLength(0);
+  });
+
+  it("hires a roster position with matching fields, idempotently and without persisting it locally", async () => {
+    let exists = false;
+    const { send, hires, hermesFetch } = setup({
+      ...qaRoutes,
+      "GET /api/profiles": () => ({ profiles: exists ? [defaultProfile, { ...defaultProfile, name: "zain-tech-qa" }] : [defaultProfile] }),
+      "POST /api/profiles": () => {
+        exists = true;
+        return { ok: true };
+      },
+    });
+    expect((await (await send("POST", "/api/hire", { ...qa, title: `  ${qa.title} ` })).json()).ok).toBe(true);
+    expect((await (await send("POST", "/api/hire", qa)).json()).ok).toBe(true);
+    expect(hermesFetch.called("POST /api/profiles")).toHaveLength(1);
+    expect(await hires.list()).toEqual([]);
+  });
+});
+
 describe("GET /api/roster", () => {
   it("merges ROSTER and local hires with live profiles", async () => {
     const hires = memoryHireStore([{ ...request, division: "tech", rank: "specialist", skills: ["technology:api-design"] }]);
@@ -166,6 +207,15 @@ describe("fileHireStore", () => {
   });
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
+  });
+
+  it("serializes concurrent saves without losing updates", async () => {
+    const store = fileHireStore(dir);
+    const base = { title: "T", division: "tech" as const, rank: "specialist" as const, reportsTo: "zain-tech-vp", skills: [] };
+    await Promise.all(Array.from({ length: 12 }, (_, i) => store.save({ ...base, profile: `zain-tech-x${i}` })));
+    const saved = JSON.parse(await readFile(join(dir, ".zain", "hires.json"), "utf8")) as { profile: string }[];
+    expect(saved.map((h) => h.profile).sort()).toEqual(Array.from({ length: 12 }, (_, i) => `zain-tech-x${i}`).sort());
+    expect((await readdir(join(dir, ".zain"))).filter((f) => f.endsWith(".tmp"))).toEqual([]);
   });
 
   it("persists non-ROSTER hires to .zain/hires.json and ignores ROSTER agents", async () => {

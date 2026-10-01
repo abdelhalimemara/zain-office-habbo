@@ -5,6 +5,7 @@ import type {
   KanbanBoard,
   KanbanComment,
   KanbanTask,
+  TaskStatus,
   UpdateTaskInput,
 } from "../../../shared/hermes";
 
@@ -34,6 +35,12 @@ export interface HermesTaskDetail {
   task: KanbanTask;
   comments: KanbanComment[];
   links: { parents: string[]; children: string[] };
+  /** One row per linked task (parents and children); archived/foreign rows may be missing. */
+  link_tasks?: { id: string; title: string; status: TaskStatus }[];
+}
+
+export interface HermesConfig {
+  kanban?: { review_dispatch?: unknown } | null;
 }
 
 export interface HermesStatus {
@@ -75,6 +82,10 @@ export class HermesClient {
   async status(): Promise<HermesStatus> {
     const res = await this.send("/api/status", { method: "GET" });
     return (await this.parse(res)) as HermesStatus;
+  }
+
+  async config(): Promise<HermesConfig> {
+    return this.request<HermesConfig>("GET", "/api/config");
   }
 
   async listProfiles(): Promise<HermesProfile[]> {

@@ -4,11 +4,11 @@ import { findAgent } from "./roster";
 
 /**
  * Task flow:
- *  1. HQ creates a *mandate*: tenant = division, assignee = division manager, status triage.
- *  2. Hermes decompose fans it into child tasks for the division's agents; the mandate
- *     stays alive and wakes when the children finish.
- *  3. The manager rolls up the result and moves the mandate to `review` = awaiting HQ approval.
- *  4. HQ approves (→ done) or rejects (comment + → todo, back to the manager).
+ *  1. HQ creates a *mandate*: tenant = division, assignee = division manager, straight to the VP.
+ *  2. The VP creates subtasks for their own team and links each as a *parent* of the mandate,
+ *     then blocks the mandate on the dependency; it resumes when every subtask is done.
+ *  3. The VP rolls up the result and requests review = awaiting HQ approval.
+ *  4. HQ approves (→ done) or rejects (comment + back to the manager).
  */
 
 export type AgentActivity = "working" | "blocked" | "awaiting-approval" | "queued" | "idle";
@@ -29,8 +29,14 @@ export function isMandate(task: KanbanTask, roster?: readonly RosterAgent[]): bo
   return agent?.rank === "vp";
 }
 
-export function pendingApprovals(board: KanbanBoard): KanbanTask[] {
-  return allTasks(board).filter((t) => t.status === AWAITING_APPROVAL);
+/** Subtasks done / total; Hermes counts archived as satisfying a dependency too. */
+export function subtaskProgress(subtasks: readonly { status: TaskStatus }[]): { done: number; total: number } {
+  return { done: subtasks.filter((s) => s.status === "done" || s.status === "archived").length, total: subtasks.length };
+}
+
+/** Mandates awaiting HQ; specialists' own `review` tasks are not HQ's to approve. */
+export function pendingApprovals(board: KanbanBoard, roster?: readonly RosterAgent[]): KanbanTask[] {
+  return allTasks(board).filter((t) => t.status === AWAITING_APPROVAL && isMandate(t, roster));
 }
 
 const ACTIVITY_PRIORITY: AgentActivity[] = ["blocked", "awaiting-approval", "working", "queued", "idle"];

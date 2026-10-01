@@ -1,10 +1,11 @@
 import type { CreateMandateRequest, CreateMandateResponse, TaskDetailResponse } from "../../../shared/api";
 import { DIVISION_IDS, divisionForTenant, getDivision, type DivisionId } from "../../../shared/divisions";
-import { AWAITING_APPROVAL } from "../../../shared/flow";
+import { AWAITING_APPROVAL, isMandate } from "../../../shared/flow";
 import type { KanbanTask } from "../../../shared/hermes";
 import { managerOf } from "../../../shared/roster";
-import type { HermesClient } from "../hermes/client";
+import { HermesError, type HermesClient } from "../hermes/client";
 import { HttpError, badRequest, optionalString, requiredString } from "../http";
+import { mandateSubtasks } from "./board";
 import { fullRoster, type HireStore } from "./hireStore";
 import { mandateBody } from "./persona";
 
@@ -36,19 +37,20 @@ export async function createMandate(
     assignee: manager.profile,
     tenant: getDivision(req.division).tenant,
     priority: req.priority ?? 0,
-    triage: true,
+    triage: false,
   });
   const telegramSubscribed = await hermes.subscribeHome(task.id, "telegram");
   return { task, telegramSubscribed };
 }
 
-export async function taskDetail(id: string, hermes: HermesClient): Promise<TaskDetailResponse> {
-  const detail = await hermes.task(id);
+export async function taskDetail(id: string, hermes: HermesClient, hires: HireStore): Promise<TaskDetailResponse> {
+  const [detail, roster] = await Promise.all([hermes.task(id), fullRoster(hires)]);
   return {
     task: detail.task,
     comments: detail.comments ?? [],
     parents: detail.links?.parents ?? [],
     children: detail.links?.children ?? [],
+    subtasks: await mandateSubtasks(detail, roster, hermes),
   };
 }
 
@@ -62,26 +64,36 @@ async function requireAwaitingApproval(id: string, hermes: HermesClient): Promis
 
 /**
  * review → done goes through Hermes' complete_task (PATCH status=done), which accepts `review`
- * as human approval. complete_task overwrites `result`, so the manager's roll-up is resent.
+ * as human approval. complete_task overwrites `result` and `kanban_request_review` only writes
+ * the summary, so the roll-up is resent as the result to survive completion.
  */
 export async function approve(id: string, note: string | undefined, hermes: HermesClient): Promise<KanbanTask> {
   const task = await requireAwaitingApproval(id, hermes);
   const summary = note ? `Approved by HQ: ${note}` : "Approved by HQ";
+  const result = task.result ?? task.latest_summary ?? undefined;
   await hermes.addComment(id, summary, UI_AUTHOR);
-  return hermes.updateTask(id, { status: "done", summary, ...(task.result ? { result: task.result } : {}) });
+  return hermes.updateTask(id, { status: "done", summary, ...(result ? { result } : {}) });
 }
 
 /**
  * review → todo is routed by Hermes to reopen_review_task, which lands on `ready` (or `todo`
- * while parents are open) and restores the implementer, so the manager re-runs with the comment.
- * The assignee is re-pinned to the division manager in case the review was routed elsewhere.
+ * while parents are open) and restores the implementer. Mandates are re-pinned to the division
+ * manager in case review was routed to someone else; other tasks keep the restored implementer.
+ * A re-pin refused because a worker already claimed the task (409) still counts as rejected.
  */
 export async function reject(id: string, reason: string, hermes: HermesClient, hires: HireStore): Promise<KanbanTask> {
   const task = await requireAwaitingApproval(id, hermes);
   await hermes.addComment(id, `Changes requested by HQ: ${reason}`, UI_AUTHOR);
   const reopened = await hermes.updateTask(id, { status: "todo" });
+  const roster = await fullRoster(hires);
   const division = divisionForTenant(task.tenant);
-  if (!division) return reopened;
-  const manager = managerOf(division.id, await fullRoster(hires)).profile;
-  return reopened.assignee === manager ? reopened : hermes.updateTask(id, { assignee: manager });
+  if (!division || !(isMandate(task, roster) || isMandate(reopened, roster))) return reopened;
+  const manager = managerOf(division.id, roster).profile;
+  if (reopened.assignee === manager) return reopened;
+  try {
+    return await hermes.updateTask(id, { assignee: manager });
+  } catch (err) {
+    if (err instanceof HermesError && err.status === 409) return reopened;
+    throw err;
+  }
 }

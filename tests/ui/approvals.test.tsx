@@ -9,6 +9,7 @@ const reviewTasks = [
   task({ id: "r1", title: "Studio rebrand", status: "review", assignee: "zain-studio-vp", latest_summary: "Delivered 3 concepts" }),
   task({ id: "r2", title: "Tech migration", status: "review", tenant: "zain-tech", assignee: "zain-tech-vp", result: "Migrated" }),
   task({ id: "x", title: "Still running", status: "running" }),
+  task({ id: "s", title: "Specialist self-review", status: "review", assignee: "zain-studio-copy" }),
 ];
 
 function setup(extra: Record<string, unknown> = {}) {
@@ -32,6 +33,7 @@ describe("ApprovalsInbox", () => {
     expect(screen.getByText("Delivered 3 concepts")).toBeInTheDocument();
     expect(screen.getByText("Migrated")).toBeInTheDocument();
     expect(screen.queryByText("Still running")).not.toBeInTheDocument();
+    expect(screen.queryByText("Specialist self-review")).not.toBeInTheDocument();
   });
 
   it("approve calls the approve endpoint with the optional note", async () => {

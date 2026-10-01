@@ -21,9 +21,9 @@ export function TaskCard({ task, agents, now, onOpen }: Props) {
           {isMandate(task, agents) && <span className="zui-badge zui-badge--mandate">Mandate</span>}
         </span>
         <span className="zui-card__meta zui-card__stats">
-          {task.progress && (
+          {task.dependencyProgress && (
             <span title="Subtasks done">
-              {task.progress.done}/{task.progress.total}
+              {task.dependencyProgress.done}/{task.dependencyProgress.total} subtasks
             </span>
           )}
           <span title="Priority">P{task.priority}</span>

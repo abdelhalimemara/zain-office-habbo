@@ -1,4 +1,4 @@
-import { getDivision } from "../../../shared/divisions";
+import { getDivision, type Division } from "../../../shared/divisions";
 import { CEO_PROFILE, agentsInDivision, findAgent, type RosterAgent } from "../../../shared/roster";
 import { humanize } from "../headcount/skillFile";
 
@@ -26,6 +26,20 @@ function teamLines(agent: RosterAgent, roster: readonly RosterAgent[]): string[]
     .map((a) => `- \`${a.profile}\` — ${a.title}`);
 }
 
+/** The VP-owned fan-out, spelled out in the Hermes worker tools the VP actually has. */
+function fanOutProtocol(division: Division, team: readonly string[]): string[] {
+  return [
+    "1. Plan: break the mandate into concrete pieces of work for your team.",
+    `2. For each piece call \`kanban_create\` with \`tenant="${division.tenant}"\` and an \`assignee\` from ONLY this team list:`,
+    ...(team.length ? team.map((t) => `   ${t}`) : ["   - (no team members yet: do the work yourself and skip to step 5)"]),
+    "3. For each subtask call `kanban_link(parent_id=<subtask id>, child_id=<this mandate's id>)` so the mandate waits on it.",
+    '4. Call `kanban_block(kind="dependency", reason="Waiting on N subtasks: <ids>")` on the mandate. It resumes on its own when every subtask is done.',
+    "5. When resumed, read the subtask results (`kanban_show`), write the consolidated deliverable, and call `kanban_request_review` with the full roll-up as the `summary`. HQ approves or requests changes.",
+    "",
+    "Never complete the mandate yourself (`kanban_complete`), and never assign work outside your team. When HQ requests changes, read their comment and repeat from step 1 for what is missing.",
+  ];
+}
+
 export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): string {
   const division = getDivision(agent.division);
   const lines = [
@@ -37,21 +51,20 @@ export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): str
     "## How work flows at Zain Group",
     "",
     `- All work lives on the \`zain-group\` kanban board. Every ${division.name} task carries tenant \`${division.tenant}\`.`,
-    "- HQ issues *mandates* to division managers. Managers decompose them into child tasks for their own team only.",
-    "- When every child task is done, the manager rolls the results up into the mandate and moves it to `review`, which means awaiting HQ approval.",
+    "- HQ issues *mandates* to division managers (VPs; the COO for HQ). The manager fans each mandate out to their own team as subtasks.",
+    "- When every subtask is done, the manager rolls the results up and requests review, which means awaiting HQ approval.",
     "- HQ approves (the mandate becomes done) or requests changes with a comment and sends it back to the manager.",
-    "- Finish your own tasks with a clear result summary; never mark a mandate done yourself.",
   ];
   if (agent.rank === "vp") {
-    const team = teamLines(agent, roster);
+    lines.push("", "## Handling a mandate (you are the division manager)", "", ...fanOutProtocol(division, teamLines(agent, roster)));
+  } else {
     lines.push(
       "",
-      "## Your responsibilities as division manager",
+      "## Handling your tasks",
       "",
-      "- You own decomposition: split each mandate into concrete tasks assigned to the right member of your team.",
-      "- You own the roll-up: when the children are done, write the combined result into the mandate and move it to `review` for HQ approval.",
-      "- When HQ requests changes, read the comment, re-plan with your team and resubmit.",
-      ...(team.length ? ["", "Your team:", ...team] : []),
+      "- Do the task you are assigned and finish it with `kanban_complete`, including a clear result summary your manager can roll up.",
+      "- Do not request review from HQ and do not create work for other divisions; HQ only reviews your manager's mandates.",
+      "- If you are genuinely stuck, block with the exact reason so your manager can help.",
     );
   }
   if (agent.reviewer) {
@@ -66,19 +79,17 @@ export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): str
   return lines.join("\n");
 }
 
-/** The mandate body: HQ's brief followed by explicit instructions for the division manager. */
+/** The mandate body: HQ's brief followed by the fan-out protocol for the division manager. */
 export function mandateBody(brief: string, manager: RosterAgent, roster: readonly RosterAgent[]): string {
   const division = getDivision(manager.division);
-  const team = teamLines(manager, roster);
   return [
     brief || "(No further brief provided.)",
     "",
     "---",
     `**Instructions for ${manager.title} (\`${manager.profile}\`)**`,
     "",
-    `This is an HQ mandate for ${division.name}. Decompose it into tasks for this team only (tenant \`${division.tenant}\`):`,
-    ...(team.length ? team : ["- (no team members yet: do the work yourself)"]),
+    `This is an HQ mandate for ${division.name}. You own it end to end:`,
     "",
-    "When all child tasks are done, roll up their results into this mandate's result and move it to `review` for HQ approval. Do not mark it done yourself.",
+    ...fanOutProtocol(division, teamLines(manager, roster)),
   ].join("\n");
 }

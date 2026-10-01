@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { localOnly } from "./guard";
+import { localOnly, parseOriginList, type GuardOptions } from "./guard";
 import { HermesClient } from "./hermes/client";
 import { HeadcountSource } from "./headcount/catalog";
 import { health } from "./health";
 import { HttpError, errorResponse, optionalString, readJsonObject, requiredString, taskIdParam } from "./http";
+import { boardWithProgress } from "./org/board";
 import { hire, parseHireRequest } from "./org/hire";
 import { fullRoster, type HireStore } from "./org/hireStore";
 import { mergeRoster } from "./org/rosterView";
@@ -14,15 +15,17 @@ export interface AppDeps {
   hermes: HermesClient;
   headcount: HeadcountSource;
   hires: HireStore;
+  guard?: GuardOptions;
 }
 
+export const DEFAULT_PORT = 8787;
 const MAX_BODY_BYTES = 128 * 1024;
 
 export function createApp(deps: AppDeps): Hono {
-  const { hermes, headcount, hires } = deps;
+  const { hermes, headcount, hires, guard = { port: DEFAULT_PORT } } = deps;
   const app = new Hono();
 
-  app.use("/api/*", localOnly);
+  app.use("/api/*", localOnly(guard));
   app.use(
     "/api/*",
     bodyLimit({
@@ -36,15 +39,15 @@ export function createApp(deps: AppDeps): Hono {
 
   app.get("/api/health", async (c) => c.json(await health(hermes)));
 
-  app.get("/api/board", async (c) => c.json(await hermes.board()));
+  app.get("/api/board", async (c) => c.json(await boardWithProgress(hermes, hires)));
 
-  app.get("/api/tasks/:id", async (c) => c.json(await taskDetail(taskIdParam(c), hermes)));
+  app.get("/api/tasks/:id", async (c) => c.json(await taskDetail(taskIdParam(c), hermes, hires)));
 
   app.post("/api/tasks/:id/comments", async (c) => {
     const id = taskIdParam(c);
     const body = requiredString(await readJsonObject(c), "body", 1, 20_000);
     await hermes.addComment(id, body, UI_AUTHOR);
-    return c.json(await taskDetail(id, hermes), 201);
+    return c.json(await taskDetail(id, hermes, hires), 201);
   });
 
   app.post("/api/mandates", async (c) => {
@@ -85,11 +88,17 @@ export function createApp(deps: AppDeps): Hono {
 export interface Env {
   HERMES_URL?: string;
   HERMES_SESSION_TOKEN?: string;
+  HEADCOUNT_REF?: string;
+  ZAIN_ALLOWED_ORIGINS?: string;
+}
+
+export function guardOptions(port: number, env: Env): GuardOptions {
+  return { port, extraOrigins: parseOriginList(env.ZAIN_ALLOWED_ORIGINS) };
 }
 
 export function defaultClients(env: Env): Pick<AppDeps, "hermes" | "headcount"> {
   return {
     hermes: new HermesClient({ baseUrl: env.HERMES_URL, token: env.HERMES_SESSION_TOKEN }),
-    headcount: new HeadcountSource(),
+    headcount: new HeadcountSource({ ref: env.HEADCOUNT_REF }),
   };
 }

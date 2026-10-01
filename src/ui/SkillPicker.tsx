@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { useHeadcountCatalog } from "../api/hooks";
 import { ErrorNote } from "./common";
-import { MAX_SKILLS } from "./hireForm";
+import { MAX_SKILLS } from "@shared/hireRules";
 
 interface Props {
   value: readonly string[];

@@ -16,6 +16,8 @@ function board(tasks: KanbanTask[]): KanbanBoard {
   };
 }
 
+const allOf = (b: KanbanBoard) => b.columns.flatMap((c) => c.tasks);
+
 describe("flow", () => {
   const b = board([
     task("m1", "review", "zain-studio-vp"),
@@ -32,8 +34,16 @@ describe("flow", () => {
     expect(isMandate(task("x", "todo", null))).toBe(false);
   });
 
-  it("lists tasks awaiting HQ approval", () => {
-    expect(pendingApprovals(b).map((t) => t.id)).toEqual(["m1"]);
+  it("lists only mandates awaiting HQ approval", () => {
+    const withSpecialistReview = board([...allOf(b), task("s1", "review", "zain-studio-copy"), task("u1", "review", null)]);
+    expect(pendingApprovals(withSpecialistReview).map((t) => t.id)).toEqual(["m1"]);
+  });
+
+  it("recognises mandates of locally hired VPs when given the merged roster", () => {
+    const hired = { profile: "zain-studio-vp2", title: "VP Motion", division: "studio" as const, rank: "vp" as const, reportsTo: "default", skills: [] };
+    const b2 = board([task("m2", "review", "zain-studio-vp2")]);
+    expect(pendingApprovals(b2)).toEqual([]);
+    expect(pendingApprovals(b2, [hired]).map((t) => t.id)).toEqual(["m2"]);
   });
 
   it("surfaces the most urgent activity per agent", () => {

@@ -6,7 +6,7 @@
  * 403 foreign host/origin, 502 Hermes unreachable or token rejected.
  */
 import type { DivisionId } from "./divisions";
-import type { KanbanBoard, KanbanComment, KanbanTask } from "./hermes";
+import type { KanbanBoard, KanbanComment, KanbanTask, TaskStatus } from "./hermes";
 import type { RosterAgent } from "./roster";
 
 export const API = {
@@ -26,16 +26,31 @@ export interface HealthResponse {
   ok: boolean;
   hermes: "reachable" | "unreachable" | "unauthorized";
   telegram: "connected" | "disconnected" | "unknown";
+  /**
+   * Hermes `kanban.review_dispatch` (default on): when on, a Hermes review agent claims every
+   * `review` task and may approve mandates before HQ sees them.
+   */
+  reviewDispatch: "on" | "off" | "unknown";
   board: string;
 }
 
 export type BoardResponse = KanbanBoard;
 
+export interface Subtask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  assignee: string | null;
+}
+
 export interface TaskDetailResponse {
   task: KanbanTask;
   comments: KanbanComment[];
+  /** Raw Hermes links. A mandate's subtasks are its *parents* (the mandate waits on them). */
   parents: string[];
   children: string[];
+  /** The mandate's subtasks (from its parents); empty for non-mandates. */
+  subtasks: Subtask[];
 }
 
 /** POST taskComments → 201 TaskDetailResponse (refreshed). */
