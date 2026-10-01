@@ -66,7 +66,7 @@ export interface Seat {
   y: number;
   facing: Facing;
   room: string;
-  role?: "ceo" | "manager";
+  role?: "ceo" | "manager" | "board";
   desk: string;
 }
 

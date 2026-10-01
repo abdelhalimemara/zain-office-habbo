@@ -38,6 +38,10 @@ export function assignSeats(layout: FloorLayout, agents: readonly SeatCandidate[
   for (const a of ordered) {
     if (a.rank === "ceo" && take(roleSeat("ceo"), a.profile)) continue;
     if (a.rank === "vp" && take(roleSeat("manager"), a.profile)) continue;
+    if (a.rank === "board") {
+      if (!take(roleSeat("board"), a.profile)) overflow.push(a.profile);
+      continue;
+    }
     rest.push(a);
   }
   const free = layout.seats.filter((s) => !s.role);

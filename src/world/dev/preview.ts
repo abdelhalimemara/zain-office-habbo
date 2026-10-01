@@ -7,15 +7,20 @@ const ACTIVITIES: AgentActivity[] = ["working", "blocked", "awaiting-approval", 
 const params = new URLSearchParams(location.search);
 
 function mockAgents(): WorldAgent[] {
-  return ROSTER.map((a, i) => ({
+  const agents: WorldAgent[] = ROSTER.map((a, i) => ({
     profile: a.profile,
     title: a.title,
     division: a.division,
     rank: a.rank,
-    activity: ACTIVITIES[i % ACTIVITIES.length]!,
+    activity: a.rank === "board" ? "working" : ACTIVITIES[i % ACTIVITIES.length]!,
     bubble: i % 3 === 0 ? "Q4 launch brief" : undefined,
-    hired: params.get("vacant") === "all" ? false : i % 7 !== 6,
+    hired: params.get("vacant") === "all" ? false : a.rank === "board" || i % 7 !== 6,
   }));
+  const seated = agents.filter((a) => a.rank === "board").length;
+  for (let n = seated + 1; n <= 5; n++) {
+    agents.push({ profile: `zain-board-seat-${n}`, title: "Board · Open seat", division: "hq", rank: "board", activity: "idle", hired: false });
+  }
+  return agents;
 }
 
 function mockStats(): Record<DivisionId, DivisionStats> {

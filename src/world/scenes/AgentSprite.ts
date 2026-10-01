@@ -128,7 +128,8 @@ export class AgentSprite {
   }
 
   private wantsSeat(): boolean {
-    return !!this.seat && (!this.agent.hired || this.agent.activity !== "idle");
+    if (!this.seat) return false;
+    return !this.agent.hired || this.agent.activity !== "idle" || this.agent.rank === "board";
   }
 
   private retarget(): void {
@@ -267,11 +268,12 @@ export class AgentSprite {
   }
 
   private drawGlow(on: boolean, flicker: number): void {
-    const key = on && this.seat ? `${this.seat.id}|${flicker}` : "";
+    const hasMonitor = this.seat?.role !== "board";
+    const key = on && this.seat && hasMonitor ? `${this.seat.id}|${flicker}` : "";
     if (key === this.glowKey) return;
     this.glowKey = key;
     this.glow.clear();
-    if (!on || !this.seat) return;
+    if (!key || !this.seat) return;
     const v = FACING_VEC[this.seat.facing];
     const m = monitorGeom(this.seat.x + v.dx, this.seat.y + v.dy, opposite(this.seat.facing));
     if (m.visible) {

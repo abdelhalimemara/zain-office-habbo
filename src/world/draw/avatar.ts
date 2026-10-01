@@ -28,6 +28,7 @@ const FRONT_HAIR: Record<HairStyle, R[]> = {
   buzz: [[-6, -31, 12, 2]],
   curly: [[-7, -33, 14, 5], [-8, -30, 3, 5], [5, -30, 3, 5]],
   hijab: [[-7, -32, 14, 6], [-7, -26, 3, 9], [4, -26, 3, 9], [-4, -19, 9, 2]],
+  receding: [[-6, -31, 3, 2], [3, -31, 3, 2], [-6, -29, 2, 5], [5, -29, 1, 3]],
 };
 
 const BACK_HAIR: Record<HairStyle, R[]> = {
@@ -39,6 +40,7 @@ const BACK_HAIR: Record<HairStyle, R[]> = {
   buzz: [[-6, -31, 12, 9]],
   curly: [[-7, -33, 14, 12], [-8, -30, 16, 5]],
   hijab: [[-7, -32, 14, 15]],
+  receding: [[-6, -27, 12, 6], [-5, -29, 10, 2]],
 };
 
 function shift(rects: R[], dy: number): R[] {
@@ -88,12 +90,14 @@ export function drawAvatar(g: Graphics, a: Appearance, pose: Pose): void {
       d([[4, -28, 2, 9]], shade(a.skin, -0.12));
     }
     d([[-1, -25, 1, 2], [2, -25, 1, 2]], PAL.black);
+    if (a.glasses) d([[-2, -26, 3, 1], [1, -26, 3, 1], [-2, -24, 1, 1], [3, -24, 1, 1]], 0x3a3530);
     d([[0, -21, 2, 1]], shade(a.skin, -0.3));
     if (a.outfit !== "casual") {
       d([[-1, -18, 3, 4]], PAL.white);
       d([[-2, -18, 1, 5], [2, -18, 1, 5]], a.lapel);
       d([[0, -17, 1, 5]], a.tie);
       if (a.outfit === "ceo") d([[-4, -16, 1, 1]], PAL.gold);
+      if (a.outfit === "board") d([[-3, -17, 1, 1]], PAL.gold);
     } else {
       d([[-1, -18, 3, 1]], shade(a.shirt, 0.3));
     }

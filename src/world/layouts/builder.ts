@@ -64,14 +64,24 @@ export class LayoutBuilder {
     return this.seat(x, y, facing, room, desk.id, role);
   }
 
+  /** A seat on a chair at a shared table (no desk or monitor of its own). */
+  tableSeat(x: number, y: number, facing: Facing, room: string, table: Furniture, role?: Seat["role"]): Seat {
+    return this.seat(x, y, facing, room, table.id, role);
+  }
+
+  /** Loose chairs around a table, leaving out tiles already taken by seats. */
   chairsAround(x: number, y: number, w: number, d: number, ends = true): this {
+    const taken = new Set(this.seats.map((s) => `${s.x},${s.y}`));
+    const chair = (cx: number, cy: number, dir: Facing) => {
+      if (!taken.has(`${cx},${cy}`)) this.add("chair", cx, cy, 1, 1, dir);
+    };
     for (let i = 0; i < w; i++) {
-      this.add("chair", x + i, y - 1, 1, 1, "sw");
-      this.add("chair", x + i, y + d, 1, 1, "ne");
+      chair(x + i, y - 1, "sw");
+      chair(x + i, y + d, "ne");
     }
     for (let j = 0; ends && j < d; j++) {
-      this.add("chair", x - 1, y + j, 1, 1, "se");
-      this.add("chair", x + w, y + j, 1, 1, "nw");
+      chair(x - 1, y + j, "se");
+      chair(x + w, y + j, "nw");
     }
     return this;
   }

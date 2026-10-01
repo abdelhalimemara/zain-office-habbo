@@ -62,6 +62,10 @@ function glyph(ch: string): readonly string[] {
   return GLYPHS[ch.toUpperCase()] ?? GLYPHS["?"]!;
 }
 
+export function pixelTextSupports(text: string): boolean {
+  return [...text].every((ch) => GLYPHS[ch.toUpperCase()] !== undefined);
+}
+
 export function measureText(text: string, scale = 1): number {
   let w = 0;
   for (const ch of text) w += glyph(ch)[0]!.length + 1;
