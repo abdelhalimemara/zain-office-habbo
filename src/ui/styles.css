@@ -299,6 +299,9 @@
 .zui-column__list,
 .zui-chips,
 .zui-subtasks,
+.zui-board-members,
+.zui-consultations,
+.zui-lens,
 .zui-comments,
 .zui-steps {
   list-style: none;
@@ -492,3 +495,8 @@ textarea.zui-input { resize: vertical; }
 @media (prefers-reduced-motion: reduce) {
   .zui-panel { animation: none; }
 }
+
+.zui-board-member { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; background: var(--bg-2); border-left: 4px solid var(--accent); }
+.zui-board-member .zui-hint { flex-basis: 100%; margin: 0; }
+.zui-lens { font-size: 13px; }
+.zui-skill-group { margin: 4px 0 0; font-size: 12px; color: var(--muted); }

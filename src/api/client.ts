@@ -1,6 +1,8 @@
 import {
   API,
   type ApproveRequest,
+  type BoardConsultRequest,
+  type BoardConsultResponse,
   type BoardResponse,
   type CreateMandateRequest,
   type CreateMandateResponse,
@@ -54,6 +56,7 @@ export const api = {
   approve: (id: string, input: ApproveRequest = {}) => post<unknown>(API.approve(id), input),
   reject: (id: string, input: RejectRequest) => post<unknown>(API.reject(id), input),
   reopen: (id: string, input: ReopenRequest) => post<unknown>(API.reopen(id), input),
+  boardConsult: (input: BoardConsultRequest) => post<BoardConsultResponse>(API.boardConsult, input),
   roster: () => request<RosterResponse>(API.roster),
   hire: (input: HireRequest) => post<HireResponse>(API.hire, input),
   headcountCatalog: () => request<HeadcountCatalogResponse>(API.headcountCatalog),

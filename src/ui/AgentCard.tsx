@@ -1,9 +1,21 @@
+import { findBoardMember } from "@shared/board";
 import { getDivision } from "@shared/divisions";
 import { agentActivity } from "@shared/flow";
+import { SKILL_SOURCES, skillSourceFor } from "@shared/skillSources";
 import { useBoard } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { ActivityBadge, RANK_LABEL, useRosterAgents } from "./common";
 import { Panel } from "./Panel";
+
+/** Headcount skills stay one flat list; skills from a registered source are grouped under it. */
+function skillGroups(skills: readonly string[]): { label: string | null; skills: string[] }[] {
+  const headcount = skills.filter((s) => !skillSourceFor(s));
+  const sources = SKILL_SOURCES.map((src) => ({
+    label: `${src.id} · ${src.repo} (${src.license})`,
+    skills: skills.filter((s) => skillSourceFor(s) === src),
+  })).filter((g) => g.skills.length > 0);
+  return [...(headcount.length ? [{ label: null, skills: headcount }] : []), ...sources];
+}
 
 export function AgentCard({ profile }: { profile: string }) {
   const { agents, loaded } = useRosterAgents();
@@ -24,6 +36,7 @@ export function AgentCard({ profile }: { profile: string }) {
   const boss = agent.reportsTo ? agents.find((a) => a.profile === agent.reportsTo) : undefined;
   const current = board.data ? agentActivity(profile, board.data) : null;
   const vacant = loaded && !agent.hired;
+  const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
 
   return (
     <Panel title={agent.title} accent={d.color} onClose={closePanel}>
@@ -34,8 +47,19 @@ export function AgentCard({ profile }: { profile: string }) {
         <dd>{d.name}</dd>
         <dt>Rank</dt>
         <dd>{RANK_LABEL[agent.rank]}</dd>
-        <dt>Reports to</dt>
-        <dd>{agent.reportsTo ? (boss?.title ?? agent.reportsTo) : "The user (Telegram)"}</dd>
+        {member ? (
+          <>
+            <dt>Role</dt>
+            <dd>Advises the CEO and founder</dd>
+            <dt>Seat</dt>
+            <dd>{member.seat}</dd>
+          </>
+        ) : (
+          <>
+            <dt>Reports to</dt>
+            <dd>{agent.reportsTo ? (boss?.title ?? agent.reportsTo) : "The user (Telegram)"}</dd>
+          </>
+        )}
         <dt>Status</dt>
         <dd>
           {!loaded ? "…" : vacant ? <span className="zui-badge zui-badge--vacant">Vacant</span> : <span className="zui-badge zui-badge--hired">Hired</span>}
@@ -55,15 +79,35 @@ export function AgentCard({ profile }: { profile: string }) {
           </>
         )}
       </dl>
+      {member && (
+        <>
+          <h3 className="zui-subheading">Lens</h3>
+          <ul className="zui-lens">
+            {member.lens.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </>
+      )}
       <h3 className="zui-subheading">Skills</h3>
-      <ul className="zui-chips">
-        {agent.skills.map((s) => (
-          <li key={s} className="zui-chip" style={{ borderColor: d.color }}>
-            {s}
-          </li>
-        ))}
-      </ul>
+      {skillGroups(agent.skills).map((g) => (
+        <section key={g.label ?? "headcount"} aria-label={g.label ? `${g.label} skills` : "Skills"}>
+          {g.label && <p className="zui-skill-group">{g.label}</p>}
+          <ul className="zui-chips">
+            {g.skills.map((s) => (
+              <li key={s} className="zui-chip" style={{ borderColor: d.color }}>
+                {g.label ? s.split(":")[1] : s}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
       <div className="zui-row">
+        {member && !vacant && (
+          <button type="button" className="zui-btn zui-btn--primary" onClick={() => openPanel({ kind: "board", members: [agent.profile] })}>
+            Consult
+          </button>
+        )}
         {agent.rank === "vp" && (
           <button type="button" className="zui-btn zui-btn--primary" onClick={() => openPanel({ kind: "kanban", division: agent.division })}>
             Open kanban

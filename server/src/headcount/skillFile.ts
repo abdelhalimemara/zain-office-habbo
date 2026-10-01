@@ -1,3 +1,4 @@
+import { skillSourceFor } from "../../../shared/skillSources";
 import { parseSkillId } from "./catalog";
 
 /**
@@ -10,11 +11,20 @@ const NAME_MAX = 64;
 const DESCRIPTION_MAX = 60;
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\s*\r?\n/;
 
-/** `marketing:brand-voice` → `hc-marketing-brand-voice`; the prefix keeps clear of cloned default skills. */
+/**
+ * `marketing:brand-voice` → `hc-marketing-brand-voice`, `hormozi:pricing-strategy` →
+ * `hz-pricing-strategy` (the source's prefix); prefixes keep clear of cloned default skills.
+ */
 export function hermesSkillName(id: string): string {
   const parsed = parseSkillId(id);
-  if (!parsed) throw new Error(`invalid headcount skill id ${id}`);
-  return `hc-${parsed.department}-${parsed.skill}`.slice(0, NAME_MAX).replace(/[-.]+$/, "");
+  if (!parsed) throw new Error(`invalid skill id ${id}`);
+  const source = skillSourceFor(id);
+  const name = source ? `${source.hermesPrefix}-${parsed.skill}` : `hc-${parsed.department}-${parsed.skill}`;
+  return name.slice(0, NAME_MAX).replace(/[-.]+$/, "");
+}
+
+export function skillCategory(id: string): string {
+  return skillSourceFor(id)?.category ?? SKILL_CATEGORY;
 }
 
 export function humanize(slug: string): string {
@@ -35,15 +45,21 @@ function upstreamDescription(frontmatter: string): string | null {
   return match[1].trim().replace(/^(["'])([\s\S]*)\1$/, "$2");
 }
 
-/** Rewrites an upstream headcount SKILL.md so Hermes accepts it as a new skill. */
-export function toHermesSkill(id: string, upstream: string): { name: string; content: string } {
+function attribution(id: string): string {
+  const source = skillSourceFor(id);
+  if (!source) return `> Headcount skill \`${id}\` (github.com/cbrock84/headcount).`;
+  return `> Skill \`${id}\` from github.com/${source.repo} at ${source.ref.slice(0, 12)} (${source.license}).`;
+}
+
+/** Rewrites an upstream SKILL.md so Hermes accepts it as a new skill in the right category. */
+export function toHermesSkill(id: string, upstream: string): { name: string; content: string; category: string } {
   const parsed = parseSkillId(id);
-  if (!parsed) throw new Error(`invalid headcount skill id ${id}`);
+  if (!parsed) throw new Error(`invalid skill id ${id}`);
   const name = hermesSkillName(id);
   const source = upstream.replace(/^﻿/, "");
   const fm = FRONTMATTER.exec(source);
   const body = (fm ? source.slice(fm[0].length) : source).trim();
-  if (!body) throw new Error(`headcount skill ${id} has an empty SKILL.md`);
+  if (!body) throw new Error(`skill ${id} has an empty SKILL.md`);
   const whenToUse = fm ? upstreamDescription(fm[1]!) : null;
   const content = [
     "---",
@@ -51,11 +67,11 @@ export function toHermesSkill(id: string, upstream: string): { name: string; con
     `description: ${JSON.stringify(shortDescription(parsed.department, parsed.skill))}`,
     "---",
     "",
-    `> Headcount skill \`${id}\` (github.com/cbrock84/headcount).`,
+    attribution(id),
     ...(whenToUse ? ["", `**When to use:** ${whenToUse}`] : []),
     "",
     body,
     "",
   ].join("\n");
-  return { name, content };
+  return { name, content, category: skillCategory(id) };
 }

@@ -6,6 +6,7 @@ import { HermesClient, type FetchLike } from "../../server/src/hermes/client";
 import { memoryHireStore, type HireStore } from "../../server/src/org/hireStore";
 import type { KanbanTask } from "../../shared/hermes";
 import { ROSTER } from "../../shared/roster";
+import { SKILL_SOURCES, skillSourceFor } from "../../shared/skillSources";
 
 export const TOKEN = "tok-secret-123";
 export const KANBAN = "/api/plugins/kanban";
@@ -84,7 +85,7 @@ function skillMarkdown(skill: string): string {
 
 export function githubFetch(options: { down?: boolean } = {}) {
   const tree = [
-    ...new Set(ROSTER.flatMap((a) => a.skills)),
+    ...new Set(ROSTER.flatMap((a) => a.skills).filter((id) => !skillSourceFor(id))),
     "security:incident-response",
   ].map((id) => {
     const [dept, skill] = id.split(":");
@@ -98,6 +99,11 @@ export function githubFetch(options: { down?: boolean } = {}) {
         `GET /cbrock84/headcount/${HEADCOUNT_REF}/${path}`,
         () => new Response(skillMarkdown(path.split("/")[3]!)),
       ]),
+    ),
+    ...Object.fromEntries(
+      SKILL_SOURCES.flatMap((source) =>
+        source.skills.map((skill) => [`GET /${source.repo}/${source.ref}/${source.skillPath(skill)}`, () => new Response(skillMarkdown(skill))]),
+      ),
     ),
   });
 }

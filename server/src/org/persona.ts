@@ -1,6 +1,8 @@
 import { getDivision, type Division } from "../../../shared/divisions";
 import { CEO_PROFILE, agentsInDivision, findAgent, type RosterAgent } from "../../../shared/roster";
+import { findBoardMember } from "../../../shared/board";
 import { humanize } from "../headcount/skillFile";
+import { boardDescription, boardSoul } from "./boardPersona";
 
 function bossLabel(agent: RosterAgent, roster: readonly RosterAgent[]): string {
   if (!agent.reportsTo) return "nobody";
@@ -15,6 +17,8 @@ function skillNames(agent: RosterAgent): string {
 
 /** Short routing signal for Hermes' decomposer: who this is and what they are good at. */
 export function profileDescription(agent: RosterAgent): string {
+  const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
+  if (member) return boardDescription(member);
   const division = getDivision(agent.division);
   const text = `${division.name} · ${agent.title} (${agent.rank}). ${division.tagline}. Skills: ${skillNames(agent)}.`;
   return text.length <= 400 ? text : `${text.slice(0, 399)}…`;
@@ -22,7 +26,7 @@ export function profileDescription(agent: RosterAgent): string {
 
 function teamLines(agent: RosterAgent, roster: readonly RosterAgent[]): string[] {
   return agentsInDivision(agent.division, roster)
-    .filter((a) => a.profile !== agent.profile && a.rank !== "ceo")
+    .filter((a) => a.profile !== agent.profile && a.rank !== "ceo" && a.rank !== "board")
     .map((a) => `- \`${a.profile}\` — ${a.title}`);
 }
 
@@ -43,6 +47,8 @@ function fanOutProtocol(division: Division, team: readonly string[]): string[] {
 }
 
 export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): string {
+  const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
+  if (member) return boardSoul(member);
   const division = getDivision(agent.division);
   const lines = [
     `# ${agent.title} — ${division.name}`,

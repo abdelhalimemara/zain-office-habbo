@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useUiStore, type Panel } from "../state/store";
 import { AgentCard } from "./AgentCard";
 import { ApprovalsInbox } from "./ApprovalsInbox";
+import { BoardPanel } from "./BoardPanel";
 import { HireDialog } from "./HireDialog";
 import { Hud } from "./Hud";
 import { KanbanPanel } from "./KanbanPanel";
@@ -23,6 +24,8 @@ function panelKey(panel: Panel): string {
       return `mandate:${panel.division ?? ""}`;
     case "approvals":
       return "approvals";
+    case "board":
+      return `board:${panel.members?.join(",") ?? ""}`;
   }
 }
 
@@ -32,6 +35,8 @@ function OpenPanel({ panel }: { panel: Panel }) {
       return <KanbanPanel division={panel.division} />;
     case "approvals":
       return <ApprovalsInbox />;
+    case "board":
+      return <BoardPanel members={panel.members} />;
     case "agent":
       return <AgentCard profile={panel.profile} />;
     case "task":

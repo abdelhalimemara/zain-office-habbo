@@ -2,6 +2,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileHireStore, fullRoster, memoryHireStore } from "../../server/src/org/hireStore";
+import { MAX_SKILLS } from "../../shared/hireRules";
 import { ROSTER } from "../../shared/roster";
 import { json, setup, type Handler } from "./helpers";
 
@@ -38,8 +39,9 @@ describe("POST /api/hire validation", () => {
     [{ reportsTo: "zain-nobody" }, "reportsTo"],
     [{ reportsTo: null }, "reportsTo"],
     [{ skills: [] }, "skills"],
-    [{ skills: Array.from({ length: 16 }, (_, i) => `technology:s${i}`) }, "skills"],
-    [{ skills: ["technology:not-a-skill"] }, "unknown headcount skill"],
+    [{ skills: Array.from({ length: MAX_SKILLS + 1 }, (_, i) => `technology:s${i}`) }, "skills"],
+    [{ skills: ["technology:not-a-skill"] }, "unknown skill"],
+    [{ skills: ["hormozi:create-plugin"] }, "unknown skill hormozi:create-plugin"],
     [{ skills: ["api-design"] }, "department:skill"],
     [{ skills: "technology:api-design" }, "skills"],
     [{ reviewer: "yes" }, "reviewer"],

@@ -8,6 +8,7 @@ import { health } from "./health";
 import { CeoWake } from "./telegram/ceoWake";
 import { HttpError, errorResponse, optionalString, readJsonObject, requiredString, taskIdParam } from "./http";
 import { boardWithProgress } from "./org/board";
+import { consultBoard, parseConsult } from "./org/consult";
 import { hire, parseHireRequest } from "./org/hire";
 import { fullRoster, type HireStore } from "./org/hireStore";
 import { mergeRoster } from "./org/rosterView";
@@ -82,6 +83,11 @@ export function createApp(deps: AppDeps): Hono {
     const id = taskIdParam(c);
     const instructions = requiredString(await readJsonObject(c), "instructions", 1, 4000);
     return c.json({ task: await unblock(id, instructions, hermes, hires) });
+  });
+
+  app.post("/api/board/consult", async (c) => {
+    const req = parseConsult(await readJsonObject(c));
+    return c.json(await consultBoard(req, { hermes, hires, ceoWake }), 201);
   });
 
   app.get("/api/roster", async (c) => {

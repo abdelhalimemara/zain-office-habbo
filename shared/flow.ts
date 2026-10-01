@@ -29,6 +29,18 @@ export function isMandate(task: KanbanTask, roster?: readonly RosterAgent[]): bo
   return agent?.rank === "vp";
 }
 
+/** Tasks for board advisors (consultations). Never mandates and never HQ approvals. */
+export function isBoardTask(task: KanbanTask, roster?: readonly RosterAgent[]): boolean {
+  return !!task.assignee && findAgent(task.assignee, roster)?.rank === "board";
+}
+
+/** Board consultations, newest first. */
+export function boardConsultations(board: KanbanBoard, roster?: readonly RosterAgent[]): KanbanTask[] {
+  return allTasks(board)
+    .filter((t) => isBoardTask(t, roster))
+    .sort((a, b) => b.created_at - a.created_at);
+}
+
 /** Subtasks done / total; Hermes counts archived as satisfying a dependency too. */
 export function subtaskProgress(subtasks: readonly { status: TaskStatus }[]): { done: number; total: number } {
   return { done: subtasks.filter((s) => s.status === "done" || s.status === "archived").length, total: subtasks.length };
