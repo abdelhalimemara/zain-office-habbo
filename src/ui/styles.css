@@ -126,6 +126,9 @@
   box-shadow: inset 2px 2px 0 #ffe27a, inset -2px -2px 0 var(--gold-dark);
 }
 .zui-btn--danger { background: #8e2f33; }
+.zui-approval__close { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px dashed var(--bevel); }
+.zui-approval__close > .zui-btn { align-self: flex-start; }
+.zui-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .zui-btn--icon {
   font-size: 18px;
   padding: 0 8px;

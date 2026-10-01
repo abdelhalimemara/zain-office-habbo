@@ -10,7 +10,7 @@ import { boardWithProgress } from "./org/board";
 import { hire, parseHireRequest } from "./org/hire";
 import { fullRoster, type HireStore } from "./org/hireStore";
 import { mergeRoster } from "./org/rosterView";
-import { UI_AUTHOR, approve, createMandate, parseMandate, reject, taskDetail } from "./org/tasks";
+import { UI_AUTHOR, approve, createMandate, parseMandate, reject, reopen, taskDetail } from "./org/tasks";
 
 export interface AppDeps {
   hermes: HermesClient;
@@ -68,6 +68,12 @@ export function createApp(deps: AppDeps): Hono {
     const id = taskIdParam(c);
     const reason = requiredString(await readJsonObject(c), "reason", 1, 2000);
     return c.json({ task: await reject(id, reason, hermes, hires) });
+  });
+
+  app.post("/api/tasks/:id/reopen", async (c) => {
+    const id = taskIdParam(c);
+    const instructions = requiredString(await readJsonObject(c), "instructions", 1, 4000);
+    return c.json({ task: await reopen(id, instructions, hermes, hires) });
   });
 
   app.get("/api/roster", async (c) => {

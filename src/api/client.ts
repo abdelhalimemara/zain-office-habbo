@@ -9,6 +9,7 @@ import {
   type HireRequest,
   type HireResponse,
   type RejectRequest,
+  type ReopenRequest,
   type RosterResponse,
   type TaskDetailResponse,
 } from "@shared/api";
@@ -52,6 +53,7 @@ export const api = {
   createMandate: (input: CreateMandateRequest) => post<CreateMandateResponse>(API.mandates, input),
   approve: (id: string, input: ApproveRequest = {}) => post<unknown>(API.approve(id), input),
   reject: (id: string, input: RejectRequest) => post<unknown>(API.reject(id), input),
+  reopen: (id: string, input: ReopenRequest) => post<unknown>(API.reopen(id), input),
   roster: () => request<RosterResponse>(API.roster),
   hire: (input: HireRequest) => post<HireResponse>(API.hire, input),
   headcountCatalog: () => request<HeadcountCatalogResponse>(API.headcountCatalog),

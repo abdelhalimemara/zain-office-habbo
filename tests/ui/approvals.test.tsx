@@ -51,33 +51,60 @@ describe("ApprovalsInbox", () => {
     expect(screen.getByRole("heading", { name: "Approvals (2)" })).toBeInTheDocument();
   });
 
-  it("approve calls the approve endpoint with the optional note", async () => {
+  it("asks for an inline confirmation before Approve & close marks the mandate done", async () => {
     const fetch = setup({ [`POST ${API.approve("r1")}`]: { ok: true } });
     const item = await itemFor("Studio rebrand");
-    await userEvent.type(within(item).getByLabelText(/Note to manager/), "Great work");
-    await userEvent.click(within(item).getByRole("button", { name: "Approve" }));
-    expect(await within(item).findByText(/Approved/)).toBeInTheDocument();
-    expect(fetch.calls("POST", API.approve("r1"))).toEqual([{ body: { note: "Great work" } }]);
+    const close = within(item).getByRole("button", { name: "Approve & close" });
+    expect(close).not.toHaveClass("zui-btn--primary");
+    expect(close).toHaveAccessibleDescription("Marks the mandate done. Agents stop working on it.");
+    await userEvent.click(close);
+    const confirm = within(item).getByRole("group", { name: "Confirm close" });
+    expect(confirm).toHaveTextContent("Close this mandate as done?");
+    await userEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(within(item).queryByRole("group", { name: "Confirm close" })).not.toBeInTheDocument();
+    expect(fetch.calls("POST", API.approve("r1"))).toHaveLength(0);
+
+    await userEvent.click(within(item).getByRole("button", { name: "Approve & close" }));
+    await userEvent.click(within(item).getByRole("button", { name: "Confirm" }));
+    expect(await within(item).findByText("Closed — marked done.")).toBeInTheDocument();
+    expect(fetch.calls("POST", API.approve("r1"))).toEqual([{ body: {} }]);
   });
 
-  it("request changes requires a reason before calling reject", async () => {
+  it("Send back to VP is the primary action and requires instructions", async () => {
     const fetch = setup({ [`POST ${API.reject("r2")}`]: { ok: true } });
     const item = await itemFor("Tech migration");
-    await userEvent.click(within(item).getByRole("button", { name: "Request changes" }));
-    expect(within(item).getByText("A reason is required to request changes.")).toBeInTheDocument();
-    expect(within(item).getByLabelText(/Note to manager/)).toHaveAttribute("aria-invalid", "true");
+    const send = within(item).getByRole("button", { name: "Send back to VP" });
+    expect(send).toHaveClass("zui-btn--primary");
+    expect(within(item).queryByRole("button", { name: /Request changes/ })).not.toBeInTheDocument();
+    await userEvent.click(send);
+    expect(within(item).getByText("Write instructions for VP Tech to send this back.")).toBeInTheDocument();
+    expect(within(item).getByLabelText("Instructions for VP Tech")).toHaveAttribute("aria-invalid", "true");
     expect(fetch.calls("POST", API.reject("r2"))).toHaveLength(0);
 
-    await userEvent.type(within(item).getByLabelText(/Note to manager/), "Add rollback plan");
-    await userEvent.click(within(item).getByRole("button", { name: "Request changes" }));
-    expect(await within(item).findByText("Sent back to the manager.")).toBeInTheDocument();
+    await userEvent.type(within(item).getByLabelText("Instructions for VP Tech"), "Add rollback plan");
+    await userEvent.click(send);
+    expect(await within(item).findByText("Sent back to VP Tech.")).toBeInTheDocument();
     expect(fetch.calls("POST", API.reject("r2"))).toEqual([{ body: { reason: "Add rollback plan" } }]);
   });
 
-  it("shows the server error message when approval fails", async () => {
-    setup({ [`POST ${API.approve("r1")}`]: () => new Response(JSON.stringify({ error: "Hermes unreachable" }), { status: 502 }) });
+  it("keeps the generic Approve / Send back wording for subtask reviews", async () => {
+    const fetch = setup({ [`POST ${API.reject("s")}`]: { ok: true } });
+    const section = (await screen.findByText("Subtasks waiting for review (1)")).closest("details")!;
+    const item = within(section).getByText("Specialist self-review").closest("article")!;
+    expect(within(item).queryByRole("button", { name: "Approve & close" })).not.toBeInTheDocument();
+    await userEvent.click(within(item).getByRole("button", { name: "Send back" }));
+    expect(within(item).getByText("A note is required to send this back.")).toBeInTheDocument();
+    await userEvent.type(within(item).getByLabelText(/Note to assignee/), "Cite sources");
+    await userEvent.click(within(item).getByRole("button", { name: "Send back" }));
+    expect(await within(item).findByText("Sent back to the assignee.")).toBeInTheDocument();
+    expect(fetch.calls("POST", API.reject("s"))).toEqual([{ body: { reason: "Cite sources" } }]);
+  });
+
+  it("shows the server error message when closing fails", async () => {
+    setup({ [`POST ${API.approve("r1")}`]: () => new Response(JSON.stringify({ error: "Hermes isn't reachable." }), { status: 502 }) });
     const item = await itemFor("Studio rebrand");
-    await userEvent.click(within(item).getByRole("button", { name: "Approve" }));
-    expect(await within(item).findByRole("alert")).toHaveTextContent("Hermes unreachable");
+    await userEvent.click(within(item).getByRole("button", { name: "Approve & close" }));
+    await userEvent.click(within(item).getByRole("button", { name: "Confirm" }));
+    expect(await within(item).findByRole("alert")).toHaveTextContent("Hermes isn't reachable.");
   });
 });

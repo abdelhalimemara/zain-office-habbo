@@ -2,7 +2,7 @@ import type { CreateMandateRequest, CreateMandateResponse, TaskDetailResponse } 
 import { DIVISION_IDS, divisionForTenant, getDivision, type DivisionId } from "../../../shared/divisions";
 import { AWAITING_APPROVAL, isMandate } from "../../../shared/flow";
 import type { KanbanTask } from "../../../shared/hermes";
-import { managerOf } from "../../../shared/roster";
+import { managerOf, type RosterAgent } from "../../../shared/roster";
 import { HermesError, type HermesClient } from "../hermes/client";
 import { HttpError, badRequest, optionalString, requiredString } from "../http";
 import { mandateSubtasks } from "./board";
@@ -76,24 +76,55 @@ export async function approve(id: string, note: string | undefined, hermes: Herm
 }
 
 /**
+ * Mandates go back to the division manager in case review was routed to someone else. A re-pin
+ * refused because a worker already claimed the task (409) still leaves it with a runnable owner.
+ */
+async function repinToManager(id: string, task: KanbanTask, roster: readonly RosterAgent[], hermes: HermesClient): Promise<KanbanTask> {
+  const division = divisionForTenant(task.tenant);
+  if (!division) return task;
+  const manager = managerOf(division.id, roster).profile;
+  if (task.assignee === manager) return task;
+  try {
+    return await hermes.updateTask(id, { assignee: manager });
+  } catch (err) {
+    if (err instanceof HermesError && err.status === 409) return task;
+    throw err;
+  }
+}
+
+/**
  * review → todo is routed by Hermes to reopen_review_task, which lands on `ready` (or `todo`
- * while parents are open) and restores the implementer. Mandates are re-pinned to the division
- * manager in case review was routed to someone else; other tasks keep the restored implementer.
- * A re-pin refused because a worker already claimed the task (409) still counts as rejected.
+ * while parents are open) and restores the implementer. Mandates are re-pinned to the manager;
+ * other tasks keep the restored implementer.
  */
 export async function reject(id: string, reason: string, hermes: HermesClient, hires: HireStore): Promise<KanbanTask> {
   const task = await requireAwaitingApproval(id, hermes);
   await hermes.addComment(id, `Changes requested by HQ: ${reason}`, UI_AUTHOR);
   const reopened = await hermes.updateTask(id, { status: "todo" });
   const roster = await fullRoster(hires);
-  const division = divisionForTenant(task.tenant);
-  if (!division || !(isMandate(task, roster) || isMandate(reopened, roster))) return reopened;
-  const manager = managerOf(division.id, roster).profile;
-  if (reopened.assignee === manager) return reopened;
+  if (!(isMandate(task, roster) || isMandate(reopened, roster))) return reopened;
+  return repinToManager(id, reopened, roster, hermes);
+}
+
+const REOPENABLE = new Set(["done", "review"]);
+
+/**
+ * Comments never wake an agent and a done task never runs, so HQ's follow-up on a closed (or
+ * awaiting) mandate must reopen it. PATCH status=ready is accepted from both: from `review`
+ * Hermes runs reopen_review_task; from `done` it writes `ready` directly, refusing (409) only while
+ * a parent is unfinished, in which case `todo` waits for the parents and resumes on its own.
+ */
+export async function reopen(id: string, instructions: string, hermes: HermesClient, hires: HireStore): Promise<KanbanTask> {
+  const [{ task }, roster] = await Promise.all([hermes.task(id), fullRoster(hires)]);
+  if (!isMandate(task, roster)) throw new HttpError(409, `task ${id} is not a mandate`);
+  if (!REOPENABLE.has(task.status)) throw new HttpError(409, `mandate ${id} is ${task.status}; only done or review mandates can be reopened`);
+  await hermes.addComment(id, `HQ reopened this mandate: ${instructions}`, UI_AUTHOR);
+  let reopened: KanbanTask;
   try {
-    return await hermes.updateTask(id, { assignee: manager });
+    reopened = await hermes.updateTask(id, { status: "ready" });
   } catch (err) {
-    if (err instanceof HermesError && err.status === 409) return reopened;
-    throw err;
+    if (!(err instanceof HermesError && err.status === 409)) throw err;
+    reopened = await hermes.updateTask(id, { status: "todo" });
   }
+  return repinToManager(id, reopened, roster, hermes);
 }
