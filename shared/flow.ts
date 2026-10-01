@@ -39,6 +39,24 @@ export function pendingApprovals(board: KanbanBoard, roster?: readonly RosterAge
   return allTasks(board).filter((t) => t.status === AWAITING_APPROVAL && isMandate(t, roster));
 }
 
+/** Specialists' tasks parked in `review`: no HQ approval is due, but a human must unstick them. */
+export function waitingSubtaskReviews(board: KanbanBoard, roster?: readonly RosterAgent[]): KanbanTask[] {
+  return allTasks(board).filter((t) => t.status === AWAITING_APPROVAL && !isMandate(t, roster));
+}
+
+export const NO_BRIEF = "(No further brief provided.)";
+
+/**
+ * Mandate bodies are HQ's brief, a `---` line, then `**Instructions for <VP>…**` and the
+ * VP protocol. A `---` not followed by that heading is part of the brief.
+ */
+export function splitMandateBody(body: string): { brief: string; instructions: string | null } {
+  const lines = body.split("\n");
+  const at = lines.findIndex((line, i) => line === "---" && (lines[i + 1] ?? "").startsWith("**Instructions for "));
+  if (at < 0) return { brief: body, instructions: null };
+  return { brief: lines.slice(0, at).join("\n").trimEnd(), instructions: lines.slice(at + 1).join("\n") };
+}
+
 const ACTIVITY_PRIORITY: AgentActivity[] = ["blocked", "awaiting-approval", "working", "queued", "idle"];
 
 function activityOf(status: TaskStatus): AgentActivity | null {

@@ -34,7 +34,7 @@ function LaneList({ lane, tasks, agents, now }: LaneListProps) {
             task={t}
             agents={agents}
             now={now}
-            statusTag={lane.statuses.length > 1 ? t.status : undefined}
+            statusTag={lane.statuses.length > 1 || !lane.statuses.includes(t.status) ? t.status : undefined}
             onOpen={(id) => openPanel({ kind: "task", id })}
           />
         ))}
@@ -91,7 +91,7 @@ export function KanbanPanel({ division }: { division: DivisionId }) {
   const closePanel = useUiStore((s) => s.closePanel);
   const phone = useMediaQuery(PHONE_QUERY);
   const manager = divisionManager(division, agents);
-  const groups = groupByLane(board.data ? tasksForTenant(board.data, d.tenant) : []);
+  const groups = groupByLane(board.data ? tasksForTenant(board.data, d.tenant) : [], agents);
   const managerActivity = board.data ? agentActivity(manager.profile, board.data).activity : null;
   const now = board.data?.now ?? Date.now() / 1000;
 

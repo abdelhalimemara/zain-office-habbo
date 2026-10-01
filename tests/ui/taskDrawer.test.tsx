@@ -45,4 +45,32 @@ describe("TaskDrawer", () => {
     expect(await screen.findByText("Comment posted.")).toBeInTheDocument();
     expect(fetch.calls("POST", API.taskComments("t1"))).toEqual([{ body: { body: "Looks good" } }]);
   });
+
+  function mandate(body: string): TaskDetailResponse {
+    return { ...detail("running"), task: task({ id: "t1", title: "Rebrand", status: "running", assignee: "zain-studio-vp", body }), comments: [] };
+  }
+
+  it("shows HQ's brief and folds the VP instructions into a collapsed details", async () => {
+    const body = `Refresh the logo\n  keep the gold\n\n---\n**Instructions for VP Studio (\`zain-studio-vp\`)**\n\n${evil}`;
+    mockFetch({ [API.task("t1")]: mandate(body), [API.roster]: { agents: rosterEntries } });
+    const { container } = renderUi(<TaskDrawer id="t1" />);
+    const brief = await screen.findByText(/Refresh the logo/);
+    expect(brief.textContent).toBe("Refresh the logo\n  keep the gold");
+    const summary = screen.getByText("Instructions sent to VP Studio");
+    const details = summary.closest("details")!;
+    expect(details).not.toHaveAttribute("open");
+    expect(details).toHaveTextContent("**Instructions for VP Studio");
+    expect(brief).not.toHaveTextContent("Instructions for");
+    expect(container.querySelector("script, img")).toBeNull();
+  });
+
+  it("mutes the no-brief placeholder", async () => {
+    mockFetch({
+      [API.task("t1")]: mandate("(No further brief provided.)\n\n---\n**Instructions for VP Studio (`zain-studio-vp`)**"),
+      [API.roster]: { agents: rosterEntries },
+    });
+    renderUi(<TaskDrawer id="t1" />);
+    expect(await screen.findByText("(No further brief provided.)")).toHaveClass("zui-text--muted");
+  });
 });
+

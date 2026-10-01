@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { divisionForTenant } from "@shared/divisions";
-import { AWAITING_APPROVAL, subtaskProgress } from "@shared/flow";
+import { AWAITING_APPROVAL, isMandate, NO_BRIEF, splitMandateBody, subtaskProgress } from "@shared/flow";
 import { useAddComment, useTaskDetail } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { ApprovalActions } from "./ApprovalActions";
@@ -31,6 +31,22 @@ function CommentBox({ taskId }: { taskId: string }) {
       </p>
       <ErrorNote error={add.error} />
     </form>
+  );
+}
+
+function Brief({ body, recipient }: { body: string; recipient: string }) {
+  const { brief, instructions } = splitMandateBody(body);
+  return (
+    <>
+      <h3 className="zui-subheading">Brief</h3>
+      <Text className={brief === NO_BRIEF ? "zui-text--muted" : undefined}>{brief}</Text>
+      {instructions && (
+        <details className="zui-instructions">
+          <summary>Instructions sent to {recipient}</summary>
+          <Text>{instructions}</Text>
+        </details>
+      )}
+    </>
   );
 }
 
@@ -92,15 +108,14 @@ export function TaskDrawer({ id }: { id: string }) {
               </ul>
             </>
           )}
-          {task.body && <h3 className="zui-subheading">Brief</h3>}
-          <Text>{task.body}</Text>
+          {task.body && <Brief body={task.body} recipient={agents.find((a) => a.profile === task.assignee)?.title ?? "the manager"} />}
           {task.latest_summary && <h3 className="zui-subheading">Latest summary</h3>}
           <Text>{task.latest_summary}</Text>
           {task.result && <h3 className="zui-subheading">Result</h3>}
           <Text>{task.result}</Text>
           {task.status === AWAITING_APPROVAL && (
             <>
-              <h3 className="zui-subheading">HQ approval</h3>
+              <h3 className="zui-subheading">{isMandate(task, agents) ? "HQ approval" : "Review"}</h3>
               <ApprovalActions taskId={task.id} />
             </>
           )}

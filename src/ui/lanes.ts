@@ -1,4 +1,6 @@
+import { isMandate } from "@shared/flow";
 import type { KanbanTask, TaskStatus } from "@shared/hermes";
+import type { RosterAgent } from "@shared/roster";
 
 export type LaneId = "inbox" | "ready" | "working" | "blocked" | "awaiting" | "done";
 
@@ -20,11 +22,17 @@ export const LANES: readonly Lane[] = [
 
 export const DONE_PREVIEW = 10;
 
-export function groupByLane(tasks: readonly KanbanTask[]): Record<LaneId, KanbanTask[]> {
+/** Only mandates await HQ; a specialist's task stuck in `review` is waiting on a human, so it reads as blocked. */
+export function laneOf(task: KanbanTask, roster?: readonly RosterAgent[]): LaneId | undefined {
+  if (task.status === "review" && !isMandate(task, roster)) return "blocked";
+  return LANES.find((l) => l.statuses.includes(task.status))?.id;
+}
+
+export function groupByLane(tasks: readonly KanbanTask[], roster?: readonly RosterAgent[]): Record<LaneId, KanbanTask[]> {
   const groups = Object.fromEntries(LANES.map((l) => [l.id, [] as KanbanTask[]])) as Record<LaneId, KanbanTask[]>;
   for (const task of tasks) {
-    const lane = LANES.find((l) => l.statuses.includes(task.status));
-    if (lane) groups[lane.id].push(task);
+    const lane = laneOf(task, roster);
+    if (lane) groups[lane].push(task);
   }
   groups.done.sort((a, b) => (b.completed_at ?? 0) - (a.completed_at ?? 0));
   return groups;
