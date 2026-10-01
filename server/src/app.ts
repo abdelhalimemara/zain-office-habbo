@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { localOnly } from "./guard";
 import { HermesClient } from "./hermes/client";
 import { HeadcountSource } from "./headcount/catalog";
 import { health } from "./health";
@@ -21,6 +22,7 @@ export function createApp(deps: AppDeps): Hono {
   const { hermes, headcount, hires } = deps;
   const app = new Hono();
 
+  app.use("/api/*", localOnly);
   app.use(
     "/api/*",
     bodyLimit({

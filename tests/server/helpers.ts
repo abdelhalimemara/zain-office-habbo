@@ -106,10 +106,14 @@ export function setup(routes: Record<string, Handler>, options: { hires?: HireSt
   const headcount = new HeadcountSource({ fetchImpl: gh.fetchImpl });
   const hires = options.hires ?? memoryHireStore();
   const app = createApp({ hermes, headcount, hires });
-  const send = (method: string, path: string, body?: unknown) =>
+  const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
-      headers: body === undefined ? {} : { "Content-Type": "application/json" },
+      headers: {
+        Host: "127.0.0.1:8787",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...headers,
+      },
       body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
     });
   return { app, send, hermes, headcount, hires, hermesFetch, gh };
