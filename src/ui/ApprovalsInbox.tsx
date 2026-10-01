@@ -5,7 +5,7 @@ import type { KanbanTask } from "@shared/hermes";
 import { useBoard } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { ApprovalActions } from "./ApprovalActions";
-import { AgentChip, ErrorNote, Text, useRosterAgents } from "./common";
+import { AgentChip, ErrorNote, mandateVpTitle, Text, useRosterAgents } from "./common";
 import { Panel } from "./Panel";
 
 function ApprovalItem({ task: t, agents }: { task: KanbanTask; agents: readonly RosterEntry[] }) {
@@ -19,7 +19,7 @@ function ApprovalItem({ task: t, agents }: { task: KanbanTask; agents: readonly 
         <AgentChip profile={t.assignee} agents={agents} />
       </div>
       <Text className="zui-text--preview">{t.latest_summary ?? t.result}</Text>
-      <ApprovalActions taskId={t.id} />
+      <ApprovalActions taskId={t.id} vpTitle={mandateVpTitle(t, agents)} />
     </article>
   );
 }

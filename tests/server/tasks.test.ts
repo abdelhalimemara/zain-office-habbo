@@ -1,5 +1,5 @@
 import { memoryHireStore } from "../../server/src/org/hireStore";
-import { KANBAN, TOKEN, json, setup, task } from "./helpers";
+import { KANBAN, TOKEN, json, setup, task, type Handler } from "./helpers";
 
 const TASK = `${KANBAN}/tasks/t_abc`;
 
@@ -313,5 +313,77 @@ describe("approvals", () => {
         n === 1 ? { task: task({ status: "ready", assignee: "zain-growth-paid" }) } : json({ detail: "db locked" }, 500),
     });
     expect((await send("POST", "/api/approvals/t_abc/reject", { reason: "Redo" })).status).toBe(502);
+  });
+});
+
+describe("POST /api/tasks/:id/reopen", () => {
+  function reopenSetup(status: string, patch: Record<string, unknown> = {}, routes: Record<string, Handler> = {}) {
+    return setup({
+      [`GET ${TASK}`]: () => detail({ status, ...patch }),
+      [`POST ${TASK}/comments`]: () => ({ ok: true }),
+      [`PATCH ${TASK}`]: (call) => ({ task: task({ ...patch, ...(call.body as object) }) }),
+      ...routes,
+    });
+  }
+
+  it.each(["done", "review"])("reopens a %s mandate to ready with HQ's instructions as a comment", async (status) => {
+    const { send, hermesFetch } = reopenSetup(status);
+    const res = await send("POST", "/api/tasks/t_abc/reopen", { instructions: "  Key is set; proceed with setup  " });
+    expect(res.status).toBe(200);
+    expect((await res.json()).task).toMatchObject({ status: "ready", assignee: "zain-growth-vp" });
+    expect(hermesFetch.called(`POST ${TASK}/comments`)[0]!.body).toEqual({
+      body: "HQ reopened this mandate: Key is set; proceed with setup",
+      author: "zain-hq-ui",
+    });
+    const writes = hermesFetch.calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.path}`);
+    expect(writes).toEqual([`POST ${TASK}/comments`, `PATCH ${TASK}`]);
+    expect(hermesFetch.called(`PATCH ${TASK}`)[0]!.body).toEqual({ status: "ready" });
+  });
+
+  it("falls back to todo when Hermes refuses ready because a subtask reopened", async () => {
+    const { send, hermesFetch } = reopenSetup("done", {}, {
+      [`PATCH ${TASK}`]: (call) =>
+        (call.body as { status: string }).status === "ready"
+          ? json({ detail: "Cannot move to 'ready': blocked by parent(s) not done" }, 409)
+          : { task: task({ status: "todo" }) },
+    });
+    const res = await send("POST", "/api/tasks/t_abc/reopen", { instructions: "Redo" });
+    expect(res.status).toBe(200);
+    expect(hermesFetch.called(`PATCH ${TASK}`).map((c) => c.body)).toEqual([{ status: "ready" }, { status: "todo" }]);
+  });
+
+  it("re-pins the division manager when the mandate sits with someone else", async () => {
+    const { send, hermesFetch } = setup({
+      [`GET ${TASK}`]: () => detail({ status: "done" }),
+      [`POST ${TASK}/comments`]: () => ({ ok: true }),
+      [`PATCH ${TASK}`]: (call, n) => ({ task: task({ assignee: n === 1 ? "zain-growth-paid" : "zain-growth-vp", ...(call.body as object) }) }),
+    });
+    await send("POST", "/api/tasks/t_abc/reopen", { instructions: "Redo" });
+    expect(hermesFetch.called(`PATCH ${TASK}`).map((c) => c.body)).toEqual([{ status: "ready" }, { assignee: "zain-growth-vp" }]);
+  });
+
+  it.each(["running", "todo", "blocked", "ready", "triage"])("refuses a %s mandate with 409 and writes nothing", async (status) => {
+    const { send, hermesFetch } = reopenSetup(status);
+    const res = await send("POST", "/api/tasks/t_abc/reopen", { instructions: "Redo" });
+    expect(res.status).toBe(409);
+    expect(hermesFetch.calls.filter((c) => c.method !== "GET")).toEqual([]);
+  });
+
+  it("refuses non-mandates with 409", async () => {
+    const { send, hermesFetch } = reopenSetup("done", { assignee: "zain-growth-seo" });
+    expect((await send("POST", "/api/tasks/t_abc/reopen", { instructions: "Redo" })).status).toBe(409);
+    expect(hermesFetch.calls.filter((c) => c.method !== "GET")).toEqual([]);
+  });
+
+  it.each([{}, { instructions: "   " }, { instructions: "x".repeat(4001) }, { instructions: 3 }])("requires 1..4000 chars of instructions: %j", async (body) => {
+    const { send, hermesFetch } = reopenSetup("done");
+    expect((await send("POST", "/api/tasks/t_abc/reopen", body)).status).toBe(400);
+    expect(hermesFetch.called(`GET ${TASK}`)).toHaveLength(0);
+  });
+
+  it("is behind the same write guard", async () => {
+    const { send } = reopenSetup("done");
+    expect((await send("POST", "/api/tasks/t_abc/reopen", { instructions: "x" }, { "Content-Type": "text/plain" })).status).toBe(415);
+    expect((await send("POST", "/api/tasks/t_abc/reopen", { instructions: "x" }, { Origin: "https://evil.example" })).status).toBe(403);
   });
 });

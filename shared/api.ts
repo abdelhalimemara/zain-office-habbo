@@ -17,6 +17,7 @@ export const API = {
   mandates: "/api/mandates",
   approve: (id: string) => `/api/approvals/${encodeURIComponent(id)}/approve`,
   reject: (id: string) => `/api/approvals/${encodeURIComponent(id)}/reject`,
+  reopen: (id: string) => `/api/tasks/${encodeURIComponent(id)}/reopen`,
   roster: "/api/roster",
   hire: "/api/hire",
   headcountCatalog: "/api/headcount/catalog",
@@ -88,7 +89,12 @@ export interface RejectRequest {
   reason: string;
 }
 
-/** Approve / reject → 200; 409 when the task is not in `review`. */
+/** Reopen a `done` or `review` mandate with instructions for its VP (1..4000 chars) → 200 ApprovalResponse; 409 otherwise. */
+export interface ReopenRequest {
+  instructions: string;
+}
+
+/** Approve / reject / reopen → 200; approve and reject answer 409 when the task is not in `review`. */
 export interface ApprovalResponse {
   task: KanbanTask;
 }

@@ -1,6 +1,7 @@
 import type { RosterEntry } from "@shared/api";
 import { getDivision, type DivisionId } from "@shared/divisions";
-import type { AgentActivity } from "@shared/flow";
+import { isMandate, type AgentActivity } from "@shared/flow";
+import type { KanbanTask } from "@shared/hermes";
 import { managerOf, ROSTER, type RosterAgent } from "@shared/roster";
 import { useRoster } from "../api/hooks";
 
@@ -8,6 +9,12 @@ export function useRosterAgents(): { agents: RosterEntry[]; loaded: boolean } {
   const { data } = useRoster();
   if (data) return { agents: data.agents, loaded: true };
   return { agents: ROSTER.map((a) => ({ ...a, hired: false, model: null })), loaded: false };
+}
+
+/** The VP's title when `task` is a mandate, else undefined. */
+export function mandateVpTitle(task: KanbanTask, agents: readonly RosterEntry[]): string | undefined {
+  if (!isMandate(task, agents)) return undefined;
+  return agents.find((a) => a.profile === task.assignee)?.title ?? task.assignee ?? undefined;
 }
 
 export function divisionManager(division: DivisionId, agents: readonly RosterAgent[]): RosterAgent {

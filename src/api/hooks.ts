@@ -60,6 +60,17 @@ export function useReject() {
   });
 }
 
+export function useReopen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, instructions }: { id: string; instructions: string }) => api.reopen(id, { instructions }),
+    onSuccess: (_data, { id }) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.board });
+      void qc.invalidateQueries({ queryKey: queryKeys.task(id) });
+    },
+  });
+}
+
 export function useAddComment() {
   const qc = useQueryClient();
   return useMutation({
