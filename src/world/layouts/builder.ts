@@ -64,12 +64,12 @@ export class LayoutBuilder {
     return this.seat(x, y, facing, room, desk.id, role);
   }
 
-  chairsAround(x: number, y: number, w: number, d: number): this {
+  chairsAround(x: number, y: number, w: number, d: number, ends = true): this {
     for (let i = 0; i < w; i++) {
       this.add("chair", x + i, y - 1, 1, 1, "sw");
       this.add("chair", x + i, y + d, 1, 1, "ne");
     }
-    for (let j = 0; j < d; j++) {
+    for (let j = 0; ends && j < d; j++) {
       this.add("chair", x - 1, y + j, 1, 1, "se");
       this.add("chair", x + w, y + j, 1, 1, "nw");
     }

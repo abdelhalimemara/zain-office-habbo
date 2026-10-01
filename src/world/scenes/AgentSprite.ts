@@ -1,5 +1,5 @@
 import { Container, Graphics } from "pixi.js";
-import { appearanceFor, type Appearance } from "../appearance";
+import { appearanceFor, vacantAppearance, type Appearance } from "../appearance";
 import { drawAvatar, type Pose } from "../draw/avatar";
 import { drawScreen, monitorGeom } from "../draw/furniture";
 import { drawBubble, drawFootRing, drawNameTag, drawSelectArrow, drawZzz } from "../draw/overlays";
@@ -23,6 +23,12 @@ export interface AgentHost {
 type Mode = "seated" | "standing" | "walking";
 
 const SPEED = 2.4;
+export const VACANT_ALPHA = 0.55;
+
+function lookFor(agent: WorldAgent): Appearance {
+  const look = appearanceFor(agent.profile, agent.division, agent.rank);
+  return agent.hired ? look : vacantAppearance(look);
+}
 const ACTIVITY_LABEL: Record<WorldAgent["activity"], string> = {
   working: "Working",
   blocked: "Blocked",
@@ -54,6 +60,8 @@ export class AgentSprite {
   private poseKey = "";
   private glowKey = "";
   private hovered = false;
+  private bubbleH = 0;
+  private tagH = 0;
   private selected = false;
   private readonly rand: () => number;
   private readonly phase: number;
@@ -65,7 +73,7 @@ export class AgentSprite {
     const h = hashString(agent.profile);
     this.rand = seededRandom(h);
     this.phase = (h % 1000) / 1000;
-    this.look = appearanceFor(agent.profile, agent.division, agent.rank);
+    this.look = lookFor(agent);
     this.ring.visible = false;
     this.body.addChild(this.ring, this.avatar);
     this.tags.addChild(this.zzz, this.bubble, this.nameTag, this.arrow);
@@ -83,11 +91,11 @@ export class AgentSprite {
   }
 
   update(agent: WorldAgent): void {
-    const relook = agent.rank !== this.agent.rank || agent.division !== this.agent.division;
+    const relook = agent.rank !== this.agent.rank || agent.division !== this.agent.division || agent.hired !== this.agent.hired;
     const retarget = agent.activity !== this.agent.activity || agent.hired !== this.agent.hired;
     this.agent = agent;
     if (relook) {
-      this.look = appearanceFor(agent.profile, agent.division, agent.rank);
+      this.look = lookFor(agent);
       this.poseKey = "";
     }
     this.refreshOverlays();
@@ -233,22 +241,25 @@ export class AgentSprite {
       drawAvatar(this.avatar, this.look, pose);
       this.avatar.scale.x = this.facing === "sw" || this.facing === "nw" ? -1 : 1;
     }
-    this.body.alpha = this.agent.hired ? 1 : 0.38;
+    this.body.alpha = this.agent.hired ? 1 : VACANT_ALPHA;
     if (walking) this.place();
     this.drawGlow(working, still ? 0 : Math.floor(nowMs / 450) % 2);
     const idle = this.agent.hired && this.agent.activity === "idle" && this.mode !== "walking";
     const cycle = ((nowMs / 1000 + this.phase * 6) % 6) / 6;
-    this.zzz.visible = idle && (still || cycle < 0.45);
+    this.zzz.visible = idle && !this.nameTag.visible && (still || cycle < 0.45);
     if (this.zzz.visible) {
       const rise = still ? 0 : Math.round(cycle * 14);
       this.zzz.position.set(6, this.headTop() - 6 - rise);
       this.zzz.alpha = still ? 0.9 : 1 - cycle;
     }
+    const bubbleY = this.headTop() - 1;
+    this.bubble.position.set(0, bubbleY);
+    const tagY = bubbleY - (this.bubble.visible ? this.bubbleH + 1 : 1);
+    this.nameTag.position.set(0, tagY);
     if (this.arrow.visible) {
       const bounce = still ? 0 : Math.round(Math.abs(Math.sin(nowMs / 180)) * 3);
-      this.arrow.position.set(0, this.headTop() - (this.bubble.visible ? 22 : 6) - bounce);
+      this.arrow.position.set(0, tagY - (this.nameTag.visible ? this.tagH + 4 : 4) - bounce);
     }
-    this.bubble.position.set(0, this.headTop() - 1);
   }
 
   private headTop(): number {
@@ -282,16 +293,15 @@ export class AgentSprite {
     const a = this.agent;
     this.bubble.clear();
     const kind = a.hired && a.activity !== "working" && a.activity !== "idle" ? a.activity : null;
-    if (kind) drawBubble(this.bubble, kind);
+    this.bubbleH = kind ? drawBubble(this.bubble, kind) : 0;
     this.bubble.visible = !!kind;
     this.zzz.clear();
     drawZzz(this.zzz);
     this.nameTag.clear();
     const showTag = this.hovered || this.selected;
     if (showTag) {
-      const sub = !a.hired ? "Vacant desk" : (a.bubble ?? ACTIVITY_LABEL[a.activity]);
-      drawNameTag(this.nameTag, a.title, sub);
-      this.nameTag.position.set(0, 22);
+      const sub = !a.hired ? "+ Vacant · not hired yet" : (a.bubble ?? ACTIVITY_LABEL[a.activity]);
+      this.tagH = drawNameTag(this.nameTag, a.title, sub);
     }
     this.nameTag.visible = showTag;
     this.arrow.clear();

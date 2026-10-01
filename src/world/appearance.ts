@@ -43,3 +43,28 @@ export function appearanceFor(profile: string, division: DivisionId, rank: Rank)
     lapel: outfit === "ceo" ? PAL.gold : shade(suit, 0.18),
   };
 }
+
+function desaturate(color: number, amount: number): number {
+  const r = (color >> 16) & 0xff;
+  const g = (color >> 8) & 0xff;
+  const b = color & 0xff;
+  const lum = 0.3 * r + 0.59 * g + 0.11 * b;
+  const tint = [lum * 0.92 + 10, lum * 0.96 + 14, lum + 26];
+  const mix = (c: number, t: number) => Math.max(0, Math.min(255, Math.round(c + (t - c) * amount)));
+  return (mix(r, tint[0]!) << 16) | (mix(g, tint[1]!) << 8) | mix(b, tint[2]!);
+}
+
+/** Washed-out, blue-grey variant used for roster seats nobody has been hired into yet. */
+export function vacantAppearance(a: Appearance, amount = 0.8): Appearance {
+  return {
+    ...a,
+    skin: desaturate(a.skin, amount),
+    hair: desaturate(a.hair, amount),
+    shirt: desaturate(a.shirt, amount),
+    shirtShade: desaturate(a.shirtShade, amount),
+    pants: desaturate(a.pants, amount),
+    shoes: desaturate(a.shoes, amount),
+    tie: desaturate(a.tie, amount),
+    lapel: desaturate(a.lapel, amount),
+  };
+}

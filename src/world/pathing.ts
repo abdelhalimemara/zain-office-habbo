@@ -1,6 +1,7 @@
 import type { Pt } from "./iso";
 import { NON_BLOCKING, type FloorLayout, type Room } from "./layouts/types";
 import { roomAt } from "./layouts";
+import { tilesUnderLabels } from "./labels";
 
 export interface Grid {
   cols: number;
@@ -101,8 +102,8 @@ export function freeTilesIn(layout: FloorLayout, room: Room, reserved: ReadonlyS
 export function loungeTiles(layout: FloorLayout): Pt[] {
   const room = layout.rooms.find((r) => r.id === layout.lounge);
   if (!room) return [];
-  const seats = new Set(layout.seats.map((s) => `${s.x},${s.y}`));
-  return freeTilesIn(layout, room, seats);
+  const reserved = new Set([...layout.seats.map((s) => `${s.x},${s.y}`), ...tilesUnderLabels(layout)]);
+  return freeTilesIn(layout, room, reserved);
 }
 
 export function wanderTarget(layout: FloorLayout, rand: () => number, avoid?: Pt): Pt | null {

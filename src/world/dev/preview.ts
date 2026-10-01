@@ -14,7 +14,7 @@ function mockAgents(): WorldAgent[] {
     rank: a.rank,
     activity: ACTIVITIES[i % ACTIVITIES.length]!,
     bubble: i % 3 === 0 ? "Q4 launch brief" : undefined,
-    hired: i % 7 !== 6,
+    hired: params.get("vacant") === "all" ? false : i % 7 !== 6,
   }));
 }
 
@@ -36,6 +36,9 @@ const log = document.getElementById("log")!;
 const bar = document.getElementById("bar")!;
 let agents = mockAgents();
 
+const insetValues = (params.get("insets") ?? "").split(",").map(Number);
+const insets = { top: insetValues[0] || 0, right: insetValues[1] || 0, bottom: insetValues[2] || 0, left: insetValues[3] || 0 };
+
 const world = await World.create(stage, {
   onSelectBuilding: (d) => {
     log.textContent = `building: ${d}`;
@@ -45,7 +48,7 @@ const world = await World.create(stage, {
     log.textContent = `agent: ${p}`;
     world.setSelectedAgent(p);
   },
-});
+}, { insets });
 
 const initial: WorldView = params.get("view") && params.get("view") !== "city"
   ? { kind: "floor", division: params.get("view") as DivisionId }
@@ -67,6 +70,7 @@ button("shuffle", () => {
   agents = agents.map((a) => ({ ...a, activity: ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)]! }));
   world.setAgents(agents);
 });
+button("panel", () => world.setInsets({ ...insets, right: insets.right ? 0 : 420 }));
 button("destroy", () => world.destroy());
 
 Object.assign(window, { world });

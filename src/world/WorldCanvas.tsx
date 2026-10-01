@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { DivisionId } from "../../shared/divisions";
 import type { DivisionStats } from "../../shared/flow";
+import type { Insets } from "./camera";
 import type { WorldAgent, WorldView } from "./types";
 import { World } from "./World";
 
@@ -12,6 +13,8 @@ export interface WorldCanvasProps {
   onSelectBuilding(division: DivisionId): void;
   onSelectAgent(profile: string): void;
   className?: string;
+  /** Css pixels covered by overlay UI (HUD, side panels); auto-fit centres the world in the rest. Defaults to 0. */
+  insets?: Partial<Insets>;
 }
 
 export function WorldCanvas(props: WorldCanvasProps) {
@@ -28,7 +31,7 @@ export function WorldCanvas(props: WorldCanvasProps) {
     void World.create(el, {
       onSelectBuilding: (d) => propsRef.current.onSelectBuilding(d),
       onSelectAgent: (p) => propsRef.current.onSelectAgent(p),
-    }).then((world) => {
+    }, { insets: propsRef.current.insets }).then((world) => {
       created = world;
       if (cancelled) {
         world.destroy();
@@ -39,6 +42,7 @@ export function WorldCanvas(props: WorldCanvasProps) {
       world.setAgents(p.agents);
       if (p.stats) world.setDivisionStats(p.stats);
       world.setSelectedAgent(p.selectedAgent);
+      world.setInsets(p.insets ?? {});
       worldRef.current = world;
     });
     return () => {
@@ -63,6 +67,11 @@ export function WorldCanvas(props: WorldCanvasProps) {
   useEffect(() => {
     worldRef.current?.setSelectedAgent(props.selectedAgent);
   }, [props.selectedAgent]);
+
+  const { top = 0, right = 0, bottom = 0, left = 0 } = props.insets ?? {};
+  useEffect(() => {
+    worldRef.current?.setInsets({ top, right, bottom, left });
+  }, [top, right, bottom, left]);
 
   return <div ref={containerRef} className={props.className} style={{ position: "relative", width: "100%", height: "100%" }} />;
 }
