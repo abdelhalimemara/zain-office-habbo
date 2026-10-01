@@ -26,3 +26,8 @@ export function sameHit(a: Hit | null, b: Hit | null): boolean {
   if (a.kind === "agent" && b.kind === "agent") return a.profile === b.profile;
   return false;
 }
+
+export function cursorFor(hit: Hit | null, dragging = false): string {
+  if (dragging) return "grabbing";
+  return hit ? "pointer" : "grab";
+}

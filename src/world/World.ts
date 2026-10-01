@@ -20,7 +20,7 @@ import { diffAgents } from "./diff";
 import { PAL } from "./palette";
 import { CityScene } from "./scenes/CityScene";
 import { FloorScene } from "./scenes/FloorScene";
-import { sameHit, type Scene } from "./scenes/Scene";
+import { cursorFor, sameHit, type Scene } from "./scenes/Scene";
 import type { Hit, WorldAgent, WorldCallbacks, WorldStats, WorldView } from "./types";
 
 const CLICK_SLOP = 5;
@@ -73,7 +73,12 @@ export class World {
   static async create(container: HTMLElement, callbacks: WorldCallbacks, options: WorldOptions = {}): Promise<World> {
     const world = new World(container, callbacks);
     world.insets = normalizeInsets(options.insets);
-    await world.init();
+    try {
+      await world.init();
+    } catch (err) {
+      world.destroy();
+      throw err;
+    }
     return world;
   }
 
@@ -154,7 +159,7 @@ export class World {
     this.destroyed = true;
     this.resizeObserver?.disconnect();
     this.motionQuery?.removeEventListener("change", this.onMotionChange);
-    const canvas = this.app.canvas as HTMLCanvasElement | undefined;
+    const canvas = (this.app.renderer as unknown) ? this.app.canvas : undefined;
     if (canvas) {
       canvas.removeEventListener("pointerdown", this.onPointerDown);
       canvas.removeEventListener("pointermove", this.onPointerMove);
@@ -165,7 +170,11 @@ export class World {
       this.app.ticker?.remove(this.onTick);
       this.scene?.destroy();
       this.scene = null;
-      this.app.destroy({ removeView: true }, { children: true });
+      try {
+        this.app.destroy({ removeView: true }, { children: true });
+      } catch {
+        canvas.remove();
+      }
     }
     this.host.remove();
   }
@@ -176,6 +185,7 @@ export class World {
     const scene: Scene = this.view.kind === "city" ? new CityScene(opts) : new FloorScene(this.view.division, opts);
     this.scene = scene;
     this.hover = null;
+    this.app.canvas.style.cursor = cursorFor(null);
     this.app.stage.addChild(scene.root);
     scene.setStats(this.stats);
     scene.setAgents(this.agents, { added: [...this.agents.values()], updated: [], removed: [] });
@@ -260,7 +270,7 @@ export class World {
     if (sameHit(hit, this.hover)) return;
     this.hover = hit;
     this.scene?.setHover(hit);
-    this.app.canvas.style.cursor = hit ? "pointer" : "grab";
+    this.app.canvas.style.cursor = cursorFor(hit);
   }
 
   private zoomTo(next: number, at: { x: number; y: number }): void {
@@ -303,7 +313,7 @@ export class World {
     const k = this.dpr / this.scale;
     this.tween = null;
     this.pan = { x: this.pan.x + dx * k, y: this.pan.y + dy * k };
-    this.app.canvas.style.cursor = "grabbing";
+    this.app.canvas.style.cursor = cursorFor(null, true);
     this.applyPan();
   };
 
