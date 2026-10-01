@@ -135,7 +135,7 @@ describe("HQ mandate → VP fan-out → approval", () => {
     expect(realErrors(page)).toEqual([]);
   });
 
-  it("a specialist's own task in review is not HQ's to approve: no badge, not in Approvals", async () => {
+  it("a specialist's own task in review is not an HQ approval: no badge, listed only under subtask reviews", async () => {
     const { page, hermes } = stack;
     const task = hermes.seedTask({ title: "Brand voice audit", tenant: "zain-studio", assignee: "zain-studio-brand", status: "review", latest_summary: "Audit done" });
     await openApp(stack);
@@ -144,7 +144,10 @@ describe("HQ mandate → VP fan-out → approval", () => {
     expect(await approvalsBadge(page)).toBeNull();
     await page.click(".zui-hud button", "Approvals");
     await page.waitFor("__e2e.text('.zui-panel h2') === 'Approvals (0)'", "empty approvals");
-    expect(await page.eval("__e2e.text('.zui-panel')")).not.toContain("Brand voice audit");
+    const inbox = await page.eval<string>("__e2e.text('.zui-panel')");
+    expect(inbox).toContain("Nothing awaiting HQ approval.");
+    expect(inbox).toContain("Subtasks waiting for review (1)");
+    expect(inbox.indexOf("Brand voice audit")).toBeGreaterThan(inbox.indexOf("Subtasks waiting for review (1)"));
     await page.press("Escape");
   });
 
@@ -188,11 +191,11 @@ describe("HQ mandate → VP fan-out → approval", () => {
           box: Math.round(r.left) + '..' + Math.round(r.right) + ' in ' + Math.round(panel.left) + '..' + Math.round(panel.right) };
       });
     })()`);
-    expect(lanes.map((l) => l.label)).toEqual(["Inbox (0)", "Ready (1)", "Working (0)", "Blocked (0)", "Awaiting HQ (1)", "Done (3)"]);
+    expect(lanes.map((l) => l.label)).toEqual(["Inbox (0)", "Ready (1)", "Working (0)", "Blocked (1)", "Awaiting HQ (0)", "Done (3)"]);
     for (const l of lanes) expect(l.collapsed, l.label).toBe(l.label.endsWith("(0)"));
     expect(lanes.filter((l) => !l.inView)).toEqual([]);
-    // The specialist's review task sits in "Awaiting HQ" although HQ is not asked to approve it.
-    expect(await laneOf(page, "Brand voice audit")).toBe("Awaiting HQ (1)");
+    // Awaiting HQ holds mandates only; a specialist's parked review is a blocker for the VP.
+    expect(await laneOf(page, "Brand voice audit")).toBe("Blocked (1)");
     const panelWidth = await page.eval<number>("document.querySelector('.zui-panel').getBoundingClientRect().width");
     expect(panelWidth).toBeLessThanOrEqual(Math.min(720, 1400 * 0.52) + 0.5);
     await stack.shot("studio-kanban");
@@ -206,7 +209,7 @@ describe("HQ mandate → VP fan-out → approval", () => {
     await openStudioKanban(page);
     await page.waitFor("document.querySelectorAll('.zui-panel [role=tab]').length === 6", "six lane tabs");
     expect(await page.eval("!!document.querySelector('.zui-panel .zui-kanban')")).toBe(false);
-    expect(await page.eval("__e2e.text('.zui-panel [role=tab][aria-selected=true]')")).toBe("Awaiting HQ 1");
+    expect(await page.eval("__e2e.text('.zui-panel [role=tab][aria-selected=true]')")).toBe("Blocked 1");
     expect(await page.eval("__e2e.text('.zui-panel [role=tabpanel]')")).toContain("Brand voice audit");
     await page.click(".zui-panel [role=tab]", "Done");
     await page.waitFor("__e2e.text('.zui-panel [role=tab][aria-selected=true]') === 'Done 3'", "Done tab selected");
