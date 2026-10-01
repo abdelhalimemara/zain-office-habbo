@@ -1,4 +1,4 @@
-import { isManager, rosterOrFallback, toWorldAgents, toWorldStats, truncate } from "../../src/app/worldModel";
+import { isManager, rosterOrFallback, toWorldAgents, toWorldStats, truncate, worldInsets } from "../../src/app/worldModel";
 import type { KanbanBoard, KanbanTask, TaskStatus } from "../../shared/hermes";
 import { TASK_STATUSES } from "../../shared/hermes";
 import { ROSTER } from "../../shared/roster";
@@ -47,6 +47,20 @@ describe("worldModel", () => {
   it("truncates long text with an ellipsis", () => {
     expect(truncate("short")).toBe("short");
     expect(truncate("x".repeat(40), 10)).toBe(`${"x".repeat(9)}…`);
+  });
+
+  it("insets the world under the HUD and beside side panels", () => {
+    const desktop = { width: 1400, height: 900 };
+    expect(worldInsets(null, desktop)).toEqual({ top: 64, right: 0, bottom: 0, left: 0 });
+    expect(worldInsets("kanban", desktop).right).toBe(720);
+    expect(worldInsets("agent", { width: 1000, height: 800 }).right).toBe(520);
+    expect(worldInsets("hire", desktop).right).toBe(0);
+  });
+
+  it("insets the world above the bottom sheet on phones", () => {
+    const phone = { width: 390, height: 844 };
+    expect(worldInsets("kanban", phone)).toEqual({ top: 104, right: 0, bottom: 717, left: 0 });
+    expect(worldInsets(null, phone).bottom).toBe(0);
   });
 
   it("identifies managers by rank", () => {

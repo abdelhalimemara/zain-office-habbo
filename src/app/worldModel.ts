@@ -3,7 +3,7 @@ import { DIVISIONS, type DivisionId } from "../../shared/divisions";
 import { agentActivity, divisionStats, type DivisionStats } from "../../shared/flow";
 import type { KanbanBoard } from "../../shared/hermes";
 import { ROSTER, type RosterAgent } from "../../shared/roster";
-import type { WorldAgent } from "../world";
+import type { Insets, WorldAgent } from "../world";
 
 const BUBBLE_MAX = 28;
 
@@ -36,6 +36,19 @@ export function toWorldStats(board: KanbanBoard | undefined): Record<DivisionId,
     DivisionId,
     DivisionStats
   >;
+}
+
+const SIDE_PANELS = new Set(["kanban", "approvals", "agent", "task"]);
+const PHONE_MAX_WIDTH = 700;
+const HUD_HEIGHT = { desktop: 64, phone: 104 };
+
+/** Screen area the overlay UI covers, so the world fits into what stays visible. */
+export function worldInsets(panelKind: string | null, viewport: { width: number; height: number }): Insets {
+  const phone = viewport.width < PHONE_MAX_WIDTH;
+  const top = phone ? HUD_HEIGHT.phone : HUD_HEIGHT.desktop;
+  if (!panelKind || !SIDE_PANELS.has(panelKind)) return { top, right: 0, bottom: 0, left: 0 };
+  if (phone) return { top, right: 0, bottom: Math.round(viewport.height * 0.85), left: 0 };
+  return { top, right: Math.round(Math.min(720, viewport.width * 0.52)), bottom: 0, left: 0 };
 }
 
 export function isManager(agent: Pick<RosterAgent, "rank"> | undefined): boolean {

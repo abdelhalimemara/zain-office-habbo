@@ -5,7 +5,8 @@ import { useBoard, useRoster } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { UiRoot } from "../ui/UiRoot";
 import { WorldCanvas } from "../world/WorldCanvas";
-import { isManager, rosterOrFallback, toWorldAgents, toWorldStats } from "./worldModel";
+import { useViewport } from "./useViewport";
+import { isManager, rosterOrFallback, toWorldAgents, toWorldStats, worldInsets } from "./worldModel";
 import "./app.css";
 
 export function App() {
@@ -16,6 +17,9 @@ export function App() {
   const enterDivision = useUiStore((s) => s.enterDivision);
   const selectAgent = useUiStore((s) => s.selectAgent);
   const openPanel = useUiStore((s) => s.openPanel);
+  const panelKind = useUiStore((s) => s.panel?.kind ?? null);
+  const viewport = useViewport();
+  const insets = useMemo(() => worldInsets(panelKind, viewport), [panelKind, viewport]);
 
   const roster = useMemo(() => rosterOrFallback(rosterData?.agents), [rosterData]);
   const agents = useMemo(() => toWorldAgents(roster, board), [roster, board]);
@@ -40,6 +44,7 @@ export function App() {
         agents={agents}
         stats={stats}
         selectedAgent={selectedAgent}
+        insets={insets}
         onSelectBuilding={onSelectBuilding}
         onSelectAgent={onSelectAgent}
       />
