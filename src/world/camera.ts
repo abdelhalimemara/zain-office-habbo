@@ -132,3 +132,18 @@ export function panFor(c: CameraState, dpr: number): { x: number; y: number } {
   const k = dpr / c.scale;
   return { x: c.focus.x * k - c.world.x, y: c.focus.y * k - c.world.y };
 }
+
+/** Smooth (photographic) scenes: any fractional scale, filling the visible area edge to edge with a small margin. */
+export const SMOOTH_FILL = 0.95;
+const SMOOTH_STEP = 1.25;
+
+export function fitSmooth(content: Rect, area: { w: number; h: number }, dpr: number, fill = SMOOTH_FILL): number {
+  const raw = Math.min((area.w * dpr) / Math.max(1, content.w), (area.h * dpr) / Math.max(1, content.h)) * fill;
+  return Number.isFinite(raw) && raw > 0 ? raw : 1;
+}
+
+/** Wheel/pinch step for smooth scenes, clamped between half the fitted scale and 3× device resolution. */
+export function stepSmooth(scale: number, dir: 1 | -1, fitted: number, dpr: number): number {
+  const next = scale * (dir > 0 ? SMOOTH_STEP : 1 / SMOOTH_STEP);
+  return Math.max(fitted * 0.5, Math.min(Math.max(fitted, dpr * 3), next));
+}

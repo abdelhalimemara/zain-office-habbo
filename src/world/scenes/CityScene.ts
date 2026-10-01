@@ -1,150 +1,102 @@
-import { Container, Graphics } from "pixi.js";
+import { Assets, Container, Graphics, Sprite, type Texture } from "pixi.js";
 import type { DivisionId } from "../../../shared/divisions";
-import { drawPedestrian } from "../draw/avatar";
-import { buildingBox, drawDivisionBuilding, drawHqTower } from "../draw/buildings";
-import { PROP_HEIGHT, drawCityGround, drawProp } from "../draw/city";
-import { drawBadge, drawBang } from "../draw/overlays";
-import { hashString, pick, seededRandom } from "../hash";
-import { boxHull, dynamicDepth, pointInPolygon, screenBounds, sortDepth, toScreen, type Box, type Pt, type Ranked, type Rect } from "../iso";
-import { CITY_BUILDINGS, CITY_PROPS, CITY_SIZE, PED_LOOPS, loopLength, pointOnLoop, type CityBuilding, type PedLoop } from "../layouts/city";
-import { HAIR_COLORS, PAL, SKIN_TONES, divisionColor } from "../palette";
+import cityUrl from "../assets/city.webp";
+import { buildBadge, buildCompactMarker, buildNameLabel, buildZainPlate } from "../draw/cityOverlays";
+import type { Rect } from "../iso";
+import { CITY_BACKGROUND, CITY_HOTSPOTS, HQ_SIGN, cityFitBounds, hotspotAt, type CityHotspot } from "../layouts/cityImage";
+import { divisionColor } from "../palette";
 import type { Hit, WorldStats } from "../types";
-import type { Scene, SceneOptions } from "./Scene";
+import type { Scene, SceneOptions, SceneViewport } from "./Scene";
 
-interface BuildingView {
-  building: CityBuilding;
-  hull: Pt[];
-  depth: number;
+interface Marker {
+  hotspot: CityHotspot;
+  group: Container;
+  label: Container;
   badge: Container;
-  badgeBase: Graphics;
-  bang: Graphics;
-  bangAt: { x: number; y: number } | null;
+  bang: Container | null;
+  labelH: number;
+  badgeH: number;
 }
 
-interface Ped {
-  g: Graphics;
-  loop: PedLoop;
-  offset: number;
-  speed: number;
-  colors: [number, number, number];
-  frameKey: string;
-}
-
-const SHIRTS = [0xe0567a, 0x3dbe7a, 0x8e6cef, 0x3a9bef, 0xf2c230, 0xf4f5f7, 0xe67e22, 0x2c3e50];
+const GAP = 4;
+const LIFT = 8;
+const TOP_MARGIN = 6;
+/** Below this many css px per image px, markers collapse into one compact pill. */
+const COMPACT_BELOW = 0.42;
 
 export class CityScene implements Scene {
   readonly root = new Container();
-  private readonly base = new Graphics();
-  private readonly objects = new Container();
-  private readonly overlay = new Container();
-  private readonly hoverLine = new Graphics();
-  private readonly buildings: BuildingView[] = [];
-  private readonly peds: Ped[] = [];
-  private statics: Ranked[] = [];
+  readonly screen = new Container();
+  readonly style = "smooth" as const;
+  readonly background = CITY_BACKGROUND;
+  private readonly glow = new Graphics();
+  private readonly markers: Marker[] = [];
   private hovered: DivisionId | null = null;
+  private viewport: SceneViewport | null = null;
+  private stats: Partial<WorldStats> | null = null;
   private reducedMotion: boolean;
+  private destroyed = false;
+  private compact = false;
 
   constructor(opts: SceneOptions) {
     this.reducedMotion = opts.reducedMotion;
-    this.objects.sortableChildren = true;
-    this.root.addChild(this.base, this.objects, this.hoverLine, this.overlay);
-    this.build();
-  }
-
-  private build(): void {
-    drawCityGround(this.base);
-    this.base.cacheAsTexture({ antialias: false, scaleMode: "nearest" });
-
-    const boxes: Box[] = [
-      ...CITY_BUILDINGS.map(buildingBox),
-      ...CITY_PROPS.map((p) => ({ x0: p.x + 0.1, y0: p.y + 0.1, x1: p.x + p.w - 0.1, y1: p.y + p.d - 0.1, h: PROP_HEIGHT[p.kind] })),
-    ];
-    const depths = sortDepth(boxes);
-    this.statics = boxes.map((box, i) => ({ box, depth: depths[i]! }));
-
-    CITY_BUILDINGS.forEach((b, i) => {
-      const g = new Graphics();
-      if (b.division === "hq") drawHqTower(g, b);
-      else drawDivisionBuilding(g, b, divisionColor(b.division));
-      g.zIndex = depths[i]!;
-      this.objects.addChild(g);
-      g.cacheAsTexture({ antialias: false, scaleMode: "nearest" });
-      const box = boxes[i]!;
+    const plate = new Container();
+    buildZainPlate(plate, HQ_SIGN.w, HQ_SIGN.h);
+    plate.position.set(HQ_SIGN.x, HQ_SIGN.y);
+    this.root.addChild(this.glow, plate);
+    if (opts.debugHotspots) this.root.addChild(debugOutlines());
+    for (const hotspot of CITY_HOTSPOTS) {
+      const group = new Container();
+      const label = new Container();
       const badge = new Container();
-      const top = toScreen(b.x + b.w / 2, b.y + b.d / 2, box.h + 14);
-      badge.position.set(Math.round(top.x), Math.round(top.y));
-      badge.scale.set(2);
-      const badgeBase = new Graphics();
-      const bang = new Graphics();
-      drawBang(bang);
-      badge.addChild(badgeBase, bang);
-      badge.visible = false;
-      this.overlay.addChild(badge);
-      this.buildings.push({ building: b, hull: boxHull(box), depth: depths[i]!, badge, badgeBase, bang, bangAt: null });
-    });
-
-    CITY_PROPS.forEach((p, i) => {
-      const g = new Graphics();
-      drawProp(g, p);
-      g.zIndex = depths[CITY_BUILDINGS.length + i]!;
-      this.objects.addChild(g);
-    });
-
-    PED_LOOPS.forEach((loop, li) => {
-      for (let k = 0; k < 3; k++) {
-        const r = seededRandom(hashString(`ped-${li}-${k}`));
-        const g = new Graphics();
-        this.objects.addChild(g);
-        this.peds.push({
-          g,
-          loop,
-          offset: r(),
-          speed: (0.45 + r() * 0.35) * (k === 1 ? -1 : 1),
-          colors: [pick(SHIRTS, Math.floor(r() * 97)), pick(HAIR_COLORS, Math.floor(r() * 97)), pick(SKIN_TONES, Math.floor(r() * 97))],
-          frameKey: "",
-        });
-      }
-    });
-    this.update(0, 0);
+      group.addChild(label, badge);
+      this.screen.addChild(group);
+      this.markers.push({ hotspot, group, label, badge, bang: null, labelH: 0, badgeH: 0 });
+    }
+    void this.loadImage();
   }
 
-  bounds(): Rect {
-    const b = screenBounds({ x0: 0, y0: 0, x1: CITY_SIZE, y1: CITY_SIZE, h: 0 });
-    const tallest = Math.max(...this.buildings.map((v) => -Math.min(...v.hull.map((p) => p.y))));
-    const top = Math.min(b.y, -tallest - 30);
-    return { x: b.x, y: top, w: b.w, h: b.y + b.h + 18 - top };
+  private async loadImage(): Promise<void> {
+    const texture = await Assets.load<Texture>(cityUrl);
+    if (this.destroyed) return;
+    texture.source.scaleMode = "linear";
+    texture.source.autoGenerateMipmaps = true;
+    texture.source.updateMipmaps();
+    const sprite = new Sprite(texture);
+    this.root.addChildAt(sprite, 0);
+  }
+
+  bounds(area?: Rect): Rect {
+    return cityFitBounds(area ?? { w: Number.POSITIVE_INFINITY });
   }
 
   hitTest(x: number, y: number): Hit | null {
-    let best: BuildingView | null = null;
-    for (const v of this.buildings) {
-      if (pointInPolygon({ x, y }, v.hull) && (!best || v.depth > best.depth)) best = v;
-    }
-    return best ? { kind: "building", division: best.building.division } : null;
+    const division = hotspotAt(x, y);
+    return division ? { kind: "building", division } : null;
   }
 
   setHover(hit: Hit | null): void {
     const next = hit?.kind === "building" ? hit.division : null;
     if (next === this.hovered) return;
     this.hovered = next;
-    this.hoverLine.clear();
-    const v = this.buildings.find((b) => b.building.division === next);
-    if (!v) return;
-    const pts = v.hull.flatMap((p) => [Math.round(p.x), Math.round(p.y)]);
-    this.hoverLine.poly(pts).stroke({ color: PAL.yellow, width: 2, alpha: 0.95 });
-    this.hoverLine.poly(pts).fill({ color: PAL.white, alpha: 0.08 });
+    this.drawGlow();
+  }
+
+  setViewport(viewport: SceneViewport): void {
+    const compact = viewport.scale / viewport.dpr < COMPACT_BELOW;
+    const resChanged = viewport.dpr !== this.viewport?.dpr || compact !== this.compact;
+    this.compact = compact;
+    const scaleChanged = viewport.scale !== this.viewport?.scale;
+    this.viewport = viewport;
+    if (resChanged) this.rebuildMarkers();
+    if (scaleChanged) this.drawGlow();
+    this.screen.scale.set(viewport.dpr);
+    this.placeMarkers();
   }
 
   setStats(stats: Partial<WorldStats> | null): void {
-    for (const v of this.buildings) {
-      const s = stats?.[v.building.division];
-      v.badgeBase.clear();
-      v.badge.visible = !!s;
-      if (!s) continue;
-      v.bangAt = drawBadge(v.badgeBase, { working: s.working, blocked: s.blocked, awaiting: s.awaitingApproval }).bang;
-      v.bang.visible = !!v.bangAt;
-      if (v.bangAt) v.bang.position.set(v.bangAt.x, v.bangAt.y);
-    }
+    this.stats = stats;
+    this.rebuildMarkers();
   }
 
   setAgents(): void {}
@@ -156,33 +108,74 @@ export class CityScene implements Scene {
   }
 
   update(_dtMs: number, nowMs: number): void {
-    const still = this.reducedMotion;
-    const t = still ? 0 : nowMs / 1000;
-    for (const p of this.peds) {
-      const len = loopLength(p.loop);
-      const pos = pointOnLoop(p.loop, p.offset + (t * p.speed) / len);
-      const sign = p.speed < 0 ? -pos.sign : pos.sign;
-      const facing = pos.dir === "x" ? (sign > 0 ? "se" : "nw") : sign > 0 ? "sw" : "ne";
-      const frame = still ? 0 : Math.floor(nowMs / 160) % 4;
-      const key = `${facing}|${frame}`;
-      if (key !== p.frameKey) {
-        p.frameKey = key;
-        p.g.clear();
-        drawPedestrian(p.g, p.colors[0], p.colors[1], p.colors[2], frame, facing === "ne" || facing === "nw");
-        p.g.scale.x = facing === "sw" || facing === "nw" ? -1 : 1;
+    const hop = this.reducedMotion ? 0 : Math.abs(Math.sin(nowMs / 260)) * 3;
+    for (const m of this.markers) if (m.bang) m.bang.pivot.y = Math.round(hop);
+  }
+
+  private rebuildMarkers(): void {
+    const res = Math.max(2, Math.ceil(this.viewport?.dpr ?? 1) * 2);
+    for (const m of this.markers) {
+      for (const c of [m.label, m.badge]) for (const child of c.removeChildren()) child.destroy();
+      const s = this.stats?.[m.hotspot.division];
+      if (this.compact) {
+        const parts = buildCompactMarker(m.label, m.hotspot.short, divisionColor(m.hotspot.division), s, res);
+        m.labelH = parts.height;
+        m.badgeH = 0;
+        m.bang = parts.bang;
+        continue;
       }
-      const s = toScreen(pos.x, pos.y);
-      p.g.position.set(Math.round(s.x), Math.round(s.y));
-      p.g.zIndex = dynamicDepth(this.statics, { x0: pos.x - 0.2, y0: pos.y - 0.2, x1: pos.x + 0.2, y1: pos.y + 0.2, h: 18 });
+      m.labelH = buildNameLabel(m.label, m.hotspot.name, divisionColor(m.hotspot.division), res);
+      if (s) {
+        const parts = buildBadge(m.badge, s, res);
+        m.badgeH = parts.height;
+        m.bang = parts.bang;
+      } else {
+        m.badgeH = 0;
+        m.bang = null;
+      }
+      m.badge.position.set(0, -(m.labelH + GAP));
     }
-    for (const v of this.buildings) {
-      if (!v.bangAt) continue;
-      const hop = still ? 0 : Math.round(Math.abs(Math.sin(nowMs / 220)) * 4);
-      v.bang.position.set(v.bangAt.x, v.bangAt.y - hop);
+    this.placeMarkers();
+  }
+
+  private placeMarkers(): void {
+    const v = this.viewport;
+    if (!v) return;
+    for (const m of this.markers) {
+      const cssX = (v.x + m.hotspot.anchor.x * v.scale) / v.dpr;
+      const cssY = (v.y + m.hotspot.anchor.y * v.scale) / v.dpr - LIFT;
+      const height = m.labelH + (m.badgeH ? GAP + m.badgeH : 0);
+      const minY = v.area.y + TOP_MARGIN + height;
+      m.group.position.set(Math.round(cssX), Math.round(Math.max(cssY, minY)));
+    }
+  }
+
+  private drawGlow(): void {
+    this.glow.clear();
+    const hotspot = CITY_HOTSPOTS.find((h) => h.division === this.hovered);
+    if (!hotspot) return;
+    const q = this.viewport?.scale ?? 1;
+    const color = divisionColor(hotspot.division);
+    const pts = hotspot.polygon.flatMap((p) => [p.x, p.y]);
+    this.glow.poly(pts).fill({ color, alpha: 0.12 });
+    for (const [w, alpha] of [[14, 0.12], [8, 0.2], [4, 0.45], [2, 1]] as const) {
+      this.glow.poly(pts).stroke({ color, width: w / q, alpha, join: "round" });
     }
   }
 
   destroy(): void {
+    this.destroyed = true;
+    this.screen.destroy({ children: true });
     this.root.destroy({ children: true });
   }
+}
+
+function debugOutlines(): Graphics {
+  const g = new Graphics();
+  for (const h of CITY_HOTSPOTS) {
+    const pts = h.polygon.flatMap((p) => [p.x, p.y]);
+    g.poly(pts).fill({ color: divisionColor(h.division), alpha: 0.25 }).stroke({ color: divisionColor(h.division), width: 2 });
+    g.circle(h.anchor.x, h.anchor.y, 5).fill(0xff00ff);
+  }
+  return g;
 }

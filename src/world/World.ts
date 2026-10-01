@@ -6,10 +6,12 @@ import {
   clampPan,
   clampScale,
   fitScale,
+  fitSmooth,
   lerpCamera,
   normalizeInsets,
   panFor,
   sameInsets,
+  stepSmooth,
   stepZoom,
   visibleArea,
   zoomAround,
@@ -17,7 +19,7 @@ import {
   type Insets,
 } from "./camera";
 import { diffAgents } from "./diff";
-import { PAL } from "./palette";
+import { PAL, cssColor } from "./palette";
 import { CityScene } from "./scenes/CityScene";
 import { FloorScene } from "./scenes/FloorScene";
 import { cursorFor, sameHit, type Scene } from "./scenes/Scene";
@@ -28,6 +30,8 @@ const REFIT_MS = 320;
 
 export interface WorldOptions {
   insets?: Partial<Insets>;
+  /** Dev aid: outline the city hotspots. */
+  debugHotspots?: boolean;
 }
 
 interface Tween {
@@ -64,6 +68,8 @@ export class World {
   private now = 0;
   private insets: Insets = NO_INSETS;
   private tween: Tween | null = null;
+  private fitted = 1;
+  private debugHotspots = false;
 
   private constructor(
     private readonly container: HTMLElement,
@@ -73,6 +79,7 @@ export class World {
   static async create(container: HTMLElement, callbacks: WorldCallbacks, options: WorldOptions = {}): Promise<World> {
     const world = new World(container, callbacks);
     world.insets = normalizeInsets(options.insets);
+    world.debugHotspots = !!options.debugHotspots;
     try {
       await world.init();
     } catch (err) {
@@ -102,7 +109,7 @@ export class World {
       return;
     }
     const canvas = this.app.canvas;
-    Object.assign(canvas.style, { display: "block", imageRendering: "pixelated", position: "absolute", left: "0", top: "0" });
+    Object.assign(canvas.style, { display: "block", position: "absolute", left: "0", top: "0" });
     this.host.appendChild(canvas);
     this.app.stage.eventMode = "none";
 
@@ -181,17 +188,41 @@ export class World {
 
   private mountScene(): void {
     this.scene?.destroy();
-    const opts = { reducedMotion: this.reducedMotion };
+    const opts = { reducedMotion: this.reducedMotion, debugHotspots: this.debugHotspots };
     const scene: Scene = this.view.kind === "city" ? new CityScene(opts) : new FloorScene(this.view.division, opts);
     this.scene = scene;
     this.hover = null;
     this.app.canvas.style.cursor = cursorFor(null);
     this.app.stage.addChild(scene.root);
+    if (scene.screen) this.app.stage.addChild(scene.screen);
+    this.applyBackground(scene);
     scene.setStats(this.stats);
     scene.setAgents(this.agents, { added: [...this.agents.values()], updated: [], removed: [] });
     scene.setSelected(this.selected);
     this.tween = null;
     this.fit(false);
+  }
+
+  /** Css colour behind the active scene, so surrounding UI can match it. */
+  get background(): string {
+    return cssColor(this.scene?.background ?? PAL.sky);
+  }
+
+  private applyBackground(scene: Scene): void {
+    const color = cssColor(scene.background);
+    this.app.renderer.background.color = scene.background;
+    this.host.style.background = color;
+    this.app.canvas.style.imageRendering = scene.style === "pixel" ? "pixelated" : "auto";
+    this.callbacks.onBackgroundChange?.(color);
+  }
+
+  private get smooth(): boolean {
+    return this.scene?.style === "smooth";
+  }
+
+  /** Canvas pixels per scene pixel: 1 for pixel art (the browser upscales), the full scale for smooth scenes. */
+  private get canvasScale(): number {
+    return this.smooth ? this.scale : 1;
   }
 
   private get dpr(): number {
@@ -210,9 +241,10 @@ export class World {
   private fit(animate: boolean): void {
     if (!this.scene || this.destroyed) return;
     const area = this.area();
-    const b = this.scene.bounds();
+    const b = this.scene.bounds(area);
+    this.fitted = this.smooth ? fitSmooth(b, area, this.dpr) : fitScale(b, area, this.dpr);
     const target: CameraState = {
-      scale: fitScale(b, area, this.dpr),
+      scale: this.fitted,
       world: { x: b.x + b.w / 2, y: b.y + b.h / 2 },
       focus: { x: area.x + area.w / 2, y: area.y + area.h / 2 },
     };
@@ -239,26 +271,36 @@ export class World {
 
   private resizeCanvas(): void {
     const { w, h } = this.viewport();
-    const artW = Math.ceil((w * this.dpr) / this.scale);
-    const artH = Math.ceil((h * this.dpr) / this.scale);
-    if (artW !== this.app.renderer.width || artH !== this.app.renderer.height) this.app.renderer.resize(artW, artH);
+    const perCss = this.smooth ? this.dpr : this.dpr / this.scale;
+    const bufW = Math.ceil(w * perCss);
+    const bufH = Math.ceil(h * perCss);
+    if (bufW !== this.app.renderer.width || bufH !== this.app.renderer.height) this.app.renderer.resize(bufW, bufH);
     const canvas = this.app.canvas;
-    canvas.style.width = `${(artW * this.scale) / this.dpr}px`;
-    canvas.style.height = `${(artH * this.scale) / this.dpr}px`;
+    canvas.style.width = `${bufW / perCss}px`;
+    canvas.style.height = `${bufH / perCss}px`;
   }
 
   private applyPan(clamp = true): void {
     if (!this.scene) return;
-    if (clamp) this.pan = clampPan(this.pan, this.scene.bounds(), this.area(), this.scale, this.dpr);
-    this.scene.root.position.set(Math.round(this.pan.x), Math.round(this.pan.y));
+    const area = this.area();
+    if (clamp) this.pan = clampPan(this.pan, this.scene.bounds(area), area, this.scale, this.dpr);
+    const q = this.canvasScale;
+    const x = Math.round(this.pan.x * q);
+    const y = Math.round(this.pan.y * q);
+    this.scene.root.scale.set(q);
+    this.scene.root.position.set(x, y);
+    this.scene.setViewport?.({ scale: q, x, y, dpr: this.dpr, area });
   }
 
+  /** Scene-pixel offset of a pointer from the canvas origin. */
   private toArt(e: { clientX: number; clientY: number }): { x: number; y: number } {
     const rect = this.app.canvas.getBoundingClientRect();
-    return {
-      x: ((e.clientX - rect.left) * this.app.renderer.width) / Math.max(1, rect.width),
-      y: ((e.clientY - rect.top) * this.app.renderer.height) / Math.max(1, rect.height),
-    };
+    const k = this.dpr / this.scale;
+    return { x: (e.clientX - rect.left) * k, y: (e.clientY - rect.top) * k };
+  }
+
+  private nextZoom(dir: 1 | -1): number {
+    return this.smooth ? stepSmooth(this.scale, dir, this.fitted, this.dpr) : stepZoom(this.scale, dir);
   }
 
   private hitAt(e: { clientX: number; clientY: number }): Hit | null {
@@ -274,7 +316,7 @@ export class World {
   }
 
   private zoomTo(next: number, at: { x: number; y: number }): void {
-    const to = clampScale(next);
+    const to = this.smooth ? next : clampScale(next);
     this.tween = null;
     if (to === this.scale) return;
     this.pan = zoomAround(this.pan, at.x, at.y, this.scale, to);
@@ -304,7 +346,7 @@ export class World {
     if (this.pointers.size === 2) {
       const dist = this.pointerSpread();
       if (this.pinchDist > 0 && (dist / this.pinchDist > 1.3 || dist / this.pinchDist < 0.77)) {
-        this.zoomTo(stepZoom(this.scale, dist > this.pinchDist ? 1 : -1), this.toArt(this.pointerCenter()));
+        this.zoomTo(this.nextZoom(dist > this.pinchDist ? 1 : -1), this.toArt(this.pointerCenter()));
         this.pinchDist = dist;
       }
       return;
@@ -341,7 +383,7 @@ export class World {
   private readonly onWheel = (e: WheelEvent): void => {
     e.preventDefault();
     if (Math.abs(e.deltaY) < 1) return;
-    this.zoomTo(stepZoom(this.scale, e.deltaY < 0 ? 1 : -1), this.toArt(e));
+    this.zoomTo(this.nextZoom(e.deltaY < 0 ? 1 : -1), this.toArt(e));
   };
 
   private readonly onMotionChange = (e: MediaQueryListEvent): void => {

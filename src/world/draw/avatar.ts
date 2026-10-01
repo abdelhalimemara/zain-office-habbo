@@ -101,19 +101,3 @@ export function drawAvatar(g: Graphics, a: Appearance, pose: Pose): void {
     d([[-1, -18, 3, 1]], PAL.white);
   }
 }
-
-export function drawPedestrian(g: Graphics, shirt: number, hair: number, skin: number, frame: number, back: boolean): void {
-  const step = [0, 1, 0, -1][frame % 4]!;
-  g.ellipse(0, 0, 4, 2).fill({ color: PAL.black, alpha: 0.22 });
-  const rects: [number, number, number, number, number][] = [
-    [-2, -5 + Math.max(0, step), 2, 5 - Math.max(0, step), 0x2f3a52],
-    [0, -5 + Math.max(0, -step), 2, 5 - Math.max(0, -step), 0x2f3a52],
-    [-3, -10, 6, 5, shirt],
-    [-3, -15, 6, 5, skin],
-    back ? [-3, -16, 6, 5, hair] : [-3, -16, 6, 2, hair],
-  ];
-  for (const [x, y, w, h] of rects) g.rect(x - 1, y - 1, w + 2, h + 2);
-  g.fill(PAL.outline);
-  for (const [x, y, w, h, c] of rects) g.rect(x, y, w, h).fill(c);
-  if (!back) g.rect(0, -13, 1, 1).rect(2, -13, 1, 1).fill(PAL.black);
-}

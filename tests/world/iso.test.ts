@@ -1,4 +1,4 @@
-import { boxHull, compareBoxes, depthKey, dynamicDepth, pointInPolygon, sortDepth, toScreen, toTile, type Box } from "../../src/world/iso";
+import { compareBoxes, depthKey, dynamicDepth, pointInPolygon, sortDepth, toScreen, toTile, type Box } from "../../src/world/iso";
 
 const box = (x0: number, y0: number, w: number, d: number, h = 10): Box => ({ x0, y0, x1: x0 + w, y1: y0 + d, h });
 
@@ -47,8 +47,8 @@ describe("iso math", () => {
     expect(z).toBeLessThan(statics[1]!.depth);
   });
 
-  it("hit-tests the extruded hull", () => {
-    const hull = boxHull(box(0, 0, 2, 2, 50));
+  it("hit-tests polygons", () => {
+    const hull = [{ x: 0, y: -60 }, { x: 32, y: -40 }, { x: 32, y: 16 }, { x: 0, y: 32 }, { x: -32, y: 16 }, { x: -32, y: -40 }];
     expect(pointInPolygon({ x: 0, y: 0 }, hull)).toBe(true);
     expect(pointInPolygon({ x: 0, y: -45 }, hull)).toBe(true);
     expect(pointInPolygon({ x: 100, y: 0 }, hull)).toBe(false);

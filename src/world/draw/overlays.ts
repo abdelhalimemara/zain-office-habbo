@@ -73,55 +73,6 @@ export function drawFootRing(g: Graphics, color: number): void {
   g.ellipse(0, 0, 10, 5).stroke({ color, width: 1, alpha: 0.9 });
 }
 
-export interface BadgeContent {
-  working: number;
-  blocked: number;
-  awaiting: number;
-}
-
-export interface BadgeLayout {
-  width: number;
-  /** Where the bouncing "!" sits, or null when nothing awaits approval. */
-  bang: { x: number; y: number } | null;
-}
-
-const BADGE_GREEN = 0x3ddc84;
-
-/** Pixel tag: green working count, red blocked count (when > 0), yellow "!" awaiting count (when > 0). */
-export function drawBadge(g: Graphics, c: BadgeContent): BadgeLayout {
-  const working = String(c.working);
-  const blocked = c.blocked > 0 ? String(c.blocked) : "";
-  const awaiting = c.awaiting > 0 ? String(c.awaiting) : "";
-  const seg = (text: string, icon: number) => (text ? icon + 2 + measureText(text) : 0);
-  const parts = [seg(working, 3), seg(blocked, 3), seg(awaiting, 3)].filter((w) => w > 0);
-  const w = 6 + parts.reduce((sum, p) => sum + p, 0) + (parts.length - 1) * 4;
-  const h = 11;
-  const x = -Math.floor(w / 2);
-  plate(g, x, -h, w, h, 0x101826, PAL.white, 0.95);
-  rect(g, x + 1, -h + 1, w - 2, h - 2, 0x172238);
-  let cx = x + 3;
-  rect(g, cx, -h + 4, 3, 3, BADGE_GREEN);
-  pixelText(g, working, cx + 5, -h + 3, PAL.white);
-  cx += seg(working, 3) + 4;
-  if (blocked) {
-    rect(g, cx, -h + 4, 3, 3, PAL.red);
-    pixelText(g, blocked, cx + 5, -h + 3, 0xff8a8a);
-    cx += seg(blocked, 3) + 4;
-  }
-  let bang: BadgeLayout["bang"] = null;
-  if (awaiting) {
-    bang = { x: cx, y: -h + 3 };
-    pixelText(g, awaiting, cx + 5, -h + 3, PAL.yellow);
-  }
-  return { width: w, bang };
-}
-
-export function drawBang(g: Graphics): void {
-  rect(g, -1, -1, 4, 7, PAL.outline);
-  rect(g, 0, 0, 2, 3, PAL.yellow);
-  rect(g, 0, 4, 2, 1, PAL.yellow);
-}
-
 export function drawRoomLabel(g: Graphics, text: string, accent: number): void {
   const w = measureText(text) + 8;
   const x = -Math.floor(w / 2);
