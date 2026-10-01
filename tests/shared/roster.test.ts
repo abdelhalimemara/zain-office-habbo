@@ -25,7 +25,10 @@ describe("roster", () => {
 
   it("reports every non-CEO agent to an existing agent", () => {
     for (const a of ROSTER) {
-      if (a.rank === "ceo") continue;
+      if (a.rank === "ceo" || a.rank === "board") {
+        expect(a.reportsTo).toBeNull();
+        continue;
+      }
       expect(a.reportsTo && findAgent(a.reportsTo)).toBeTruthy();
     }
   });
