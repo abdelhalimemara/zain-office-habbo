@@ -42,18 +42,13 @@ describe("board room seats", () => {
   });
 
   it("seats the board in roster order, never at a department desk", () => {
-    const candidates = [
-      ...agentsInDivision("hq"),
-      ...["zain-board-b", "zain-board-c", "zain-board-d", "zain-board-e", "zain-board-f"].map((profile) => ({
-        profile,
-        rank: "board" as const,
-      })),
-    ];
+    const real = boardMembers();
+    const extras = Array.from({ length: boardSeats.length - real.length + 1 }, (_, i) => `zain-board-x${i}`);
+    const candidates = [...agentsInDivision("hq"), ...extras.map((profile) => ({ profile, rank: "board" as const }))];
     const { seats, overflow } = assignSeats(hq, candidates);
-    const hormozi = boardMembers()[0]!;
-    expect(seats.get(hormozi.profile)?.id).toBe(boardSeats[0]!.id);
-    for (const p of ["zain-board-b", "zain-board-c", "zain-board-d", "zain-board-e"]) expect(seats.get(p)?.role).toBe("board");
-    expect(overflow).toEqual(["zain-board-f"]);
+    real.forEach((m, i) => expect(seats.get(m.profile)?.id).toBe(boardSeats[i]!.id));
+    for (const p of extras.slice(0, -1)) expect(seats.get(p)?.role).toBe("board");
+    expect(overflow).toEqual([extras.at(-1)]);
     for (const a of agentsInDivision("hq").filter((a) => a.rank === "lead")) expect(seats.get(a.profile)?.role).toBeUndefined();
   });
 });
