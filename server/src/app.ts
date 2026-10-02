@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { ReconcilerStatus } from "../../shared/api";
+import { VOICE_API } from "../../shared/voice";
 import type { ConsultationLog } from "./board/consultLog";
 import type { MeetingEngine } from "./board/meetings/engine";
 import { meetingRoutes } from "./board/meetings/routes";
@@ -19,6 +20,8 @@ import { fullRoster, type HireStore } from "./org/hireStore";
 import { mergeRoster } from "./org/rosterView";
 import { allTeams, memoryTeamStore, type TeamStore } from "./org/teamStore";
 import { createTeam, defaultGhExec, listTeams, parseTeamRequest, type GhCheck } from "./org/techTeams";
+import type { VoiceService } from "./voice/service";
+import { voiceRoutes } from "./voice/routes";
 import { UI_AUTHOR, approve, createMandate, parseMandate, reject, reopen, taskDetail, unblock } from "./org/tasks";
 
 export interface AppDeps {
@@ -29,6 +32,8 @@ export interface AppDeps {
   connections: ConnectionsService;
   meetings: MeetingEngine;
   consultations: ConsultationLog;
+  /** ElevenLabs voices for voice meetings. */
+  voice: VoiceService;
   /** Board members' private briefs, read only when writing their SOUL. */
   briefs: BriefReader;
   guard?: GuardOptions;
@@ -50,15 +55,14 @@ export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
 
   app.use("/api/*", localOnly(guard));
-  app.use(
-    "/api/*",
-    bodyLimit({
-      maxSize: MAX_BODY_BYTES,
-      onError: () => {
-        throw new HttpError(413, "request body too large");
-      },
-    }),
-  );
+  const smallBodies = bodyLimit({
+    maxSize: MAX_BODY_BYTES,
+    onError: () => {
+      throw new HttpError(413, "request body too large");
+    },
+  });
+  // Recordings have their own, larger limit (voiceRoutes).
+  app.use("/api/*", (c, next) => (c.req.path === VOICE_API.transcribe ? next() : smallBodies(c, next)));
   app.onError(errorResponse);
 
   app.get("/api/health", async (c) => c.json(await health(hermes, deps.reconcilerStatus, ceoWake)));
@@ -115,6 +119,7 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   meetingRoutes(app, deps.meetings);
+  voiceRoutes(app, deps.voice, deps.meetings);
 
   app.get("/api/roster", async (c) => {
     const [roster, profiles] = await Promise.all([fullRoster(hires), hermes.listProfiles()]);

@@ -8,10 +8,13 @@ import { fileRecordStore } from "./board/recordStore";
 import { ConnectionsService } from "./connections/service";
 import { NotionClient, envToken } from "./notion/client";
 import { NotionBoardSink } from "./notion/sync";
-import { fileHireStore } from "./org/hireStore";
+import { fileHireStore, fullRoster } from "./org/hireStore";
 import { fileBriefs } from "./org/privateBriefs";
 import { Reconciler } from "./org/reconcile";
 import { fileTeamStore } from "./org/teamStore";
+import { fileVoiceStore } from "./voice/assignments";
+import { ElevenLabsClient, envApiKey } from "./voice/elevenlabs";
+import { VoiceService } from "./voice/service";
 
 const HOST = "127.0.0.1";
 const port = Number(process.env.ZAIN_SERVER_PORT ?? DEFAULT_PORT);
@@ -23,12 +26,14 @@ const clients = defaultClients(process.env);
 const hires = fileHireStore(process.cwd());
 const root = process.cwd();
 const sink = new NotionBoardSink(new NotionClient(envToken()), root);
+const voice = new VoiceService({ root, client: new ElevenLabsClient(envApiKey()), store: fileVoiceStore(root), roster: () => fullRoster(hires) });
 const meetings = new MeetingEngine({
   hermes: clients.hermes,
   hires,
   ceoWake: clients.ceoWake,
   store: fileRecordStore(join(root, ".zain", "meetings.json"), isStoredMeeting),
   sink,
+  onTurns: (meeting, from) => voice.prefetch(meeting, from),
 });
 const consultations = new ConsultationLog({
   hermes: clients.hermes,
@@ -50,6 +55,7 @@ const app = createApp({
   reconcilerStatus: () => reconciler.status(),
   meetings,
   consultations,
+  voice,
   connections: new ConnectionsService({ hermes: clients.hermes, ceoWake: clients.ceoWake, hermesBin: process.env.HERMES_BIN }),
 });
 

@@ -56,6 +56,8 @@ export interface MeetingEngineDeps {
   now?: () => number;
   log?: (line: string) => void;
   newId?: () => string;
+  /** Told when board turns from index `from` on are recorded (e.g. to prefetch their audio); must not throw. */
+  onTurns?: (meeting: BoardMeeting, from: number) => void;
 }
 
 const taskTitle = (meeting: BoardMeeting, label: string) => `${MEETING_TITLE_PREFIX}${meeting.topic} · ${label}`;
@@ -85,6 +87,7 @@ export class MeetingEngine {
       topic: req.topic,
       brief: req.brief,
       members,
+      mode: req.mode ?? "chat",
       boardOnly: req.boardOnly ?? false,
       discussionRounds: req.discussionRounds ?? 1,
       status: "in-round",
@@ -234,7 +237,7 @@ export class MeetingEngine {
       turns.push({ round: state.round, kind, speaker: member, text, at: this.now(), taskId });
       votes.push(a.done ? parseVote(member, a.text) : { member, vote: "abstain", rationale: text });
     }
-    m.turns.push(...turns);
+    this.recordTurns(m, turns);
     if (kind === "vote") {
       m.votes = votes;
       m.decision = decide(votes);
@@ -243,6 +246,16 @@ export class MeetingEngine {
     if (m.boardOnly) return this.startRound(stored, state.round + 1, board);
     m.status = "awaiting-founder";
     await this.save(stored);
+  }
+
+  private recordTurns(m: BoardMeeting, turns: readonly MeetingTurn[]): void {
+    const from = m.turns.length;
+    m.turns.push(...turns);
+    try {
+      this.deps.onTurns?.(m, from);
+    } catch (err) {
+      this.log(`meetings: turn listener failed (${err instanceof Error ? err.message : "error"})`);
+    }
   }
 
   private async startMinutes(stored: StoredMeeting): Promise<void> {
@@ -274,7 +287,7 @@ export class MeetingEngine {
     const a = await this.answer(stored.minutes.taskId!, board);
     if (!a?.done) return;
     m.conclusion = a.text;
-    m.turns.push({ round: m.currentRound, kind: "vote", speaker: CEO_PROFILE, text: a.text, at: this.now(), taskId: stored.minutes.taskId });
+    this.recordTurns(m, [{ round: m.currentRound, kind: "vote", speaker: CEO_PROFILE, text: a.text, at: this.now(), taskId: stored.minutes.taskId }]);
     m.status = "concluded";
     await this.save(stored);
   }

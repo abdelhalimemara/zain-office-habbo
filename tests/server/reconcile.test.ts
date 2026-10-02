@@ -228,7 +228,7 @@ describe("Reconciler", () => {
 
 describe("GET /api/health reconciler status", () => {
   it("reports the last run when the server runs a reconciler", async () => {
-    const { headcount, hires, ceoWake, briefs, connections, meetings, consultations } = setup({});
+    const { headcount, hires, ceoWake, briefs, connections, meetings, consultations, voice } = setup({});
     const statusRoute = mockFetch({ ...hermesBase, "GET /api/status": () => ({ gateway_platforms: {} }) });
     const app = createApp({
       hermes: new HermesClient({ baseUrl: "http://hermes.test", fetchImpl: statusRoute.fetchImpl }),
@@ -239,6 +239,7 @@ describe("GET /api/health reconciler status", () => {
       connections,
       meetings,
       consultations,
+      voice,
       reconcilerStatus: () => ({ lastRunAt: 1_700_000_000, repaired: 2 }),
     });
     const res = await app.request("/api/health", { headers: { Host: "127.0.0.1:8787" } });
