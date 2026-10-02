@@ -3,6 +3,7 @@ import { agentsInDivision } from "../../shared/roster";
 import { tilesOf } from "../../src/world/plan/builder";
 import { findPath, isWalkable, walkGrid } from "../../src/world/plan/grid";
 import { DIR_VEC, floorPlan } from "../../src/world/plan";
+import { BOARD_ROOM, BOARD_TABLE } from "../../src/world/plan/hq";
 
 describe.each(DIVISION_IDS.map((d) => [d]))("floor plan %s", (division) => {
   const plan = floorPlan(division);
@@ -97,8 +98,45 @@ describe("HQ plan", () => {
     expect(Math.max(table.w, table.d)).toBeGreaterThanOrEqual(6);
     for (const s of board) {
       expect(s.desk).toBe(table.id);
-      expect(hq.items.find((i) => i.id === s.sit.item)?.kind, "board stands behind a head chair").toBe("chair");
+      expect(hq.items.find((i) => i.id === s.sit.item)?.kind, "board stands at their own exec chair").toBe("execChair");
     }
     expect(hq.seats.filter((s) => s.role === "ceo")).toHaveLength(1);
+  });
+
+  it("seats the board at the table: two at the head, three down the back long side, legs behind the table edge", () => {
+    const board = hq.seats.filter((s) => s.role === "board");
+    const table = hq.items.find((i) => i.kind === "boardTable")!;
+    const head = board.filter((s) => s.facing === "+x");
+    const side = board.filter((s) => s.facing === "+y");
+    expect(head.map((s) => [s.x, s.y])).toEqual([[table.x - 1, table.y], [table.x - 1, table.y + 1]]);
+    expect(side.map((s) => [s.x, s.y])).toEqual([0, 1, 2].map((i) => [table.x + i, table.y - 1]));
+    for (const s of board) {
+      expect(s.reach).toBe(1);
+      expect(hq.items.find((i) => i.id === s.sit.item)?.kind).toBe("execChair");
+      const chair = hq.items.find((i) => i.id === s.sit.item)!;
+      expect([chair.x, chair.y]).toEqual([s.x, s.y]);
+    }
+  });
+
+  it("keeps the board table a real table centred in its room", () => {
+    const table = hq.items.find((i) => i.kind === "boardTable")!;
+    expect(table).toMatchObject(BOARD_TABLE);
+    expect(Math.min(table.w, table.d)).toBe(2);
+    expect(Math.max(table.w, table.d)).toBeGreaterThanOrEqual(6);
+    expect((table.w * table.d) / (BOARD_ROOM.w * BOARD_ROOM.d)).toBeLessThan(0.25);
+    expect(table.y - BOARD_ROOM.y).toBe(BOARD_ROOM.y + BOARD_ROOM.d - (table.y + table.d));
+  });
+
+  it("leaves a walkable ring between the board-room chairs and its walls", () => {
+    const grid = walkGrid(hq);
+    const { x, y, w, d } = BOARD_ROOM;
+    for (let tx = x; tx < x + w; tx++) {
+      expect(isWalkable(grid, tx, y), `${tx},${y}`).toBe(true);
+      expect(isWalkable(grid, tx, y + d - 1), `${tx},${y + d - 1}`).toBe(true);
+    }
+    for (let ty = y; ty < y + d; ty++) {
+      expect(isWalkable(grid, x, ty), `${x},${ty}`).toBe(true);
+      expect(isWalkable(grid, x + w - 1, ty), `${x + w - 1},${ty}`).toBe(true);
+    }
   });
 });
