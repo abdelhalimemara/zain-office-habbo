@@ -18,6 +18,7 @@ import {
   websiteHref,
 } from "./auditModel";
 import { AtAGlance, Benchmark, ExecutiveSummary, FixPhases, Gaps } from "./AuditReport";
+import { SeoBlock } from "./AuditSeo";
 import { ApifyHint, Opportunities, StepTimeline } from "./AuditSections";
 import { ErrorNote } from "./common";
 import { absoluteTime } from "./mandates";
@@ -149,6 +150,11 @@ export function AuditBody({ audit, now }: { audit: ProspectAudit; now: number })
       {audit.benchmark && audit.benchmark.length > 0 && (
         <Section title="The competitive gap">
           <Benchmark rows={audit.benchmark} bottomLine={analysis?.bottomLines.competitive} />
+        </Section>
+      )}
+      {audit.seo && (
+        <Section title="SEO (Semrush)">
+          <SeoBlock seo={audit.seo} />
         </Section>
       )}
       {analysis && (

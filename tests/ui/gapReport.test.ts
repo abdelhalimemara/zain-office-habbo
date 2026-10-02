@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { AuditFinding } from "@shared/audits";
 import {
   auditKpis,
+  authorityCell,
+  estimate,
+  organicCell,
+  sortIssues,
+  urlPath,
   benchmarkRows,
   evidenceLine,
   followersCell,
@@ -49,5 +54,22 @@ describe("gap report", () => {
     expect(followersCell(12040)).toBe("12,040");
     expect(followersCell("not-measured")).toBe("not measured");
     expect(visitsCell({ monthlyVisits: 10628, period: "Aug 2026" })).toBe("~10,628 (est.)");
+    expect(authorityCell(33.6)).toBe("34 (est.)");
+    expect(authorityCell(undefined)).toBe("not measured");
+    expect(organicCell(8700)).toBe("~8,700 (est.)");
+  });
+
+  it("formats SEO estimates, issue order and page paths", () => {
+    expect(estimate(2380)).toBe("~2,380");
+    expect(estimate(undefined)).toBe("—");
+    const order = sortIssues([
+      { title: "a", severity: "low" as const, count: 9 },
+      { title: "b", severity: "medium" as const, count: 1 },
+      { title: "c", severity: "medium" as const, count: 40 },
+      { title: "d", severity: "critical" as const },
+    ]).map((i) => i.title);
+    expect(order).toEqual(["d", "c", "b", "a"]);
+    expect(urlPath("https://x.com/a/b?q=1")).toBe("/a/b?q=1");
+    expect(urlPath("x.com")).toBe("/");
   });
 });

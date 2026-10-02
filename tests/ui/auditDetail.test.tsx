@@ -79,6 +79,10 @@ describe("Audit detail", () => {
     expect(benchRows[1]).toHaveTextContent("20 active, text/image, since 13 Aug 2022");
     expect(benchRows[1]).toHaveTextContent("~10,628 (est.)");
     expect(benchRows[2]).toHaveTextContent("not measured");
+    const benchHead = within(bench).getAllByRole("columnheader").map((h) => h.textContent);
+    expect(benchHead.slice(-2)).toEqual(["Authority (est.)", "Organic traffic (est.)"]);
+    expect(within(benchRows[0]!).getAllByRole("cell").slice(-2).map((c) => c.textContent)).toEqual(["18 (est.)", "~1,450 (est.)"]);
+    expect(within(benchRows[2]!).getAllByRole("cell").slice(-2).map((c) => c.textContent)).toEqual(["not measured", "not measured"]);
     expect(within(section("The competitive gap")).getByText(/5x the traffic/)).toBeInTheDocument();
 
     const gaps = section("The gaps");
@@ -107,6 +111,52 @@ describe("Audit detail", () => {
     expect(steps[0]).toHaveTextContent("15s");
     expect(steps[3]).toHaveTextContent("Skipped");
     expect(steps[3]).toHaveTextContent("No ads in Meta Ad Library");
+  });
+
+  it("renders the Semrush SEO block with every figure labelled as an estimate", async () => {
+    open(doneAudit);
+    await screen.findByRole("heading", { name: "Nakheel Dental" });
+    const seo = section("SEO (Semrush)");
+    expect(within(seo).getByText("All figures are estimates. Source: Semrush via Apify, Sep 2026")).toBeInTheDocument();
+    const tiles = Object.fromEntries(
+      within(seo)
+        .getAllByRole("term")
+        .map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]),
+    );
+    expect(tiles).toEqual({
+      "Authority score": "18/100 est.",
+      "Organic keywords": "~312 est.",
+      "Organic traffic / mo": "~1,450 est.",
+      Backlinks: "~2,380 est.",
+      "Referring domains": "~96 est.",
+    });
+
+    const keywords = within(seo).getByRole("table", { name: "Top keywords" });
+    const kwRows = within(keywords).getAllByRole("row").slice(1);
+    expect(kwRows.map((r) => within(r).getByRole("rowheader").textContent)).toEqual(["nakheel dental", "dental clinic jeddah", "teeth whitening jeddah"]);
+    expect(kwRows.map((r) => r.querySelector(".zui-seo-pos")!.className.includes("--top"))).toEqual([true, false, true]);
+    expect(kwRows[1]).toHaveTextContent("#14");
+    expect(kwRows[1]).toHaveTextContent("6,600");
+    expect(kwRows[1]).toHaveTextContent("/en/clinics/jeddah-al-rawdah-branch?utm=1");
+    expect(kwRows[2]).toHaveTextContent("—");
+
+    const pages = within(within(seo).getByRole("region", { name: "Top pages" })).getAllByRole("listitem");
+    expect(pages.map((p) => p.textContent)).toEqual(["/~980 est.", "/en/services/implants~210 est."]);
+
+    const issues = within(within(seo).getByRole("region", { name: "Technical issues" })).getAllByRole("listitem");
+    expect(issues.map((i) => i.querySelector(".zui-gap-pill")!.textContent)).toEqual(["Critical", "High", "Medium", "Medium"]);
+    expect(issues[0]).toHaveTextContent("Broken internal links");
+    expect(issues[2]).toHaveTextContent("Duplicate titles52");
+
+    const comps = within(within(seo).getByRole("region", { name: "Organic competitors" })).getAllByRole("listitem");
+    expect(comps[0]).toHaveTextContent("smilehub.sa140 shared keywords · AS 34");
+    expect(comps[1]).toHaveTextContent("pearlclinic.saAS 21");
+  });
+
+  it("leaves the SEO block out when Semrush was not read", async () => {
+    open({ ...doneAudit, seo: undefined });
+    await screen.findByRole("heading", { name: "Nakheel Dental" });
+    expect(screen.queryByRole("region", { name: "SEO (Semrush)" })).not.toBeInTheDocument();
   });
 
   it("shows the area table before the analyst has written up", async () => {

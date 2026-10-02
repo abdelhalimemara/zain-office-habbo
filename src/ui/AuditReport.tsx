@@ -2,6 +2,7 @@ import type { AreaStatus, AuditAnalysis, AuditScore, BenchmarkRow, ProspectAudit
 import {
   AREA_STATUS_LABEL,
   areaLabel,
+  authorityCell,
   auditKpis,
   benchmarkRows,
   EVIDENCE_LABEL,
@@ -12,6 +13,7 @@ import {
   metaAdsCell,
   notMeasuredAreas,
   orderedAreas,
+  organicCell,
   SEVERITY_LABEL,
   sortFindings,
   visitsCell,
@@ -126,6 +128,8 @@ export function Benchmark({ rows, bottomLine }: { rows: readonly BenchmarkRow[];
               <th scope="col">Meta Ads</th>
               <th scope="col">Instagram followers</th>
               <th scope="col">Est. monthly visits</th>
+              <th scope="col">Authority (est.)</th>
+              <th scope="col">Organic traffic (est.)</th>
             </tr>
           </thead>
           <tbody>
@@ -139,6 +143,8 @@ export function Benchmark({ rows, bottomLine }: { rows: readonly BenchmarkRow[];
                 <td>{metaAdsCell(r.metaAds)}</td>
                 <td>{followersCell(r.instagramFollowers)}</td>
                 <td>{visitsCell(r.traffic)}</td>
+                <td>{authorityCell(r.authorityScore)}</td>
+                <td>{organicCell(r.organicTraffic)}</td>
               </tr>
             ))}
           </tbody>

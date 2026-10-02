@@ -42,10 +42,37 @@ export const doneAudit: ProspectAudit = {
     ],
   },
   benchmark: [
-    { name: "Smile Hub", domain: "smilehub.sa", isProspect: false, googleAds: { active: 20, formats: "text/image", since: "13 Aug 2022" }, metaAds: { active: 1, note: "confirmed" }, instagramFollowers: 988, traffic: { monthlyVisits: 10628, period: "Aug 2026" } },
-    { name: "Nakheel Dental", domain: "nakheeldental.com", isProspect: true, googleAds: "none", metaAds: "none", instagramFollowers: 12040, traffic: { monthlyVisits: 2042, period: "Aug 2026" } },
+    { name: "Smile Hub", domain: "smilehub.sa", isProspect: false, googleAds: { active: 20, formats: "text/image", since: "13 Aug 2022" }, metaAds: { active: 1, note: "confirmed" }, instagramFollowers: 988, traffic: { monthlyVisits: 10628, period: "Aug 2026" }, authorityScore: 34, organicTraffic: 8700 },
+    { name: "Nakheel Dental", domain: "nakheeldental.com", isProspect: true, googleAds: "none", metaAds: "none", instagramFollowers: 12040, traffic: { monthlyVisits: 2042, period: "Aug 2026" }, authorityScore: 18, organicTraffic: 1450 },
     { name: "Pearl Clinic", isProspect: false, googleAds: "not-measured", metaAds: "none", instagramFollowers: "not-measured", traffic: "not-measured" },
   ],
+  seo: {
+    source: "Semrush via Apify, Sep 2026",
+    authorityScore: 18,
+    organicKeywords: 312,
+    organicTraffic: 1450,
+    backlinks: 2380,
+    referringDomains: 96,
+    topKeywords: [
+      { keyword: "nakheel dental", position: 1, volume: 880, url: "https://nakheeldental.com/" },
+      { keyword: "dental clinic jeddah", position: 14, volume: 6600, url: "https://nakheeldental.com/en/clinics/jeddah-al-rawdah-branch?utm=1" },
+      { keyword: "teeth whitening jeddah", position: 3 },
+    ],
+    topPages: [
+      { url: "https://nakheeldental.com/", traffic: 980 },
+      { url: "https://nakheeldental.com/en/services/implants", traffic: 210 },
+    ],
+    issues: [
+      { title: "Missing meta descriptions", severity: "medium", count: 38 },
+      { title: "Broken internal links", severity: "critical", count: 12 },
+      { title: "Slow pages", severity: "high", count: 4 },
+      { title: "Duplicate titles", severity: "medium", count: 52 },
+    ],
+    competitors: [
+      { domain: "smilehub.sa", commonKeywords: 140, authorityScore: 34 },
+      { domain: "pearlclinic.sa", authorityScore: 21 },
+    ],
+  },
   analysis: {
     coverLine: "A public-data audit of Nakheel Dental's digital presence.",
     goal: "Show where Nakheel already wins, and where the category is being taken by others.",

@@ -119,3 +119,31 @@ export function followersCell(v: BenchmarkRow["instagramFollowers"]): string {
 export function visitsCell(v: BenchmarkRow["traffic"]): string {
   return v === undefined || v === "not-measured" ? NOT_MEASURED : `~${formatCount(v.monthlyVisits)} (est.)`;
 }
+
+/** An estimated figure: "~12,400", or a dash when the source had none. */
+export function estimate(n: number | undefined): string {
+  return n === undefined ? "—" : `~${formatCount(n)}`;
+}
+
+export function authorityCell(v: number | undefined): string {
+  return v === undefined ? NOT_MEASURED : `${Math.round(v)} (est.)`;
+}
+
+export function organicCell(v: number | undefined): string {
+  return v === undefined ? NOT_MEASURED : `~${formatCount(v)} (est.)`;
+}
+
+/** Most severe first; within a severity, the larger count first. */
+export function sortIssues<T extends { severity: Severity; count?: number }>(issues: readonly T[]): T[] {
+  return [...issues].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || (b.count ?? 0) - (a.count ?? 0));
+}
+
+/** "/services/implants" from a full URL, so long URLs fit the panel; the host is dropped. */
+export function urlPath(url: string): string {
+  try {
+    const u = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+    return `${u.pathname}${u.search}` || "/";
+  } catch {
+    return url;
+  }
+}
