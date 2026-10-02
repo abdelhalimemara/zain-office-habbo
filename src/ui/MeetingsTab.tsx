@@ -31,13 +31,20 @@ export function NotionLink({ url }: { url: string }) {
 function MeetingItem({ meeting, agents }: { meeting: BoardMeeting; agents: readonly RosterEntry[] }) {
   const openPanel = useUiStore((s) => s.openPanel);
   const now = Date.now() / 1000;
+  const live = meeting.status === "live";
+  const yours = meeting.status === "awaiting-founder";
   return (
-    <li className={`zui-meeting-item${meeting.status === "awaiting-founder" ? " zui-meeting-item--yours" : ""}`}>
-      <button type="button" className="zui-meeting-item__open" onClick={() => openPanel({ kind: "meeting", id: meeting.id })}>
+    <li className={`zui-meeting-item${yours ? " zui-meeting-item--yours" : ""}${live ? " zui-meeting-item--live" : ""}`}>
+      <button
+        type="button"
+        className="zui-meeting-item__open"
+        aria-label={live ? `Join ${meeting.topic}` : undefined}
+        onClick={() => openPanel({ kind: "meeting", id: meeting.id })}
+      >
         <span className="zui-meeting-item__top">
           <MeetingStatusChip meeting={meeting} />
           {meeting.mode === "voice" && <VoiceModeBadge />}
-          {isMeetingActive(meeting) && <span className="zui-meeting-item__phase">{phaseLabel(meeting)}</span>}
+          {isMeetingActive(meeting) && !live && <span className="zui-meeting-item__phase">{phaseLabel(meeting)}</span>}
           <span className="zui-meeting-item__time" title={absoluteTime(meeting.updatedAt)}>
             {relativeTime(meeting.updatedAt, now)}
           </span>
@@ -51,6 +58,11 @@ function MeetingItem({ meeting, agents }: { meeting: BoardMeeting; agents: reado
             })}
           </span>
           {meeting.decision && <DecisionChip decision={meeting.decision} />}
+          {live && (
+            <span className="zui-meeting-item__join" aria-hidden="true">
+              Join
+            </span>
+          )}
         </span>
       </button>
       {meeting.notionPageUrl && <NotionLink url={meeting.notionPageUrl} />}

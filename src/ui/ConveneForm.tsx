@@ -42,7 +42,8 @@ export function ConveneForm({ advisors, mode, onStarted, onCancel, cancelLabel =
     };
     setErrors(found);
     if (Object.keys(found).length) return;
-    start.mutate({ topic: t, brief: brief.trim(), members, boardOnly, mode, discussionRounds: rounds }, { onSuccess: ({ meeting }) => onStarted(meeting) });
+    const input = voice ? { topic: t, brief: brief.trim(), members, mode } : { topic: t, brief: brief.trim(), members, boardOnly, mode, discussionRounds: rounds };
+    start.mutate(input, { onSuccess: ({ meeting }) => onStarted(meeting) });
   };
 
   return (
@@ -57,6 +58,7 @@ export function ConveneForm({ advisors, mode, onStarted, onCancel, cancelLabel =
         Brief <span className="zui-hint">(context, numbers, the decision you need)</span>
       </label>
       <textarea id={ids.brief} className="zui-input" rows={4} value={brief} onChange={(e) => setBrief(e.target.value)} aria-invalid={errors.brief ? true : undefined} />
+      {voice && <p className="zui-hint zui-convene__hint">Add an agenda (numbered points) if you want them to go item by item.</p>}
       {errors.brief && <p className="zui-error">{errors.brief}</p>}
       <fieldset className="zui-fieldset">
         <legend className="zui-label">Members</legend>
@@ -70,20 +72,24 @@ export function ConveneForm({ advisors, mode, onStarted, onCancel, cancelLabel =
         ))}
         {errors.members && <p className="zui-error">{errors.members}</p>}
       </fieldset>
-      <label className="zui-check">
-        <input type="checkbox" checked={boardOnly} onChange={(e) => setBoardOnly(e.target.checked)} />
-        Board discusses on its own <span className="zui-hint">(no pauses for your remarks)</span>
-      </label>
-      <label className="zui-label" htmlFor={ids.rounds}>
-        Discussion rounds
-      </label>
-      <select id={ids.rounds} className="zui-input" value={rounds} onChange={(e) => setRounds(Number(e.target.value))}>
-        {Array.from({ length: MAX_DISCUSSION_ROUNDS }, (_, i) => i + 1).map((n) => (
-          <option key={n} value={n}>
-            {n}
-          </option>
-        ))}
-      </select>
+      {!voice && (
+        <>
+          <label className="zui-check">
+            <input type="checkbox" checked={boardOnly} onChange={(e) => setBoardOnly(e.target.checked)} />
+            Board discusses on its own <span className="zui-hint">(no pauses for your remarks)</span>
+          </label>
+          <label className="zui-label" htmlFor={ids.rounds}>
+            Discussion rounds
+          </label>
+          <select id={ids.rounds} className="zui-input" value={rounds} onChange={(e) => setRounds(Number(e.target.value))}>
+            {Array.from({ length: MAX_DISCUSSION_ROUNDS }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
       <ErrorNote error={start.error} />
       <div className="zui-row">
         <button type="submit" className="zui-btn zui-btn--primary" disabled={start.isPending}>

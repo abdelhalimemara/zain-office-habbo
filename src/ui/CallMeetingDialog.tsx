@@ -11,7 +11,11 @@ const BOARD_COLOR = "#C9A227";
 
 const CHOICES: readonly { mode: MeetingMode; title: string; text: string }[] = [
   { mode: "chat", title: "Chat meeting", text: "The board discusses in a written transcript you read and reply to." },
-  { mode: "voice", title: "Voice meeting", text: "Each member speaks in their own voice, and you can talk back." },
+  {
+    mode: "voice",
+    title: "Voice meeting",
+    text: "Live room: talk with the board in real time, everyone hears you, anyone can jump in. Open floor unless your brief has an agenda.",
+  },
 ];
 
 function ModeChoice({ chosen, onChoose }: { chosen: MeetingMode | null; onChoose: (mode: MeetingMode) => void }) {

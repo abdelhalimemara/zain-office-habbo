@@ -16,7 +16,3 @@ export function useSetVoice() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: voiceKeys.voices }),
   });
 }
-
-export function useTranscribe() {
-  return useMutation({ mutationFn: ({ audio, contentType }: { audio: Blob; contentType: string }) => api.transcribe(audio, contentType) });
-}

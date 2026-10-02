@@ -1,4 +1,4 @@
-/* Voice board meetings: call-a-meeting CTA and modal, playback bar, speaking bubbles, mic, voice settings. */
+/* Voice board meetings: call-a-meeting CTA and modal, speaking equalizer, voice settings. */
 
 .zui-btn--gold { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 600; }
 .zui-btn--gold:hover:not(:disabled) { background: var(--gold-hover); border-color: var(--gold-hover); color: #fff; }
@@ -62,64 +62,11 @@
 .zui-voice-badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--gold-tint); color: #7c6220; font: 600 11.5px/1 var(--font); }
 .zui-voice-badge svg { width: 12px; height: 12px; }
 
-.zui-player {
-  position: sticky;
-  top: -20px;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-}
-/* Masks transcript scrolling under the sticky bar, above it and behind its rounded corners. */
-.zui-player::before { content: ""; position: absolute; top: -21px; right: -2px; left: -2px; z-index: -1; height: 36px; background: var(--surface); }
-.zui-player--speaking { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200, 162, 74, 0.15); }
-.zui-player__face { display: flex; flex: none; }
-.zui-player--speaking .zui-player__face > * { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--gold); border-radius: 50%; }
-.zui-player__idle { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--surface-3); color: var(--muted); }
-.zui-player__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
-.zui-player__now { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
-.zui-player__controls { display: flex; align-items: center; gap: 2px; }
-.zui-player__btn { color: var(--ink); }
-.zui-player__btn[aria-pressed="true"] { color: var(--danger); }
-
 .zui-eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
 .zui-eq span { width: 3px; height: 100%; border-radius: 1px; background: var(--gold); transform-origin: bottom; animation: zui-eq 0.9s infinite ease-in-out; }
 .zui-eq span:nth-child(2) { animation-delay: -0.3s; }
 .zui-eq span:nth-child(3) { animation-delay: -0.6s; }
 @keyframes zui-eq { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
-
-.zui-turn__play {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin-left: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.zui-turn__play:hover { background: var(--surface-3); color: var(--ink); }
-.zui-turn__play:focus-visible { outline: none; box-shadow: var(--ring); }
-.zui-turn__fallback { color: var(--muted); font-size: 11.5px; font-style: italic; }
-.zui-turn--current .zui-turn__bubble { border-color: var(--gold); background: var(--gold-tint); }
-.zui-turn--speaking > .zui-portrait,
-.zui-turn--speaking > .zui-avatar { border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--gold); }
-
-.zui-mic { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.zui-mic .zui-error { flex-basis: 100%; margin: 0; }
-.zui-mic__btn svg { flex: none; }
-.zui-mic__btn--on { border-color: var(--danger); background: var(--danger-tint); color: #9b2f25; }
-.zui-mic__btn--on:hover:not(:disabled) { border-color: var(--danger); background: var(--danger-tint); }
-.zui-mic__status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
-.zui-mic__rec { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: zui-blink 1.2s infinite ease-in-out; }
 
 .zui-voices { display: flex; flex-direction: column; gap: 10px; }
 .zui-voice-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
@@ -138,7 +85,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .zui-eq span,
-  .zui-mic__rec { animation: none; }
+  .zui-eq span { animation: none; }
   .zui-mode-card { transition: none; }
 }
