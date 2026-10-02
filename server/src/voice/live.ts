@@ -1,5 +1,5 @@
 import type { BoardMeeting, MeetingTurn } from "../../../shared/meetings";
-import { splitBySpeaker, type LiveSessionResponse, type LiveSpeaker } from "../../../shared/voice";
+import { splitBySpeaker, type EndLiveRequest, type LiveSessionResponse, type LiveSpeaker } from "../../../shared/voice";
 import type { MeetingEngine } from "../board/meetings/engine";
 import { FOUNDER } from "../board/meetings/rounds";
 import { HttpError, badRequest } from "../http";
@@ -15,11 +15,7 @@ const STILL_CONNECTED = new Set(["initiated", "in-progress"]);
 const ATTEMPTS = 8;
 const RETRY_MS = 1500;
 
-export interface EndLive {
-  conversationId: string;
-  /** False: a dropped session is checkpointed and the meeting stays live for a reconnect. */
-  final: boolean;
-}
+export type EndLive = Required<EndLiveRequest>;
 
 export function parseEndLive(body: Record<string, unknown>): EndLive {
   const { conversationId, final } = body;
