@@ -1,0 +1,41 @@
+.zui-channel { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); font-size: 12.5px; font-weight: 500; }
+.zui-channel-icon { flex: none; }
+.zui-channel--email .zui-channel-icon { color: #4a78b5; }
+.zui-channel--whatsapp .zui-channel-icon { color: #25a35a; }
+.zui-channels { gap: 8px; }
+
+.zui-badge--client { gap: 4px; background: #e8f0fa; color: #2f5f99; }
+.zui-badge--client .zui-channel-icon { width: 12px; height: 12px; }
+
+.zui-client-note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.zui-group--client > .zui-group__title { color: var(--ink); }
+.zui-approval-item--client { border-left: 3px solid #4a78b5; }
+
+.zui-client-reply { display: flex; flex-direction: column; gap: 8px; }
+.zui-client-reply__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.zui-client-reply__client { font-size: 14px; font-weight: 600; }
+.zui-client-reply__meta .zui-person { margin-left: auto; }
+.zui-client-reply__label { margin: 4px 0 0; color: var(--muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.zui-client-reply__quote {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--line-strong);
+  border-radius: 0 var(--r-control) var(--r-control) 0;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.zui-client-reply__reason { margin: 0; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.zui-client-actions { margin-top: 4px; }
+.zui-client-actions__reply { min-height: 110px; }

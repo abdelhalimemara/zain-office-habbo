@@ -1,6 +1,8 @@
 import type { RosterEntry } from "@shared/api";
-import { isMandate } from "@shared/flow";
+import { isClientReply, isMandate } from "@shared/flow";
 import type { KanbanTask } from "@shared/hermes";
+import { ChannelIcon } from "./ChannelIcon";
+import { parseClientReply } from "./clientReply";
 import { AgentChip, formatAge } from "./common";
 
 interface Props {
@@ -12,6 +14,16 @@ interface Props {
   onOpen: (id: string) => void;
 }
 
+function ClientReplyBadge({ task }: { task: KanbanTask }) {
+  const { channel } = parseClientReply(task);
+  return (
+    <span className="zui-badge zui-badge--client">
+      {channel && <ChannelIcon channel={channel} />}
+      Client reply
+    </span>
+  );
+}
+
 export function TaskCard({ task, agents, now, statusTag, onOpen }: Props) {
   const warnings = task.warnings?.count ?? 0;
   return (
@@ -21,6 +33,7 @@ export function TaskCard({ task, agents, now, statusTag, onOpen }: Props) {
         <span className="zui-card__meta">
           <AgentChip profile={task.assignee} agents={agents} />
           {isMandate(task, agents) && <span className="zui-badge zui-badge--mandate">Mandate</span>}
+          {isClientReply(task, agents) && <ClientReplyBadge task={task} />}
           {statusTag && <span className="zui-tag" title="Hermes status">{statusTag}</span>}
         </span>
         <span className="zui-card__meta zui-card__stats">

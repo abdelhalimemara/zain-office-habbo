@@ -1,15 +1,15 @@
 import type { TaskStatus } from "@shared/hermes";
 import { LANES, type LaneId } from "./lanes";
 
-/** Kanban lane for a raw status; a non-mandate in `review` waits on a human, so it reads as blocked. */
-export function laneForStatus(status: TaskStatus, mandate: boolean): LaneId | "archived" {
+/** Kanban lane for a raw status; a `review` that isn't HQ's to decide waits on a human, so it reads as blocked. */
+export function laneForStatus(status: TaskStatus, hqDecision: boolean): LaneId | "archived" {
   if (status === "archived") return "archived";
-  if (status === "review" && !mandate) return "blocked";
+  if (status === "review" && !hqDecision) return "blocked";
   return LANES.find((l) => l.statuses.includes(status))?.id ?? "inbox";
 }
 
-export function LaneChip({ status, mandate }: { status: TaskStatus; mandate: boolean }) {
-  const lane = laneForStatus(status, mandate);
+export function LaneChip({ status, hqDecision }: { status: TaskStatus; hqDecision: boolean }) {
+  const lane = laneForStatus(status, hqDecision);
   const label = lane === "archived" ? "Archived" : LANES.find((l) => l.id === lane)!.label;
   return (
     <span className={`zui-lane-chip zui-lane-chip--${lane}`} title={`Hermes status: ${status}`}>

@@ -1,4 +1,4 @@
-import { isMandate } from "@shared/flow";
+import { isClientReply, isMandate } from "@shared/flow";
 import type { KanbanTask, TaskStatus } from "@shared/hermes";
 import type { RosterAgent } from "@shared/roster";
 
@@ -22,9 +22,9 @@ export const LANES: readonly Lane[] = [
 
 export const DONE_PREVIEW = 10;
 
-/** Only mandates await HQ; a specialist's task stuck in `review` is waiting on a human, so it reads as blocked. */
+/** Only mandates and client replies await HQ; a specialist's task stuck in `review` is waiting on a human, so it reads as blocked. */
 export function laneOf(task: KanbanTask, roster?: readonly RosterAgent[]): LaneId | undefined {
-  if (task.status === "review" && !isMandate(task, roster)) return "blocked";
+  if (task.status === "review" && !isMandate(task, roster) && !isClientReply(task, roster)) return "blocked";
   return LANES.find((l) => l.statuses.includes(task.status))?.id;
 }
 
