@@ -94,9 +94,12 @@ describe("Connections in the HUD", () => {
       "Notion: OK",
       "Notion CLI: Off",
     ]);
-    expect(pills[1]).toHaveTextContent("!WhatsApp · Ahmad");
-    expect(pills[4]).toHaveTextContent("✕Adspirer");
-    expect(pills[1]).toHaveAttribute("title", "Session expires in 2 days");
+    for (const p of pills) expect(p).toHaveTextContent(/^[A-Z]?$/);
+    expect(pills[1]).toHaveAttribute("title", "WhatsApp · Ahmad — Needs attention\nSession expires in 2 days");
+    expect(pills[1]!.querySelector(".zui-conn-glyph")).toHaveAttribute("data-icon", "WhatsApp");
+    expect(pills[1]!.querySelector(".zui-conn-dot")).toHaveClass("zui-conn-dot--warn");
+    expect(pills[4]!.querySelector(".zui-conn-glyph")).toHaveAttribute("data-icon", "monogram:A");
+    expect(pills[4]!.querySelector(".zui-conn-dot")).toHaveClass("zui-conn-dot--error");
     expect(row.querySelectorAll(".zui-conn-row__divider")).toHaveLength(2);
   });
 
