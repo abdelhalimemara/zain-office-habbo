@@ -21,14 +21,14 @@ export const BOARD_SPRITE_BY_PROFILE: Readonly<Record<string, BoardSprite>> = {
 };
 
 /** The CEO agent is Susu, the founder's chief of staff, in the sharp dark skirt suit. */
-export const CEO_SPRITE: SpriteKey = "people/female-2";
+export const CEO_SPRITE: SpriteKey = "people/female-1";
 
 /** Named agents with a fixed look: each a distinct sprite that matches their gender. */
 export const NAMED_SPRITE_BY_PROFILE: Readonly<Record<string, SpriteKey>> = {
   [CEO_PROFILE]: CEO_SPRITE,
   "zain-hq-accounts": "people/male-2",
   "zain-hq-coo": "people/male-1",
-  "zain-studio-vp": "people/female-4",
+  "zain-studio-vp": "people/female-3",
   "zain-growth-vp": "people/male-4",
   "zain-labs-vp": "people/female-5",
   "zain-tech-vp": "people/male-6",

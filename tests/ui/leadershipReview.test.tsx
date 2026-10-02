@@ -69,7 +69,7 @@ describe("Leadership review", () => {
     expect(within(rows()[0]!).getByLabelText("Division, action 1")).toHaveValue("studio");
     // The owner is named with their seat, and each division option names the exec who receives it.
     expect(within(rows()[0]!).getByRole("img", { name: "Lina Haddad · VP Studio" })).toBeInTheDocument();
-    expect(rows()[0]!.querySelector("[data-sprite]")).toHaveAttribute("data-sprite", "people/female-4");
+    expect(rows()[0]!.querySelector("[data-sprite]")).toHaveAttribute("data-sprite", "people/female-3");
     expect(within(rows()[0]!).getByRole("option", { name: "Studio · Lina Haddad", selected: true })).toBeInTheDocument();
     expect(within(rows()[0]!).getAllByRole("option").map((o) => o.textContent)).toEqual([
       "HQ · Faisal Al-Harbi",

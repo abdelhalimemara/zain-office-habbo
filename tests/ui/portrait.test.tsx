@@ -23,7 +23,7 @@ describe("Portrait", () => {
 
   it("dresses Susu in the dark skirt suit and gives workers their floor character", () => {
     const ceo = render(<Portrait agent={{ profile: CEO_PROFILE, rank: "ceo" }} name="Susu" />);
-    expect(sprite(ceo.container)).toBe("people/female-2");
+    expect(sprite(ceo.container)).toBe("people/female-1");
     ceo.unmount();
     for (const profile of ["zain-studio-art", "zain-tech-vp", "zain-growth-seo"]) {
       const { container, unmount } = render(<Portrait agent={{ profile, rank: "specialist" }} name={profile} />);
