@@ -8,7 +8,7 @@ import { ACCOUNTS_PROFILE, hermesHome } from "./hermesPaths";
 
 export const JOB_NAME = "zain-ahmad-gmail-inbox";
 export const HANDLED_LABEL = "Zain/Handled";
-export const SCHEDULE = "every 2m";
+export const SCHEDULE = "every 15m";
 const DEFAULT_PYTHON = join(
   hermesHome(),
   "installs/b2d8ea97e879ccae/environments/27281a14ceb54dd188fddb90080be0ea/venv/bin/python",
@@ -185,7 +185,7 @@ export async function runGmailSetup({ apply, hermes, python, home = hermesHome()
   log("");
   log("Next steps:");
   log("1. Run `npm run seed:roster -- --refresh-personas --apply` so Ahmad's SOUL has the Gmail inbox rules.");
-  log("2. Email Ahmad from another address; within ~2 minutes he replies (routine) or holds and raises a Client reply for HQ.");
+  log("2. Email Ahmad from another address; within ~15 minutes he replies (routine) or holds and raises a Client reply for HQ.");
   log("3. Watch runs in the Hermes dashboard → Cron (deliveries stay local; nothing is posted to Telegram).");
   return outcome;
 }

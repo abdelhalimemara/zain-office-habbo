@@ -43,7 +43,7 @@ describe("Gmail inbox loop job", () => {
   it("runs every 2 minutes in Ahmad's profile, delivering locally only, with the skill and the tools it needs", () => {
     expect(inboxJobSpec(LABEL, T)).toEqual({
       name: "zain-ahmad-gmail-inbox",
-      schedule: "every 2m",
+      schedule: "every 15m",
       prompt: inboxPrompt(LABEL, T),
       deliver: "local",
       skills: ["google-workspace"],
@@ -74,7 +74,7 @@ describe("Gmail inbox loop job", () => {
     const spec = inboxJobSpec(LABEL, T);
     const current = { id: "job1", name: JOB_NAME, prompt: spec.prompt, schedule_display: SCHEDULE, deliver: "local", skills: ["google-workspace"], enabled_toolsets: ["terminal", "skills", "kanban"] };
     expect(jobDrift(current, spec)).toEqual({});
-    expect(jobDrift({ ...current, deliver: "telegram", schedule_display: "every 5m" }, spec)).toEqual({ deliver: "local", schedule: "every 2m" });
+    expect(jobDrift({ ...current, deliver: "telegram", schedule_display: "every 5m" }, spec)).toEqual({ deliver: "local", schedule: "every 15m" });
   });
 
   it("looks the label up, creating it only on apply", () => {
@@ -104,7 +104,7 @@ describe("npm run ahmad:gmail", () => {
     expect(py.calls[1]![1]).not.toContain("labels().create");
     expect(hermesFetch.calls.filter((c) => c.method !== "GET")).toEqual([]);
     expect(hermesFetch.called("GET /api/cron/jobs")[0]!.query.get("profile")).toBe("zain-hq-accounts");
-    expect(lines).toContain(`Would create cron job ${JOB_NAME} (every 2m, delivery local only, skills google-workspace, toolsets terminal+skills+kanban).`);
+    expect(lines).toContain(`Would create cron job ${JOB_NAME} (every 15m, delivery local only, skills google-workspace, toolsets terminal+skills+kanban).`);
   });
 
   it("creates the job once, in Ahmad's profile, with the label id in its prompt", async () => {
