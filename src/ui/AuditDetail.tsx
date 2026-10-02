@@ -18,6 +18,7 @@ import {
   websiteHref,
 } from "./auditModel";
 import { AtAGlance, Benchmark, ExecutiveSummary, FixPhases, Gaps } from "./AuditReport";
+import { SearchRuns, SocialRows, TagReadList, VisitorSees } from "./AuditPages";
 import { SeoBlock } from "./AuditSeo";
 import { ApifyHint, Opportunities, StepTimeline } from "./AuditSections";
 import { ErrorNote } from "./common";
@@ -147,14 +148,34 @@ export function AuditBody({ audit, now }: { audit: ProspectAudit; now: number })
           <AtAGlance score={audit.score} />
         </Section>
       )}
-      {audit.benchmark && audit.benchmark.length > 0 && (
-        <Section title="The competitive gap">
-          <Benchmark rows={audit.benchmark} bottomLine={analysis?.bottomLines.competitive} />
+      {audit.screenshotPath && (
+        <Section title="What a visitor sees">
+          <VisitorSees path={audit.screenshotPath} name={prospectLabel(audit.prospect)} />
+        </Section>
+      )}
+      {audit.tags && audit.tags.length > 0 && (
+        <Section title="Website and technical">
+          <TagReadList tags={audit.tags} />
+        </Section>
+      )}
+      {audit.searchRuns && audit.searchRuns.length > 0 && (
+        <Section title="Search: brand vs category">
+          <SearchRuns runs={audit.searchRuns} domain={domainOf(audit.prospect.website)} bottomLine={analysis?.bottomLines.search} />
         </Section>
       )}
       {audit.seo && (
-        <Section title="SEO (Semrush)">
+        <Section title="SEO (Semrush, est.)">
           <SeoBlock seo={audit.seo} />
+        </Section>
+      )}
+      {audit.social && audit.social.length > 0 && (
+        <Section title="Organic social">
+          <SocialRows rows={audit.social} bottomLine={analysis?.bottomLines.social} />
+        </Section>
+      )}
+      {audit.benchmark && audit.benchmark.length > 0 && (
+        <Section title="The competitive gap">
+          <Benchmark rows={audit.benchmark} bottomLine={analysis?.bottomLines.competitive} />
         </Section>
       )}
       {analysis && (

@@ -1,6 +1,6 @@
 import type { SeoRead } from "@shared/audits";
 import { SeverityPill } from "./AuditReport";
-import { estimate, formatCount, sortIssues, urlPath } from "./gapReport";
+import { estimate, formatCount, groupIssues, SEVERITY_LABEL, urlPath } from "./gapReport";
 
 function Tile({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
@@ -14,9 +14,9 @@ function Tile({ label, value, accent }: { label: string; value: string; accent?:
   );
 }
 
-/** "SEO (Semrush)": the domain's authority, organic reach, links, keywords, pages, issues and organic competitors. Every figure is an estimate. */
+/** "SEO (Semrush, est.)": the domain's authority, organic reach, links, keywords, pages, issues and organic competitors. Every figure is an estimate. */
 export function SeoBlock({ seo }: { seo: SeoRead }) {
-  const issues = sortIssues(seo.issues);
+  const groups = groupIssues(seo.issues);
   return (
     <div className="zui-seo">
       <p className="zui-seo-source">All figures are estimates. Source: {seo.source}</p>
@@ -95,20 +95,22 @@ export function SeoBlock({ seo }: { seo: SeoRead }) {
         )}
       </div>
 
-      {issues.length > 0 && (
+      {groups.length > 0 && (
         <section aria-label="Technical issues" className="zui-seo-card">
           <h4>Technical issues</h4>
-          <ul className="zui-seo-list">
-            {issues.map((i) => (
-              <li key={i.title}>
-                <span className="zui-seo-issue">
-                  <SeverityPill severity={i.severity} />
-                  {i.title}
-                </span>
-                {i.count !== undefined && <span className="zui-seo-num">{formatCount(i.count)}</span>}
-              </li>
-            ))}
-          </ul>
+          {groups.map((g) => (
+            <div key={g.severity} className="zui-seo-group">
+              <SeverityPill severity={g.severity} />
+              <ul className="zui-seo-list" aria-label={`${SEVERITY_LABEL[g.severity]} issues`}>
+                {g.issues.map((i) => (
+                  <li key={i.title}>
+                    <span>{i.title}</span>
+                    {i.count !== undefined && <span className="zui-seo-num">{formatCount(i.count)}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
       )}
     </div>

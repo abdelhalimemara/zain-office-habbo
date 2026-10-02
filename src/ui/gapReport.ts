@@ -6,6 +6,7 @@ import {
   type AuditArea,
   type AuditFinding,
   type BenchmarkRow,
+  type SocialChannelRow,
   type EvidenceKind,
   type ProspectAudit,
   type Severity,
@@ -146,4 +147,37 @@ export function urlPath(url: string): string {
   } catch {
     return url;
   }
+}
+
+/** Technical issues in severity groups, most severe first; empty groups are left out. */
+export function groupIssues<T extends { severity: Severity; count?: number }>(issues: readonly T[]): { severity: Severity; issues: T[] }[] {
+  const sorted = sortIssues(issues);
+  return (["critical", "high", "medium", "low"] as const)
+    .map((severity) => ({ severity, issues: sorted.filter((i) => i.severity === severity) }))
+    .filter((g) => g.issues.length > 0);
+}
+
+export const CHANNEL_LABEL: Record<SocialChannelRow["channel"], string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  facebook: "Facebook",
+  x: "X / Twitter",
+  linkedin: "LinkedIn",
+  youtube: "YouTube",
+  snapchat: "Snapchat",
+};
+
+/** 0.0017 -> "0.17%". */
+export function formatRate(rate: number | undefined): string {
+  if (rate === undefined) return "—";
+  return `${(rate * 100).toFixed(rate < 0.1 ? 2 : 1)}%`;
+}
+
+export function countOrDash(n: number | undefined): string {
+  return n === undefined ? "—" : formatCount(n);
+}
+
+/** Only a path on this server becomes the image source (the server serves the capture). */
+export function screenshotSrc(path: string | undefined): string | undefined {
+  return path && /^\/(?!\/)/.test(path) ? path : undefined;
 }

@@ -46,6 +46,20 @@ export const doneAudit: ProspectAudit = {
     { name: "Nakheel Dental", domain: "nakheeldental.com", isProspect: true, googleAds: "none", metaAds: "none", instagramFollowers: 12040, traffic: { monthlyVisits: 2042, period: "Aug 2026" }, authorityScore: 18, organicTraffic: 1450 },
     { name: "Pearl Clinic", isProspect: false, googleAds: "not-measured", metaAds: "none", instagramFollowers: "not-measured", traffic: "not-measured" },
   ],
+  screenshotPath: "/api/growth/audits/aud-done/screenshot",
+  tags: [
+    { tag: "Google Ads conversion tag", found: true },
+    { tag: "GA4", found: false },
+    { tag: "Meta Pixel", found: false },
+  ],
+  searchRuns: [
+    { query: "Nakheel Dental", kind: "brand", prospectPresent: true, others: [] },
+    { query: "dental implants jeddah", kind: "category", prospectPresent: false, others: ["smilehub.sa", "pearlclinic.sa"] },
+  ],
+  social: [
+    { channel: "instagram", followers: 12040, posts: 574, postsPer30Days: 14.3, engagement: 0.0017, lastPost: "26 Sep 2026", measured: true },
+    { channel: "tiktok", measured: false },
+  ],
   seo: {
     source: "Semrush via Apify, Sep 2026",
     authorityScore: 18,
@@ -83,7 +97,12 @@ export const doneAudit: ProspectAudit = {
       { title: "No measurement", detail: "No GA4, GTM or Meta pixel on the page (quoted)." },
       { title: "Category term not owned", detail: "Absent from the implants search (quoted)." },
     ],
-    bottomLines: { summary: "Bottom line: findable, but not measured and not buying the category.", competitive: "Smile Hub draws an estimated 5x the traffic." },
+    bottomLines: {
+      summary: "Bottom line: findable, but not measured and not buying the category.",
+      competitive: "Smile Hub draws an estimated 5x the traffic.",
+      search: "The name is owned; the category is not, yet.",
+      social: "One active channel, with thin engagement.",
+    },
     findings: [
       { area: "website", title: "Thin service pages", detail: "Service pages return placeholder text.", severity: "high", evidence: "quoted", source: "research_website" },
       { area: "social", title: "Low engagement", detail: "0.2% engagement on the last 12 posts.", severity: "medium" },

@@ -116,7 +116,7 @@ describe("Audit detail", () => {
   it("renders the Semrush SEO block with every figure labelled as an estimate", async () => {
     open(doneAudit);
     await screen.findByRole("heading", { name: "Nakheel Dental" });
-    const seo = section("SEO (Semrush)");
+    const seo = section("SEO (Semrush, est.)");
     expect(within(seo).getByText("All figures are estimates. Source: Semrush via Apify, Sep 2026")).toBeInTheDocument();
     const tiles = Object.fromEntries(
       within(seo)
@@ -143,20 +143,71 @@ describe("Audit detail", () => {
     const pages = within(within(seo).getByRole("region", { name: "Top pages" })).getAllByRole("listitem");
     expect(pages.map((p) => p.textContent)).toEqual(["/~980 est.", "/en/services/implants~210 est."]);
 
-    const issues = within(within(seo).getByRole("region", { name: "Technical issues" })).getAllByRole("listitem");
-    expect(issues.map((i) => i.querySelector(".zui-gap-pill")!.textContent)).toEqual(["Critical", "High", "Medium", "Medium"]);
-    expect(issues[0]).toHaveTextContent("Broken internal links");
-    expect(issues[2]).toHaveTextContent("Duplicate titles52");
+    const issues = within(seo).getByRole("region", { name: "Technical issues" });
+    expect(within(issues).getAllByRole("list").map((l) => l.getAttribute("aria-label"))).toEqual(["Critical issues", "High issues", "Medium issues"]);
+    expect(within(within(issues).getByRole("list", { name: "Critical issues" })).getByRole("listitem")).toHaveTextContent("Broken internal links12");
+    expect(within(within(issues).getByRole("list", { name: "Medium issues" })).getAllByRole("listitem").map((i) => i.textContent)).toEqual([
+      "Duplicate titles52",
+      "Missing meta descriptions38",
+    ]);
 
     const comps = within(within(seo).getByRole("region", { name: "Organic competitors" })).getAllByRole("listitem");
     expect(comps[0]).toHaveTextContent("smilehub.sa140 shared keywords · AS 34");
     expect(comps[1]).toHaveTextContent("pearlclinic.saAS 21");
   });
 
+  it("renders the visitor capture, tag read, search runs and organic social in the PDF's order", async () => {
+    open(doneAudit);
+    await screen.findByRole("heading", { name: "Nakheel Dental" });
+    const titles = screen.getAllByRole("region").filter((r) => r.classList.contains("zui-audit-section")).map((r) => r.getAttribute("aria-label"));
+    expect(titles).toEqual([
+      "Executive summary",
+      "The seven areas, at a glance",
+      "What a visitor sees",
+      "Website and technical",
+      "Search: brand vs category",
+      "SEO (Semrush, est.)",
+      "Organic social",
+      "The competitive gap",
+      "The gaps",
+      "The fix",
+      "Opportunities",
+      "Pipeline",
+    ]);
+
+    const shot = within(section("What a visitor sees")).getByRole("link", { name: /Nakheel Dental home page on mobile/ });
+    expect(shot).toHaveAttribute("href", "/api/growth/audits/aud-done/screenshot");
+    expect(shot).toHaveAttribute("target", "_blank");
+    expect(within(shot).getByRole("img")).toHaveAttribute("src", "/api/growth/audits/aud-done/screenshot");
+
+    const tags = within(section("Website and technical")).getAllByRole("listitem").map((li) => li.textContent);
+    expect(tags).toEqual(["✓Google Ads conversion tag: found", "✕GA4: not found on the page", "✕Meta Pixel: not found on the page"]);
+
+    const runs = within(section("Search: brand vs category"));
+    expect(runs.getByRole("columnheader", { name: "nakheeldental.com present?" })).toBeInTheDocument();
+    const runRows = runs.getAllByRole("row").slice(1);
+    expect(runRows[0]).toHaveTextContent('"Nakheel Dental"Brand searchYesNo one else');
+    expect(runRows[1]).toHaveTextContent('"dental implants jeddah"Category searchNosmilehub.sa, pearlclinic.sa');
+    expect(runs.getByText("The name is owned; the category is not, yet.")).toBeInTheDocument();
+
+    const social = within(section("Organic social"));
+    const socialRows = social.getAllByRole("row").slice(1);
+    expect(within(socialRows[0]!).getAllByRole("cell").map((c) => c.textContent)).toEqual(["12,040", "574", "14.3", "0.17%", "26 Sep 2026"]);
+    expect(socialRows[1]).toHaveTextContent("TikToknot measured this pass");
+    expect(social.getByText("One active channel, with thin engagement.")).toBeInTheDocument();
+  });
+
+  it("only links a capture served by this server", async () => {
+    open({ ...doneAudit, screenshotPath: "https://evil.example/x.png" });
+    await screen.findByRole("heading", { name: "Nakheel Dental" });
+    expect(within(section("What a visitor sees")).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(section("What a visitor sees")).getByText("No capture this pass.")).toBeInTheDocument();
+  });
+
   it("leaves the SEO block out when Semrush was not read", async () => {
     open({ ...doneAudit, seo: undefined });
     await screen.findByRole("heading", { name: "Nakheel Dental" });
-    expect(screen.queryByRole("region", { name: "SEO (Semrush)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "SEO (Semrush, est.)" })).not.toBeInTheDocument();
   });
 
   it("shows the area table before the analyst has written up", async () => {

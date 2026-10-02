@@ -6,6 +6,9 @@ import {
   estimate,
   organicCell,
   sortIssues,
+  groupIssues,
+  formatRate,
+  screenshotSrc,
   urlPath,
   benchmarkRows,
   evidenceLine,
@@ -71,5 +74,20 @@ describe("gap report", () => {
     expect(order).toEqual(["d", "c", "b", "a"]);
     expect(urlPath("https://x.com/a/b?q=1")).toBe("/a/b?q=1");
     expect(urlPath("x.com")).toBe("/");
+  });
+
+  it("groups issues by severity and formats rates and capture paths", () => {
+    const groups = groupIssues(doneAudit.seo!.issues);
+    expect(groups.map((g) => [g.severity, g.issues.map((i) => i.title)])).toEqual([
+      ["critical", ["Broken internal links"]],
+      ["high", ["Slow pages"]],
+      ["medium", ["Duplicate titles", "Missing meta descriptions"]],
+    ]);
+    expect(formatRate(0.0017)).toBe("0.17%");
+    expect(formatRate(0.125)).toBe("12.5%");
+    expect(formatRate(undefined)).toBe("—");
+    expect(screenshotSrc("/api/growth/audits/a/screenshot")).toBe("/api/growth/audits/a/screenshot");
+    expect(screenshotSrc("//evil.example/x.png")).toBeUndefined();
+    expect(screenshotSrc("javascript:alert(1)")).toBeUndefined();
   });
 });
