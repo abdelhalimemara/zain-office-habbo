@@ -67,6 +67,32 @@ export interface HomeChannel {
   chat_type?: string | null;
 }
 
+/** POST /api/cron/jobs body (hermes_cli/web_models.py CronJobCreate). */
+export interface CronJobSpec {
+  name: string;
+  schedule: string;
+  prompt: string;
+  deliver: string;
+  skills: string[];
+  enabled_toolsets: string[];
+}
+
+/** A stored job (cron/jobs.py create_job). */
+export interface CronJob {
+  id: string;
+  name?: string;
+  prompt?: string;
+  schedule_display?: string;
+  deliver?: string;
+  skills?: string[] | null;
+  enabled_toolsets?: string[] | null;
+  state?: string;
+  enabled?: boolean;
+  next_run_at?: string | null;
+  last_run_at?: string | null;
+  last_status?: string | null;
+}
+
 /** hermes_cli/web_server_messaging.py `_whatsapp_onboarding_payload`. */
 export interface WhatsAppOnboarding {
   pairing_id: string;
@@ -130,6 +156,24 @@ export class HermesClient {
 
   async setEnv(profile: string, key: string, value: string): Promise<void> {
     await this.request("PUT", "/api/env", { key, value, profile });
+  }
+
+  async cronJobs(profile: string): Promise<CronJob[]> {
+    const data = await this.request<CronJob[] | { jobs?: CronJob[] }>("GET", `/api/cron/jobs?profile=${encodeURIComponent(profile)}`);
+    return Array.isArray(data) ? data : (data.jobs ?? []);
+  }
+
+  async createCronJob(profile: string, job: CronJobSpec): Promise<CronJob> {
+    return this.request("POST", `/api/cron/jobs?profile=${encodeURIComponent(profile)}`, job);
+  }
+
+  async updateCronJob(profile: string, id: string, updates: Partial<CronJobSpec>): Promise<CronJob> {
+    return this.request("PUT", `/api/cron/jobs/${encodeURIComponent(id)}?profile=${encodeURIComponent(profile)}`, { updates });
+  }
+
+  /** gateway_platforms from the unauthenticated status endpoint. */
+  async gatewayPlatforms(): Promise<Record<string, { state?: string | null } | undefined>> {
+    return (await this.status()).gateway_platforms ?? {};
   }
 
   async whatsappOnboardingStart(body: { mode: "bot" | "self-chat"; allowed_users: string; profile: string | null }): Promise<WhatsAppOnboarding> {

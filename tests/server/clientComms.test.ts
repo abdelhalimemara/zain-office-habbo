@@ -9,7 +9,7 @@ const soul = soulFor(ahmad, ROSTER);
 describe("Ahmad's client-communication charter", () => {
   it("names him and his channels", () => {
     expect(soul).toContain("You are Ahmad Al Zain, Account Management Lead at Zain Group.");
-    expect(soul).toContain("on your own email address and your own WhatsApp number");
+    expect(soul).toContain("on your own Gmail address and your own WhatsApp number");
     expect(soul).toMatch(/Anyone may message you/);
     expect(profileDescription(ahmad)).toContain("Ahmad Al Zain, Account Management Lead");
     expect(profileDescription(ahmad)).toContain("Handles client communication on email and whatsapp.");
@@ -30,12 +30,17 @@ describe("Ahmad's client-communication charter", () => {
   it("spells out the approval workflow through a Client reply task", () => {
     expect(soul).toContain(HOLDING_MESSAGE);
     expect(soul).toContain('title "Client reply: <client> — <topic>", `assignee="zain-hq-accounts"` (yourself) and `tenant="zain-hq"`');
-    expect(soul).toContain("the channel, the client, their message, your proposed reply and why it needs approval");
+    expect(soul).toContain("`channel: email` or `channel: whatsapp`, the client, their message, your proposed reply and why it needs approval; for email also `threadId` and `messageId`");
     expect(soul).toContain("call `kanban_request_review` with your proposed reply, exactly as the client would read it, as the `summary`");
-    expect(soul).toContain("On a review-requested wake, do nothing.");
-    expect(soul).toContain("read the task's result with `kanban_show`: it is the approved final text. Send exactly that text");
+    expect(soul).toContain("On a review-requested wake, do nothing. On a completed wake, send the result there.");
+    expect(soul).toContain("the completed task's result, read with `kanban_show`) exactly");
+    expect(soul).toContain('leaves the comment "Sent via email" on the task. A task with that comment has been sent: never send it again.');
+    expect(soul).toContain("### Your Gmail inbox loop");
+    expect(soul).toContain("never reply to the mailbox's older backlog");
+    expect(soul).toContain("`gmail reply <messageId>`");
+    expect(soul).toContain("`Zain/Handled`");
     expect(soul).toMatch(/If HQ sends it back.*revise the reply and request review again/);
-    const steps = ["holding message", "kanban_create", "kanban_request_review", "completed wake"].map((s) => soul.indexOf(s));
+    const steps = ["holding message", "kanban_create", "kanban_request_review", "Sending the approved text"].map((s) => soul.indexOf(s));
     expect([...steps].sort((a, b) => a - b)).toEqual(steps);
   });
 
