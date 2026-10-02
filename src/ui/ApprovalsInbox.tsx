@@ -16,7 +16,7 @@ function ApprovalItem({ task: t, agents }: { task: KanbanTask; agents: readonly 
         {t.title}
       </button>
       <div className="zui-card__meta">
-        <AgentChip profile={t.assignee} agents={agents} />
+        <AgentChip profile={t.assignee} agents={agents} size="md" />
       </div>
       <Text className="zui-text--preview">{t.latest_summary ?? t.result}</Text>
       <ApprovalActions taskId={t.id} vpTitle={mandateVpTitle(t, agents)} />

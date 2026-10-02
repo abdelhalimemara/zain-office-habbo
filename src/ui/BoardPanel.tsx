@@ -5,7 +5,8 @@ import { agentActivity, boardConsultations } from "@shared/flow";
 import type { KanbanTask } from "@shared/hermes";
 import { useBoard, useBoardConsult } from "../api/hooks";
 import { useUiStore } from "../state/store";
-import { ActivityBadge, AgentChip, Avatar, ErrorNote, Text, useRosterAgents } from "./common";
+import { ActivityBadge, AgentChip, ErrorNote, Text, useRosterAgents } from "./common";
+import { Portrait } from "./Portrait";
 import { Panel } from "./Panel";
 
 export const QUESTION_MAX = 8000;
@@ -20,7 +21,7 @@ function MemberCard({ agent, loaded }: { agent: RosterEntry; loaded: boolean }) 
   const activity = board.data && agent.hired ? agentActivity(agent.profile, board.data).activity : null;
   return (
     <li className="zui-board-member">
-      <Avatar name={member?.name ?? agent.title} color={BOARD_COLOR} size="md" />
+      <Portrait agent={agent} name={member?.name ?? agent.title} color={BOARD_COLOR} size="lg" vacant={loaded && !agent.hired} />
       <div className="zui-profile__text">
         <button type="button" className="zui-link" onClick={() => openPanel({ kind: "agent", profile: agent.profile })}>
           {member?.name ?? agent.title}

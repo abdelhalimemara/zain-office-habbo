@@ -5,9 +5,10 @@ import { agentActivity, tasksForTenant } from "@shared/flow";
 import type { KanbanTask } from "@shared/hermes";
 import { useBoard } from "../api/hooks";
 import { useUiStore } from "../state/store";
-import { ActivityBadge, Avatar, divisionManager, ErrorNote, useRosterAgents } from "./common";
+import { ActivityBadge, divisionManager, ErrorNote, useRosterAgents } from "./common";
 import { DONE_PREVIEW, LANES, defaultLane, groupByLane, type Lane, type LaneId } from "./lanes";
 import { Panel } from "./Panel";
+import { Portrait } from "./Portrait";
 import { TaskCard } from "./TaskCard";
 import { useMediaQuery } from "./useMediaQuery";
 
@@ -86,11 +87,12 @@ function LaneTabs({ groups, ...rest }: { groups: Record<LaneId, KanbanTask[]>; a
 export function KanbanPanel({ division }: { division: DivisionId }) {
   const d = getDivision(division);
   const board = useBoard();
-  const { agents } = useRosterAgents();
+  const { agents, loaded } = useRosterAgents();
   const openPanel = useUiStore((s) => s.openPanel);
   const closePanel = useUiStore((s) => s.closePanel);
   const phone = useMediaQuery(PHONE_QUERY);
   const manager = divisionManager(division, agents);
+  const hiredManager = agents.find((a) => a.profile === manager.profile)?.hired ?? false;
   const groups = groupByLane(board.data ? tasksForTenant(board.data, d.tenant) : [], agents);
   const managerActivity = board.data ? agentActivity(manager.profile, board.data).activity : null;
   const now = board.data?.now ?? Date.now() / 1000;
@@ -99,7 +101,7 @@ export function KanbanPanel({ division }: { division: DivisionId }) {
     <Panel title={`${d.name} · Kanban`} accent={d.color} onClose={closePanel} wide>
       <section className="zui-manager">
         <div className="zui-profile">
-          <Avatar name={manager.title} color={d.color} size="md" />
+          <Portrait agent={manager} name={manager.title} color={d.color} size="md" vacant={loaded && !hiredManager} />
           <div className="zui-profile__text">
             <strong>{manager.title}</strong>
             <span className="zui-mono">{manager.profile}</span>

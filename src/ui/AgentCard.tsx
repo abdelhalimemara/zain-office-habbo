@@ -4,7 +4,8 @@ import { agentActivity } from "@shared/flow";
 import { SKILL_SOURCES, skillSourceFor } from "@shared/skillSources";
 import { useBoard } from "../api/hooks";
 import { useUiStore } from "../state/store";
-import { ACTIVITY_LABEL, ActivityBadge, Avatar, RANK_LABEL, useRosterAgents } from "./common";
+import { ACTIVITY_LABEL, ActivityBadge, RANK_LABEL, useRosterAgents } from "./common";
+import { Portrait } from "./Portrait";
 import { Panel } from "./Panel";
 
 /** Headcount skills stay one flat list; skills from a registered source are grouped under it. */
@@ -41,7 +42,7 @@ export function AgentCard({ profile }: { profile: string }) {
   return (
     <Panel title={agent.title} accent={d.color} onClose={closePanel}>
       <div className="zui-profile zui-profile--hero">
-        <Avatar name={member?.name ?? agent.title} color={d.color} size="lg" />
+        <Portrait agent={agent} name={member?.name ?? agent.title} color={d.color} size="lg" vacant={vacant} />
         <div className="zui-profile__text">
           <strong>{member?.name ?? agent.title}</strong>
           <span className="zui-hint">
