@@ -72,6 +72,17 @@ export interface Item {
 
 export type SeatRole = "ceo" | "manager" | "board";
 
+/** Where a seated avatar's hips go: a tile-space point on a chair or sofa cushion, the way they face, the seat height. */
+export interface SitPoint {
+  x: number;
+  y: number;
+  facing: Dir;
+  /** Seat top above the floor, in tiles of height. */
+  height: number;
+  /** The chair or sofa item. */
+  item: string;
+}
+
 /**
  * A place a person works. They stand on tile (x, y) facing `facing`, with the desk or table on the next tile in that
  * direction, so its front hides their legs.
@@ -84,8 +95,17 @@ export interface PlanSeat {
   role?: SeatRole;
   /** HQ department (see HQ_TEAMS). */
   team?: string;
-  /** The desk or table in front of the seat. */
+  /** The desk or table in front of the seat (1 tile ahead, or 2 when a chair stands between). */
   desk: string;
+  /** Tiles from the seat to the desk along `facing`. */
+  reach: 1 | 2;
+  /** The chair this person sits on when seated. */
+  sit: SitPoint;
+}
+
+/** A cushion on a sofa or armchair where an idle person can sit. */
+export interface SofaSeat extends SitPoint {
+  id: string;
 }
 
 export interface Spot {
@@ -111,6 +131,7 @@ export interface FloorPlan {
   /** Free floor tiles next to sofas, café tables and counters where idle people rest. */
   idle: readonly Spot[];
   plates: readonly RoomPlate[];
+  sofaSeats: readonly SofaSeat[];
 }
 
 export const DIR_VEC: Record<Dir, { dx: number; dy: number }> = {

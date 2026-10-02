@@ -13,8 +13,8 @@ const C = {
   blackHi: 0x3b3e43,
   leather: 0x8a6748,
   fabric: 0x8e8a84,
-  marbleDark: 0x2b2c2f,
-  marbleVein: 0x8f7f6c,
+  marbleDark: 0x16171a,
+  marbleVein: 0xb8a58c,
   white: 0xeeebe6,
   steel: 0x9aa0a8,
   screen: 0x1c1e22,
@@ -89,6 +89,14 @@ function chair(g: Graphics, it: Item): void {
   box(g, cx - 0.03, cy - 0.03, cx + 0.03, cy + 0.03, 0.03, 0.22, C.legs, { gradient: false });
   box(g, cx - r * 0.9, cy - r * 0.9, cx + r * 0.9, cy + r * 0.9, 0, 0.04, C.legs, { gradient: false });
   box(g, cx - r, cy - r, cx + r, cy + r, 0.25, 0.08, col, { top: shade(col, 0.15) });
+  top(g, cx - r + 0.04, cy - r + 0.04, cx + r - 0.04, cy + r - 0.04, 0.331, shade(col, 0.24));
+  const along = it.facing === "+y" || it.facing === "-y";
+  const armA = along ? [cx - r, cy - r * 0.7, cx - r + 0.05, cy + r * 0.7] : [cx - r * 0.7, cy - r, cx + r * 0.7, cy - r + 0.05];
+  const armB = along ? [cx + r - 0.05, cy - r * 0.7, cx + r, cy + r * 0.7] : [cx - r * 0.7, cy + r - 0.05, cx + r * 0.7, cy + r];
+  if (exec || seat) {
+    box(g, armA[0]!, armA[1]!, armA[2]!, armA[3]!, 0.33, 0.12, shade(col, -0.1), { gradient: false });
+    box(g, armB[0]!, armB[1]!, armB[2]!, armB[3]!, 0.33, 0.12, shade(col, -0.1), { gradient: false });
+  }
   const back = exec ? 0.42 : 0.32;
   const t = 0.07;
   switch (it.facing) {
@@ -114,17 +122,39 @@ function table(g: Graphics, it: Item): void {
   const h = 0.48;
   contactShadow(g, x + 0.1, y + 0.1, x + w - 0.1, y + d - 0.1);
   if (board) {
-    box(g, x + 0.4, y + 0.6, x + w - 0.4, y + d - 0.6, 0, h - 0.06, 0x1d1e21, { gradient: false });
+    const along = w >= d;
+    for (const t of [0.22, 0.78]) {
+      const px = along ? x + w * t : x + w / 2;
+      const py = along ? y + d / 2 : y + d * t;
+      box(g, px - 0.22, py - 0.22, px + 0.22, py + 0.22, 0, 0.04, 0x1a1b1e, { gradient: false });
+      box(g, px - 0.12, py - 0.12, px + 0.12, py + 0.12, 0.04, h - 0.14, 0x232427);
+    }
   } else {
     legs(g, x, y, x + w, y + d, h - 0.06, 0.12);
   }
-  box(g, x, y, x + w, y + d, h - 0.06, 0.06, col, { rim: true, gradient: false });
+  const thick = board ? 0.1 : 0.06;
+  box(g, x, y, x + w, y + d, h - thick, thick, col, {
+    rim: true,
+    gradient: false,
+    top: board ? 0x1d1e22 : undefined,
+    left: shade(col, board ? 0.22 : -0.12),
+    right: shade(col, board ? 0.1 : -0.3),
+  });
   if (board) {
-    for (let i = 0; i < 4; i++) {
-      const a = (i * 0.37) % 1;
-      top(g, x + 0.3 + a * (w - 0.6), y + 0.4 + i * (d - 0.8) / 4, x + 0.6 + a * (w - 0.6) * 0.8, y + 0.46 + i * (d - 0.8) / 4, h + 0.001, C.marbleVein, 0.55);
+    const veins: [number, number, number, number][] = [
+      [0.1, 0.25, 0.45, 0.35],
+      [0.3, 0.55, 0.7, 0.5],
+      [0.55, 0.2, 0.85, 0.3],
+      [0.65, 0.7, 0.95, 0.78],
+    ];
+    for (const [a0, b0, a1, b1] of veins) {
+      const px0 = x + a0 * w;
+      const px1 = x + a1 * w;
+      const py0 = y + b0 * d;
+      top(g, px0, py0, px1, py0 + 0.04, h + 0.001, C.marbleVein, 0.45);
+      top(g, px1 - 0.02, py0, px1 + 0.02, y + b1 * d + 0.04, h + 0.001, C.marbleVein, 0.35);
     }
-    for (let i = 0; i < Math.floor(d); i++) top(g, x + w / 2 - 0.15, y + 0.4 + i, x + w / 2 + 0.15, y + 0.6 + i, h + 0.002, 0x4a4b50);
+    top(g, x + 0.05, y + 0.05, x + w - 0.05, y + 0.12, h + 0.002, 0xffffff, 0.06);
   } else if (it.kind === "meetingTable" && w * d >= 4) {
     box(g, x + w / 2 - 0.5, y + d / 2 - 0.12, x + w / 2 + 0.5, y + d / 2 + 0.12, h, 0.1, 0x3a3c40, { gradient: false });
     foliage(g, x + w / 2, y + d / 2, h + 0.15, 5);

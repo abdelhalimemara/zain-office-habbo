@@ -1,6 +1,14 @@
 import type { Graphics } from "pixi.js";
 import { toScreen, type Pt } from "../iso";
 
+export { TILE_H, TILE_W, Z_UNIT, toScreen } from "../iso";
+
+/**
+ * Shared lighting: light comes from the upper left, so tops are lifted, faces on the plane y = const (lower-left) are
+ * mid-tone and faces on the plane x = const (lower-right) are darkest. Values are shade() factors.
+ */
+export const LIGHT = { top: 0.08, left: -0.12, right: -0.3 } as const;
+
 export function mix(a: number, b: number, t: number): number {
   const ch = (s: number) => Math.round(((a >> s) & 0xff) * (1 - t) + ((b >> s) & 0xff) * t);
   return (ch(16) << 16) | (ch(8) << 8) | ch(0);
@@ -44,8 +52,8 @@ export interface BoxStyle {
 export function box(g: Graphics, x0: number, y0: number, x1: number, y1: number, z0: number, h: number, color: number, s: BoxStyle = {}): void {
   const a = s.alpha ?? 1;
   const z1 = z0 + h;
-  const left = s.left ?? shade(color, -0.12);
-  const right = s.right ?? shade(color, -0.3);
+  const left = s.left ?? shade(color, LIGHT.left);
+  const right = s.right ?? shade(color, LIGHT.right);
   faceY(g, y1, x0, x1, z0, z1, left, a);
   faceX(g, x1, y0, y1, z0, z1, right, a);
   if (s.gradient !== false && h > 0.08) {
@@ -53,7 +61,7 @@ export function box(g: Graphics, x0: number, y0: number, x1: number, y1: number,
     faceY(g, y1, x0, x1, z0, zg, 0x000000, a * 0.07);
     faceX(g, x1, y0, y1, z0, zg, 0x000000, a * 0.07);
   }
-  top(g, x0, y0, x1, y1, z1, s.top ?? shade(color, 0.08), a);
+  top(g, x0, y0, x1, y1, z1, s.top ?? shade(color, LIGHT.top), a);
   if (s.rim) {
     const e = Math.min(0.04, (x1 - x0) / 4, (y1 - y0) / 4);
     top(g, x0, y1 - e, x1, y1, z1, 0xffffff, a * 0.18);
