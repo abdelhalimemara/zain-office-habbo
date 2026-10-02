@@ -1,5 +1,5 @@
 import type { HermesClient } from "../hermes/client";
-import { ACCOUNTS_PROFILE } from "./envFile";
+import { ACCOUNTS_PROFILE } from "./hermesPaths";
 
 const CHANNEL_TOOLSETS = { email: "hermes-email", whatsapp: "hermes-whatsapp" } as const;
 export type ClientChannel = keyof typeof CHANNEL_TOOLSETS;
