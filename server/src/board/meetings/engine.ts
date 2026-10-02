@@ -11,6 +11,7 @@ import type { CeoWake } from "../../telegram/ceoWake";
 import { boardLedger, memorySection } from "../memory/ledger";
 import { splitMemory, type MemoryStore } from "../memory/notes";
 import type { RecordStore } from "../recordStore";
+import { checkDrafting, startDrafting, type DraftingContext } from "../../leadership/drafting";
 import {
   FOUNDER,
   MEETING_TITLE_PREFIX,
@@ -41,6 +42,8 @@ export interface StoredMeeting {
   meeting: BoardMeeting;
   rounds: RoundState[];
   minutes?: { taskId?: string; startedAt: number };
+  /** Leadership meetings: the CEO agent's task drafting the action items. */
+  drafting?: { taskId?: string; startedAt: number };
   notionPageId?: string;
   notionDirty?: boolean;
 }
@@ -86,11 +89,28 @@ export class MeetingEngine {
     return (await this.load(id)).meeting;
   }
 
+  /** The stored record, for services that manage their own kind of meeting (leadership/service.ts). */
+  async stored(id: string): Promise<StoredMeeting> {
+    return this.load(id);
+  }
+
+  /** Saves a record; `sync` false skips the Notion mirror (for a series of saves that ends with a synced one). */
+  async persist(stored: StoredMeeting, sync = true): Promise<void> {
+    if (sync) return this.save(stored);
+    stored.meeting.updatedAt = this.now();
+    stored.notionDirty = true;
+    await this.deps.store.put(stored);
+  }
+
+  newMeetingId(): string {
+    return this.deps.newId?.() ?? `mtg_${randomBytes(5).toString("hex")}`;
+  }
+
   async start(req: MeetingRequest): Promise<BoardMeeting> {
     const members = await hiredBoardMembers(req.members, this.deps);
     const at = this.now();
     const meeting: BoardMeeting = {
-      id: this.deps.newId?.() ?? `mtg_${randomBytes(5).toString("hex")}`,
+      id: this.newMeetingId(),
       topic: req.topic,
       brief: req.brief,
       members,
@@ -140,6 +160,11 @@ export class MeetingEngine {
       await this.save(stored);
       return m;
     }
+    if (m.kind === "leadership") {
+      // No vote: the CEO agent drafts the action items for the founder to review.
+      await startDrafting(stored, this.drafting);
+      return stored.meeting;
+    }
     m.discussionRounds = m.currentRound - 1;
     await this.startRound(stored, m.currentRound + 1, []);
     return stored.meeting;
@@ -162,8 +187,12 @@ export class MeetingEngine {
   async cancel(id: string): Promise<BoardMeeting> {
     const stored = await this.load(id);
     const m = stored.meeting;
-    if (m.status === "concluded" || m.status === "cancelled") throw new HttpError(409, `meeting ${id} is already ${m.status}`);
-    const open = [...Object.values(stored.rounds.at(-1)?.tasks ?? {}), ...(stored.minutes?.taskId ? [stored.minutes.taskId] : [])];
+    if (m.status === "concluded" || m.status === "cancelled" || m.status === "assigned") throw new HttpError(409, `meeting ${id} is already ${m.status}`);
+    const open = [
+      ...Object.values(stored.rounds.at(-1)?.tasks ?? {}),
+      ...(stored.minutes?.taskId ? [stored.minutes.taskId] : []),
+      ...(m.status === "drafting" && stored.drafting?.taskId ? [stored.drafting.taskId] : []),
+    ];
     for (const taskId of open) await this.deps.hermes.updateTask(taskId, { status: "archived" }).catch(() => undefined);
     m.status = "cancelled";
     await this.save(stored);
@@ -176,7 +205,7 @@ export class MeetingEngine {
     let board: KanbanTask[];
     try {
       stored = await this.deps.store.list();
-      if (!stored.some((s) => OPEN.has(s.meeting.status) || s.notionDirty)) return;
+      if (!stored.some((s) => OPEN.has(s.meeting.status) || s.meeting.status === "drafting" || s.notionDirty)) return;
       board = (await this.deps.hermes.board()).columns.flatMap((c) => c.tasks);
     } catch (err) {
       this.log(`meetings: tick failed (${err instanceof Error ? err.message : "error"})`);
@@ -185,12 +214,18 @@ export class MeetingEngine {
     for (const s of stored) {
       try {
         if (s.meeting.status === "minutes") await this.checkMinutes(s, board);
+        else if (s.meeting.status === "drafting") await checkDrafting(s, board, this.drafting);
         else if (OPEN.has(s.meeting.status)) await this.checkRound(s, board);
-        if (s.notionDirty) await this.sync(s);
+        // Reloaded: a request may have changed the meeting since the list was read.
+        if (s.notionDirty) await this.sync((await this.deps.store.get(s.id)) ?? s);
       } catch (err) {
         this.log(`meetings: ${s.id} failed (${err instanceof Error ? err.message : "error"})`);
       }
     }
+  }
+
+  private get drafting(): DraftingContext {
+    return { hermes: this.deps.hermes, now: this.now, log: this.log, put: (s) => this.deps.store.put(s), save: (s) => this.save(s) };
   }
 
   private async load(id: string): Promise<StoredMeeting> {
@@ -217,6 +252,14 @@ export class MeetingEngine {
     } catch (err) {
       stored.meeting.notionSyncError = (err instanceof Error ? err.message : "Notion sync failed").slice(0, 200);
       this.log(`meetings: Notion sync for ${stored.id} failed; retrying next tick`);
+    }
+    // A request that saved the meeting during the Notion call wins; it keeps only the sync's outcome.
+    const fresh = await this.deps.store.get(stored.id);
+    if (fresh && fresh.meeting.updatedAt > stored.meeting.updatedAt) {
+      fresh.notionPageId = stored.notionPageId;
+      if (stored.meeting.notionPageUrl) fresh.meeting.notionPageUrl = stored.meeting.notionPageUrl;
+      fresh.notionDirty = true;
+      return this.deps.store.put(fresh);
     }
     await this.deps.store.put(stored);
   }

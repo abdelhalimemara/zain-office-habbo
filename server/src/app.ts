@@ -11,6 +11,8 @@ import type { MeetingEngine } from "./board/meetings/engine";
 import { meetingRoutes } from "./board/meetings/routes";
 import type { ConnectionsService } from "./connections/service";
 import { localOnly, parseOriginList, type GuardOptions } from "./guard";
+import { leadershipRoutes } from "./leadership/routes";
+import type { LeadershipService } from "./leadership/service";
 import { HermesClient } from "./hermes/client";
 import { HeadcountSource } from "./headcount/catalog";
 import { health } from "./health";
@@ -45,6 +47,8 @@ export interface AppDeps {
   voice: VoiceService;
   /** Live voice meetings on the ElevenLabs Board Room agent; their routes answer 503 when omitted. */
   live?: LiveService;
+  /** Leadership (VP) meetings; their routes are absent when omitted. */
+  leadership?: LeadershipService;
   /** Board members' private briefs, read only when writing their SOUL. */
   briefs: BriefReader;
   guard?: GuardOptions;
@@ -133,6 +137,7 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   meetingRoutes(app, deps.meetings);
+  if (deps.leadership) leadershipRoutes(app, deps.leadership);
   if (deps.memory) memoryRoutes(app, deps.memory, hires);
   voiceRoutes(app, deps.voice, deps.meetings, deps.live);
 

@@ -3,6 +3,7 @@ import type { ConsultationRecord, ConsultationSink } from "../board/consultLog";
 import type { MeetingSink } from "../board/meetings/engine";
 import { FOUNDER, meetingRoundLabel, speakerName, votesSummary } from "../board/meetings/rounds";
 import { CEO_PROFILE } from "../../../shared/roster";
+import { leadershipBlocks, leadershipProperties } from "./leadership";
 import { readBoardRoomIds, type BoardRoomIds } from "./boardRoom";
 import { NotionClient, RICH_TEXT_MAX, bullet, callout, heading, paragraphs, richText } from "./client";
 
@@ -37,6 +38,7 @@ const date = (unixSeconds: number) => ({ date: { start: new Date(unixSeconds * 1
 const members = (profiles: readonly string[]) => ({ multi_select: profiles.map((p) => ({ name: speakerName(p) })) });
 
 export function meetingProperties(m: BoardMeeting): Json {
+  if (m.kind === "leadership") return leadershipProperties(m);
   return {
     Name: { title: richText(m.topic) },
     Type: select("Meeting"),
@@ -54,6 +56,7 @@ export function meetingProperties(m: BoardMeeting): Json {
 const emojiFor = (speaker: string) => (speaker === FOUNDER ? "🧑‍💼" : speaker === CEO_PROFILE ? "📝" : "💬");
 
 export function meetingBlocks(m: BoardMeeting): Json[] {
+  if (m.kind === "leadership") return leadershipBlocks(m);
   const blocks: Json[] = [heading("Brief"), ...paragraphs(m.brief)];
   let round = 0;
   for (const turn of m.turns) {

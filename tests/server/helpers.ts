@@ -19,6 +19,7 @@ import { SKILL_SOURCES, skillSourceFor } from "../../shared/skillSources";
 import { memoryVoiceStore } from "../../server/src/voice/assignments";
 import { ElevenLabsClient } from "../../server/src/voice/elevenlabs";
 import type { LiveService } from "../../server/src/voice/live";
+import type { LeadershipService } from "../../server/src/leadership/service";
 import { VoiceService } from "../../server/src/voice/service";
 
 export const TOKEN = "tok-secret-123";
@@ -197,7 +198,9 @@ export function setup(
     now?: () => number;
     voice?: VoiceService;
     /** Built once the meeting engine exists, e.g. a LiveService over a fake ElevenLabs. */
-    live?: (meetings: MeetingEngine, voice: VoiceService, memory: MemoryStore) => LiveService;
+    live?: (meetings: MeetingEngine, voice: VoiceService, memory: MemoryStore, leadership?: LeadershipService) => LiveService;
+    /** Built once the meeting engine exists: leadership (VP) meetings over the same store. */
+    leadership?: (deps: { meetings: MeetingEngine; hermes: HermesClient; hires: HireStore; ceoWake: CeoWake }) => LeadershipService;
     /** Board members' notes; an empty in-memory store by default. */
     memory?: MemoryStore;
     onTurns?: (meeting: BoardMeeting, from: number) => void;
@@ -235,8 +238,9 @@ export function setup(
   });
   const consultations = new ConsultationLog({ hermes, store: consultationStore, sink: options.sink, now: options.now, log: quiet });
   const voice = options.voice ?? stubVoice();
-  const live = options.live?.(meetings, voice, memory);
-  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations, memory, voice, live });
+  const leadership = options.leadership?.({ meetings, hermes, hires, ceoWake });
+  const live = options.live?.(meetings, voice, memory, leadership);
+  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations, memory, voice, live, leadership });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
@@ -266,6 +270,7 @@ export function setup(
     consultationStore,
     voice,
     live,
+    leadership,
     memory,
   };
 }

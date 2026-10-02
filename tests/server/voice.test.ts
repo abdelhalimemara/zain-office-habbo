@@ -168,7 +168,7 @@ describe("voice assignments", () => {
     expect((await put(HORMOZI, { voiceId: "short" })).status).toBe(400);
     expect((await put(HORMOZI, { voiceId: "has spaces in it!!" })).status).toBe(400);
     expect((await put(HORMOZI, {})).status).toBe(400);
-    expect((await put("zain-hq-coo", { voiceId: OWN_VOICE })).status).toBe(404);
+    expect((await put("zain-hq-ops", { voiceId: OWN_VOICE })).status).toBe(404);
     expect((await put("founder", { voiceId: OWN_VOICE })).status).toBe(404);
     expect((await put(CHAIR_PROFILE, { voiceId: OWN_VOICE })).status).toBe(200);
   });
