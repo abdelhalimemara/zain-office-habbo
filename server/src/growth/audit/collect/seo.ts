@@ -74,22 +74,51 @@ export async function semrushAudit(auditId: string, website: string, budget: Bud
   return { item: r.items[0], costUsd: r.costUsd };
 }
 
-export async function semrushDomains(
-  auditId: string,
-  website: string,
-  competitors: readonly string[],
-  auditItem: Item | undefined,
-  budget: Budget,
-  asOf: string,
-): Promise<{ seo: SeoData; costUsd: number }> {
+/** The prospect's domain read (overview, keywords, organic competitors); run before the competitors are known. */
+export async function semrushProspect(auditId: string, website: string, budget: Budget): Promise<{ item?: Item; costUsd: number }> {
   const host = siteHost(website);
-  const r = await budget.run(auditId, "semrush", semrushDomainsInput([host, ...competitors]));
-  const read = seoRead(byDomain(r.items, host), auditItem, asOf);
-  const others: SeoData["competitors"] = {};
-  for (const c of competitors) {
-    const item = byDomain(r.items, c);
-    if (item) others[c] = { authorityScore: num(item.authority_score), organicTraffic: num(item.organic_traffic), organicKeywords: num(item.organic_keywords) };
+  const r = await budget.run(auditId, "semrush", semrushDomainsInput([host]));
+  return { item: byDomain(r.items, host), costUsd: r.costUsd };
+}
+
+/** Semrush's organic competitors: the domains ranking for the same keywords, most keywords in common first. */
+export function keywordOverlap(prospectItem: Item | undefined, auditItem: Item | undefined): { domain: string; commonKeywords: number }[] {
+  const organic = arr(obj(obj(prospectItem).organic).competitors);
+  const list = organic.length ? organic : arr(obj(obj(auditItem).semrush).organic_competitors);
+  const self = siteHost(`https://${String(obj(prospectItem).domain ?? "")}`);
+  return list
+    .map((c) => ({ domain: siteHost(`https://${String(c.domain ?? "")}`), commonKeywords: num(c.common_keywords) ?? 0 }))
+    .filter((c) => c.domain && c.domain !== self)
+    .sort((a, b) => b.commonKeywords - a.commonKeywords);
+}
+
+/** The keywords a domain ranks for, from its Semrush domain read. */
+export function rankingKeywords(item: Item | undefined): string[] {
+  return arr(obj(obj(item).organic).top_keywords).map((k) => String(k.keyword ?? "")).filter(Boolean);
+}
+
+/** Authority, organic traffic and keywords for the competitor candidates (one run). */
+export async function semrushNumbers(
+  auditId: string,
+  domains: readonly string[],
+  budget: Budget,
+): Promise<{ numbers: SeoData["competitors"]; items: Record<string, Item>; costUsd: number }> {
+  if (!domains.length) return { numbers: {}, items: {}, costUsd: 0 };
+  const r = await budget.run(auditId, "semrush", semrushDomainsInput(domains));
+  const numbers: SeoData["competitors"] = {};
+  const items: Record<string, Item> = {};
+  for (const d of domains) {
+    const item = byDomain(r.items, d);
+    if (!item) continue;
+    items[d] = item;
+    numbers[d] = { authorityScore: num(item.authority_score), organicTraffic: num(item.organic_traffic), organicKeywords: num(item.organic_keywords) };
   }
-  for (const c of read.competitors) c.authorityScore ??= others[c.domain]?.authorityScore;
-  return { seo: { read, competitors: others }, costUsd: r.costUsd };
+  return { numbers, items, costUsd: r.costUsd };
+}
+
+/** The SEO read: the prospect's numbers and technical issues, with its keyword-overlap competitors. */
+export function buildSeo(prospectItem: Item | undefined, auditItem: Item | undefined, numbers: SeoData["competitors"], asOf: string): SeoData {
+  const read = seoRead(prospectItem, auditItem, asOf);
+  for (const c of read.competitors) c.authorityScore ??= numbers[c.domain]?.authorityScore;
+  return { read, competitors: numbers };
 }

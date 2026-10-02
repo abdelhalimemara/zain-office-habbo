@@ -1,6 +1,6 @@
 import { AUDIT_AREA_LABELS } from "../../../../../shared/audits";
 import { shortDate } from "../dates";
-import { bottomLine, cards, esc, fmt, logo, page, pct, pill, t, table, type ReportContext } from "./layout";
+import { bottomLine, cards, esc, fmt, logo, page, pct, peerMethod, pill, t, table, type ReportContext } from "./layout";
 import { googleCell, metaCell } from "./pagesFront";
 
 const CHANNEL_LABEL: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook", x: "X / Twitter", linkedin: "LinkedIn", youtube: "YouTube", snapchat: "Snapchat" };
@@ -90,6 +90,12 @@ export function reputation(ctx: ReportContext): string {
 
 export function competitive(ctx: ReportContext): string {
   const rows = ctx.audit.benchmark ?? [];
+  const commonKeywords = (domain: string | undefined) => {
+    if (domain === ctx.host) return "—";
+    const c = ctx.data.competitors?.find((x) => x.domain === domain);
+    // A neighbour shares keywords with the Saudi candidate it was found through, not (measurably) with the prospect.
+    return c?.commonKeywords !== undefined ? `${fmt(c.commonKeywords)} (est.)` : c?.via ? `via ${esc(c.via)}` : "—";
+  };
   const me = rows[0];
   const ig = (r: (typeof rows)[number]) => (typeof r.instagramFollowers === "number" ? fmt(r.instagramFollowers) : "not measured");
   const visits = (r: (typeof rows)[number]) => (typeof r.traffic === "object" ? `~${fmt(r.traffic.monthlyVisits)} (est.)` : "not measured");
@@ -102,12 +108,12 @@ export function competitive(ctx: ReportContext): string {
     igLeader ? { title: `Instagram: ${igLeader.name} leads`, detail: `${ig(igLeader)} followers; engagement and Meta activity complete the picture (see Organic Social and Paid Media).` } : { title: "Social", detail: "Instagram followers were not measured for this set." },
   ];
   const body = `<div class="body">${table(
-    ["Business", "Google Ads", "Meta Ads", "Instagram followers", "Est. monthly visits", "Authority (Semrush)"],
-    rows.map((r) => [t(r.name), googleCell(r, ctx).split(",")[0]!, metaCell(r).replace(/\s\(.*$/, ""), ig(r), visits(r), r.authorityScore === undefined ? "—" : String(r.authorityScore)]),
-    `Sources as on the previous pages, ${ctx.day}.`,
+    ["Business", "Common keywords (Semrush)", "Google Ads", "Meta Ads", "Instagram followers", "Est. monthly visits", "Authority (Semrush)"],
+    rows.map((r) => [t(r.name), commonKeywords(r.domain), googleCell(r, ctx).split(",")[0]!, metaCell(r).replace(/\s\(.*$/, ""), ig(r), visits(r), r.authorityScore === undefined ? "—" : String(r.authorityScore)]),
+    `Competitors ${peerMethod(ctx)}; other sources as on the previous pages, ${ctx.day}.`,
     0,
   )}</div>`;
-  return page(ctx, 11, "The Competitive Gap", `${me?.name ?? "The prospect"} first, against the closest Saudi competitors, same public measures.`, body, `${cards(items)}${bottomLine(ctx.analysis.bottomLines.competitive)}`);
+  return page(ctx, 11, "The Competitive Gap", `${me?.name ?? "The prospect"} first, against Saudi competitors ${peerMethod(ctx)}, same public measures.`, body, `${cards(items)}${bottomLine(ctx.analysis.bottomLines.competitive)}`);
 }
 
 export function gapsPage(ctx: ReportContext): string {

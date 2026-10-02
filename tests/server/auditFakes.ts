@@ -81,7 +81,12 @@ const semrushDomain = (domain: string): Record<string, unknown> => {
         { keyword: "صالون تجميل", position: 14, volume: 9900, traffic: 30, url: `https://${domain}/` },
         { keyword: "nail salon riyadh", position: 8, volume: 880, traffic: 10, url: `https://${domain}/services` },
       ],
-      competitors: [{ domain: "rival.sa", common_keywords: 31 }, { domain: "petstock.co.nz", common_keywords: 1 }],
+      competitors: [
+        { domain: "rival.sa", common_keywords: 31 },
+        { domain: "glam.sa", common_keywords: 12 },
+        { domain: "noon.com", common_keywords: 40 },
+        { domain: "petstock.co.nz", common_keywords: 1 },
+      ],
     },
   };
 };
