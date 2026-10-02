@@ -59,6 +59,9 @@ describe("voice queue model", () => {
   it("explains why a turn falls back to text", () => {
     expect(audioFailure(503)).toBe("Voice unavailable");
     expect(audioFailure(404)).toBe("No audio for this turn");
+    expect(audioFailure(429)).toBe("Voices are busy, replay later");
+    expect(audioFailure(502)).toBe("Voice service error");
+    expect(audioFailure(504)).toBe("Voice timed out, replay to retry");
     expect(audioFailure(500)).toBe("Audio failed (500)");
     expect(audioFailure(0)).toBe("Couldn't play");
   });
