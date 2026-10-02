@@ -91,13 +91,13 @@ export class World {
 
   private async init(): Promise<void> {
     TextureSource.defaultOptions.scaleMode = "nearest";
-    Object.assign(this.host.style, { position: "absolute", inset: "0", overflow: "hidden", touchAction: "none", background: "#13294B" });
+    Object.assign(this.host.style, { position: "absolute", inset: "0", overflow: "hidden", touchAction: "none", background: cssColor(PAL.page) });
     if (getComputedStyle(this.container).position === "static") this.container.style.position = "relative";
     this.container.appendChild(this.host);
     await this.app.init({
       width: 64,
       height: 64,
-      background: PAL.sky,
+      background: PAL.page,
       antialias: false,
       resolution: 1,
       autoDensity: false,
@@ -205,7 +205,7 @@ export class World {
 
   /** Css colour behind the active scene, so surrounding UI can match it. */
   get background(): string {
-    return cssColor(this.scene?.background ?? PAL.sky);
+    return cssColor(this.scene?.background ?? PAL.page);
   }
 
   private applyBackground(scene: Scene): void {

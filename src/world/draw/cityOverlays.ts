@@ -1,30 +1,23 @@
 import { Container, Graphics, Text, type TextStyleOptions } from "pixi.js";
 import type { DivisionStats } from "../../../shared/flow";
+import { FONT_FAMILY, INK, STATUS_COLORS, drawPill } from "./pills";
 
-const FONT = 'Inter, "SF Pro Text", system-ui, -apple-system, "Segoe UI", sans-serif';
-const INK = 0x1d2430;
+export { STATUS_COLORS } from "./pills";
+
+const FONT = FONT_FAMILY;
 const PILL_H = 24;
 const PAD = 10;
 
-export const STATUS_COLORS = { working: 0x22b573, blocked: 0xe5484d, awaiting: 0xf5a524 } as const;
-
-function textStyle(size: number, fill: number, weight: TextStyleOptions["fontWeight"] = "700"): TextStyleOptions {
-  return { fontFamily: FONT, fontSize: size, fontWeight: weight, fill, letterSpacing: 0.4 };
-}
-
-function pill(g: Graphics, w: number, h: number, fill: number, alpha = 0.96): void {
-  const r = h / 2;
-  g.roundRect(-w / 2, -h + 3, w, h, r).fill({ color: 0x0b1220, alpha: 0.1 });
-  g.roundRect(-w / 2, -h + 1.5, w, h, r).fill({ color: 0x0b1220, alpha: 0.12 });
-  g.roundRect(-w / 2, -h, w, h, r).fill({ color: fill, alpha });
+function textStyle(size: number, fill: number, weight: TextStyleOptions["fontWeight"] = "600"): TextStyleOptions {
+  return { fontFamily: FONT, fontSize: size, fontWeight: weight, fill, letterSpacing: 0.3 };
 }
 
 /** Building name: white rounded pill with a division-colour dot; bottom-centre at (0, 0). Returns its height. */
 export function buildNameLabel(c: Container, name: string, accent: number, resolution: number): number {
-  const text = new Text({ text: name, style: textStyle(12, INK, "800"), resolution });
+  const text = new Text({ text: name, style: textStyle(12, INK, "700"), resolution });
   const w = text.width + PAD * 2 + 14;
   const g = new Graphics();
-  pill(g, w, PILL_H, 0xffffff);
+  drawPill(g, w, PILL_H);
   g.circle(-w / 2 + PAD + 4, -PILL_H / 2, 4.5).fill(accent);
   text.position.set(-w / 2 + PAD + 14, -PILL_H / 2 - text.height / 2);
   c.addChild(g, text);
@@ -48,7 +41,7 @@ export function buildBadge(c: Container, s: Pick<DivisionStats, "working" | "blo
   const w = PAD * 2 + itemW.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
   const h = 22;
   const g = new Graphics();
-  pill(g, w, h, 0xffffff);
+  drawPill(g, w, h);
   c.addChild(g);
   let x = -w / 2 + PAD;
   let bang: Container | null = null;
@@ -96,7 +89,7 @@ export function buildCompactMarker(
 ): BadgeParts {
   const h = 20;
   const parts: { kind: "dot" | "bang"; color: number; text: Text }[] = [];
-  const name = new Text({ text: short, style: textStyle(10, INK, "800"), resolution });
+  const name = new Text({ text: short, style: textStyle(10, INK, "700"), resolution });
   if (s) {
     parts.push({ kind: "dot", color: STATUS_COLORS.working, text: new Text({ text: String(s.working), style: textStyle(10, INK), resolution }) });
     if (s.blocked > 0) parts.push({ kind: "dot", color: STATUS_COLORS.blocked, text: new Text({ text: String(s.blocked), style: textStyle(10, INK), resolution }) });
@@ -107,7 +100,7 @@ export function buildCompactMarker(
   const partW = parts.map((p) => (p.kind === "bang" ? 13 : 8) + 3 + p.text.width);
   const w = 8 + 10 + name.width + partW.reduce((a, b) => a + b + 7, 0) + 8;
   const g = new Graphics();
-  pill(g, w, h, 0xffffff);
+  drawPill(g, w, h);
   g.circle(-w / 2 + 11, -h / 2, 3.5).fill(accent);
   c.addChild(g);
   name.position.set(-w / 2 + 18, -h / 2 - name.height / 2);

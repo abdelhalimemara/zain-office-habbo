@@ -1,11 +1,12 @@
 import type { DivisionId } from "../../../shared/divisions";
 import { pointInPolygon, type Pt, type Rect } from "../iso";
+import { PAGE_BACKGROUND } from "../palette";
 
 /** The rendered, car-free city diorama (src/world/assets/city.webp, transparent background), in image pixels. */
 export const CITY_IMAGE = { width: 2000, height: 2000 } as const;
 
-/** Canvas colour behind the transparent diorama. */
-export const CITY_BACKGROUND = 0xf7f7f7;
+/** Canvas colour behind the transparent diorama: the shared warm-white page. */
+export const CITY_BACKGROUND = PAGE_BACKGROUND;
 
 /** Opaque-pixel bounds of the diorama (alpha > 8: x 27–1937, y 111–1832) plus a 10 px margin. */
 export const CITY_CONTENT: Rect = { x: 17, y: 101, w: 1931, h: 1742 };
