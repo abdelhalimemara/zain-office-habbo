@@ -16,6 +16,7 @@ import {
   type RosterResponse,
   type TaskDetailResponse,
 } from "@shared/api";
+import { LEADERSHIP_API, type AssignActionsRequest, type StartLeadershipRequest, type UpdateActionsRequest } from "@shared/leadership";
 import { BOARD_MEMORY_API, type BoardMemoryResponse } from "@shared/boardMemory";
 import {
   MEETINGS_API,
@@ -25,6 +26,16 @@ import {
   type StartMeetingRequest,
 } from "@shared/meetings";
 import { LIVE_API, VOICE_API, type EndLiveRequest, type LiveSessionResponse, type SetVoiceRequest, type VoicesResponse } from "@shared/voice";
+
+/** One action's assignment; `ok: false` leaves the action proposed so it can be retried. */
+export interface AssignOutcome {
+  id: string;
+  ok: boolean;
+  taskId?: string;
+  error?: string;
+}
+
+export type AssignActionsResult = MeetingResponse & { results?: AssignOutcome[] };
 
 export class ApiRequestError extends Error {
   constructor(
@@ -67,6 +78,9 @@ export const api = {
   startMeeting: (input: StartMeetingRequest) => post<MeetingResponse>(MEETINGS_API.list, input),
   founderRemark: (id: string, input: FounderRemarkRequest) => post<MeetingResponse>(MEETINGS_API.remark(id), input),
   cancelMeeting: (id: string) => post<MeetingResponse>(MEETINGS_API.cancel(id), {}),
+  startLeadership: (input: StartLeadershipRequest) => post<MeetingResponse>(LEADERSHIP_API.start, input),
+  updateActions: (id: string, input: UpdateActionsRequest) => put<MeetingResponse>(LEADERSHIP_API.actions(id), input),
+  assignActions: (id: string, input: AssignActionsRequest) => post<AssignActionsResult>(LEADERSHIP_API.assign(id), input),
   boardMemory: () => request<BoardMemoryResponse>(BOARD_MEMORY_API.list),
   /** The origin guard wants JSON on every write, so the DELETE carries an empty object. */
   deleteMemoryNote: (profile: string, id: string) => request<void>(BOARD_MEMORY_API.note(profile, id), { method: "DELETE", body: "{}" }),

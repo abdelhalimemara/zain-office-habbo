@@ -10,8 +10,11 @@ import { MeetingRoom } from "./MeetingRoom";
 import { HireDialog } from "./HireDialog";
 import { Hud } from "./Hud";
 import { KanbanPanel } from "./KanbanPanel";
+import { LeadershipCta } from "./LeadershipCta";
+import { LeadershipPanel } from "./LeadershipPanel";
 import { MandatesRail } from "./MandatesRail";
 import { NewMandateDialog } from "./NewMandateDialog";
+import { StartLeadershipDialog } from "./StartLeadershipDialog";
 import { TaskDrawer } from "./TaskDrawer";
 import "./styles.css";
 
@@ -33,6 +36,8 @@ function panelKey(panel: Panel): string {
       return `board:${panel.members?.join(",") ?? ""}:${panel.tab ?? ""}`;
     case "meeting":
       return `meeting:${panel.id}`;
+    case "leadership":
+      return `leadership:${panel.id ?? ""}`;
   }
 }
 
@@ -46,6 +51,8 @@ function OpenPanel({ panel }: { panel: Panel }) {
       return <BoardPanel members={panel.members} tab={panel.tab} />;
     case "meeting":
       return <MeetingRoom id={panel.id} />;
+    case "leadership":
+      return <LeadershipPanel id={panel.id} />;
     case "agent":
       return <AgentCard profile={panel.profile} />;
     case "task":
@@ -63,25 +70,30 @@ export function UiRoot() {
   const view = useUiStore((s) => s.view);
   const callMeetingOpen = useUiStore((s) => s.callMeetingOpen);
   const setCallMeetingOpen = useUiStore((s) => s.setCallMeetingOpen);
+  const leadershipDialogOpen = useUiStore((s) => s.leadershipDialogOpen);
+  const setLeadershipDialogOpen = useUiStore((s) => s.setLeadershipDialogOpen);
 
   useEffect(() => {
-    if (!panel && !callMeetingOpen) return;
+    if (!panel && !callMeetingOpen && !leadershipDialogOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (callMeetingOpen) setCallMeetingOpen(false);
+      else if (leadershipDialogOpen) setLeadershipDialogOpen(false);
       else closePanel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panel, closePanel, callMeetingOpen, setCallMeetingOpen]);
+  }, [panel, closePanel, callMeetingOpen, setCallMeetingOpen, leadershipDialogOpen, setLeadershipDialogOpen]);
 
   return (
     <div className="zui-root">
       <Hud />
       {railVisible(view, panel?.kind ?? null) && <MandatesRail />}
       {view.kind === "floor" && view.division === "hq" && <CallMeetingCta />}
+      {view.kind === "floor" && view.division === "hq" && <LeadershipCta />}
       {panel && <OpenPanel key={panelKey(panel)} panel={panel} />}
       {callMeetingOpen && <CallMeetingDialog />}
+      {leadershipDialogOpen && <StartLeadershipDialog />}
     </div>
   );
 }

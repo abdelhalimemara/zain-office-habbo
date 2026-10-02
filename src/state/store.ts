@@ -11,6 +11,8 @@ export type Panel =
   | { kind: "approvals" }
   | { kind: "board"; members?: string[]; tab?: "meetings" | "consult" | "memory" }
   | { kind: "meeting"; id: string }
+  /** The VP room: the list of leadership meetings, or one of them. */
+  | { kind: "leadership"; id?: string }
   | { kind: "agent"; profile: string }
   | { kind: "task"; id: string }
   | { kind: "mandate"; division?: DivisionId }
@@ -44,6 +46,8 @@ export interface UiState {
   railSheetOpen: boolean;
   /** The "Call a meeting" modal is open over whatever else is showing. */
   callMeetingOpen: boolean;
+  /** The "Call a VP meeting" modal is open. */
+  leadershipDialogOpen: boolean;
   goToCity: () => void;
   enterDivision: (division: DivisionId) => void;
   openPanel: (panel: Panel) => void;
@@ -54,22 +58,24 @@ export interface UiState {
   setRailCollapsed: (collapsed: boolean) => void;
   setRailSheetOpen: (open: boolean) => void;
   setCallMeetingOpen: (open: boolean) => void;
+  setLeadershipDialogOpen: (open: boolean) => void;
 }
 
-export const initialUiState: Pick<UiState, "view" | "selectedAgent" | "panel" | "railCollapsed" | "railSheetOpen" | "callMeetingOpen"> = {
+export const initialUiState: Pick<UiState, "view" | "selectedAgent" | "panel" | "railCollapsed" | "railSheetOpen" | "callMeetingOpen" | "leadershipDialogOpen"> = {
   view: { kind: "city" },
   selectedAgent: null,
   panel: null,
   railCollapsed: false,
   railSheetOpen: false,
   callMeetingOpen: false,
+  leadershipDialogOpen: false,
 };
 
 export const useUiStore = create<UiState>()((set) => ({
   ...initialUiState,
   railCollapsed: loadRailCollapsed(),
-  goToCity: () => set({ view: { kind: "city" }, selectedAgent: null, panel: null, callMeetingOpen: false }),
-  enterDivision: (division) => set({ view: { kind: "floor", division }, selectedAgent: null, panel: null, callMeetingOpen: false }),
+  goToCity: () => set({ view: { kind: "city" }, selectedAgent: null, panel: null, callMeetingOpen: false, leadershipDialogOpen: false }),
+  enterDivision: (division) => set({ view: { kind: "floor", division }, selectedAgent: null, panel: null, callMeetingOpen: false, leadershipDialogOpen: false }),
   openPanel: (panel) =>
     set((s) => ({ panel, selectedAgent: panel.kind === "agent" ? panel.profile : s.selectedAgent })),
   closePanel: () => set({ panel: null, selectedAgent: null }),
@@ -83,4 +89,5 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setRailSheetOpen: (railSheetOpen) => set({ railSheetOpen }),
   setCallMeetingOpen: (callMeetingOpen) => set({ callMeetingOpen }),
+  setLeadershipDialogOpen: (leadershipDialogOpen) => set({ leadershipDialogOpen }),
 }));

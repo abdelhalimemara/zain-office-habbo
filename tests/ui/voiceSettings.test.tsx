@@ -40,7 +40,7 @@ describe("Voice settings", () => {
   it("lists the chair as the CEO and every board member with own or stock voice", async () => {
     routes(configured);
     const section = await voicesSection();
-    const rows = within(section).getAllByRole("listitem");
+    const rows = within(within(section).getByRole("list", { name: "Board voices" })).getAllByRole("listitem");
     expect(rows.map((r) => r.querySelector(".zui-voice-row__name")!.textContent)).toEqual([
       "CEO",
       "Alex Hormozi",
@@ -54,6 +54,14 @@ describe("Voice settings", () => {
     expect(within(rows[1]!).getByLabelText("ElevenLabs voice id for Alex Hormozi")).toHaveAttribute("placeholder", OWN);
     expect(within(rows[2]!).getByText("Stock voice")).toBeInTheDocument();
     expect(within(rows[2]!).queryByRole("button", { name: "Use stock" })).not.toBeInTheDocument();
+  });
+
+  it("lists the COO and the four VPs under the leadership room, without repeating the CEO", async () => {
+    routes(configured);
+    const section = await voicesSection();
+    const rows = within(within(section).getByRole("list", { name: "Leadership room voices" })).getAllByRole("listitem");
+    expect(rows.map((r) => r.querySelector(".zui-voice-row__name")!.textContent)).toEqual(["COO", "VP Studio", "VP Growth", "VP Labs", "VP Tech"]);
+    expect(within(rows[0]!).getByLabelText("ElevenLabs voice id for COO")).toBeInTheDocument();
   });
 
   it("validates the pasted id, then saves it", async () => {

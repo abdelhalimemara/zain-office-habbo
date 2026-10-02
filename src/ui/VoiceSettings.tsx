@@ -1,9 +1,11 @@
 import { useId, useState, type FormEvent } from "react";
 import type { RosterEntry } from "@shared/api";
 import { findBoardMember } from "@shared/board";
+import { LEADERSHIP_SEATS } from "@shared/leadership";
 import { CHAIR_PROFILE, type VoicesResponse } from "@shared/voice";
 import { useSetVoice, useVoices } from "../api/voiceHooks";
 import { ErrorNote } from "./common";
+import { SEAT_LABEL, SEAT_ROLE } from "./leadershipModel";
 import { Portrait } from "./Portrait";
 import { VoiceTag, VoicesOffNotice } from "./VoiceBits";
 import { voiceIdError, voiceStatus } from "./voiceModel";
@@ -76,26 +78,55 @@ function VoiceRow({ speaker, voices }: { speaker: Speaker; voices: VoicesRespons
   );
 }
 
-/** Each board member's ElevenLabs voice, plus the CEO's office, which reads the minutes. */
-export function VoiceSettings({ advisors, agents }: { advisors: readonly RosterEntry[]; agents: readonly RosterEntry[] }) {
-  const voices = useVoices();
+type VoiceGroup = "board" | "leadership";
+
+function boardSpeakers(advisors: readonly RosterEntry[], agents: readonly RosterEntry[], withCeo: boolean): Speaker[] {
   const ceo = agents.find((a) => a.profile === CHAIR_PROFILE);
-  const speakers: Speaker[] = [
-    { profile: CHAIR_PROFILE, agent: ceo, name: ceo?.name ? `${ceo.name}, CEO` : "CEO", seat: "Takes the notes and reads the minutes" },
+  return [
+    ...(withCeo ? [{ profile: CHAIR_PROFILE, agent: ceo, name: ceo?.name ? `${ceo.name}, CEO` : "CEO", seat: "Takes the notes and reads the minutes" }] : []),
     ...advisors.map((a) => ({ profile: a.profile, agent: a, name: findBoardMember(a.profile)?.name ?? a.title, seat: findBoardMember(a.profile)?.seat ?? a.title })),
   ];
+}
+
+/** The CEO agent, COO and VPs who speak in the VP room. */
+function leadershipSpeakers(agents: readonly RosterEntry[], withCeo: boolean): Speaker[] {
+  return LEADERSHIP_SEATS.filter((p) => withCeo || p !== CHAIR_PROFILE).map((profile) => ({
+    profile,
+    agent: agents.find((a) => a.profile === profile),
+    name: SEAT_LABEL[profile],
+    seat: profile === CHAIR_PROFILE ? "CEO agent · also reads the board minutes" : SEAT_ROLE[profile],
+  }));
+}
+
+/**
+ * ElevenLabs voices for voice meetings: board members plus the CEO's office (which reads the minutes), and the
+ * execs in the VP room. The CEO agent is one voice in both rooms, so it is listed once.
+ */
+export function VoiceSettings({ advisors = [], agents, groups = ["board", "leadership"] }: { advisors?: readonly RosterEntry[]; agents: readonly RosterEntry[]; groups?: readonly VoiceGroup[] }) {
+  const voices = useVoices();
+  const both = groups.includes("board") && groups.includes("leadership");
+  const sections = groups.map((g) => ({
+    group: g,
+    title: g === "board" ? "Board" : "Leadership room",
+    speakers: g === "board" ? boardSpeakers(advisors, agents, true) : leadershipSpeakers(agents, !both),
+  }));
   return (
     <section className="zui-voices" aria-label="Voices">
       <p className="zui-hint">
-        Voices for voice meetings. Members without their own voice use a stock ElevenLabs voice. Copy a voice's ID from your ElevenLabs voice library.
+        Voices for voice meetings. Anyone without their own voice uses a stock ElevenLabs voice. Copy a voice's ID from your ElevenLabs voice library.
       </p>
       {voices.data && !voices.data.configured && <VoicesOffNotice detail="Voices you set here are kept and used once it is." />}
       <ErrorNote error={voices.error} />
-      <ul className="zui-voice-list">
-        {speakers.map((s) => (
-          <VoiceRow key={s.profile} speaker={s} voices={voices.data} />
-        ))}
-      </ul>
+      {sections.map((sec) => (
+        <div key={sec.group} className="zui-voice-group">
+          {groups.length > 1 && <h4 className="zui-voice-group__title">{sec.title}</h4>}
+          <ul className="zui-voice-list" aria-label={`${sec.title} voices`}>
+            {sec.speakers.map((sp) => (
+              <VoiceRow key={sp.profile} speaker={sp} voices={voices.data} />
+            ))}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }

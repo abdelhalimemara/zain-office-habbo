@@ -7,6 +7,7 @@
 @import "./voice.css";
 @import "./live.css";
 @import "./memory.css";
+@import "./leadership.css";
 
 .zui-hud {
   position: absolute;

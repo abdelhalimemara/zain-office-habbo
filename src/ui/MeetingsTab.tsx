@@ -6,6 +6,7 @@ import { isMeetingActive, useMeetings } from "../api/meetingHooks";
 import { useUiStore } from "../state/store";
 import { ErrorNote } from "./common";
 import { absoluteTime, relativeTime } from "./mandates";
+import { meetingsOfKind } from "./leadershipModel";
 import { DECISION_LABEL, phaseLabel, STATUS_LABEL } from "./meetingModel";
 import { Portrait } from "./Portrait";
 import { VoiceModeBadge } from "./VoiceBits";
@@ -73,7 +74,7 @@ function MeetingItem({ meeting, agents }: { meeting: BoardMeeting; agents: reado
 export function MeetingsTab({ advisors, agents }: { advisors: readonly RosterEntry[]; agents: readonly RosterEntry[] }) {
   const { data, error, isPending } = useMeetings();
   const openCallMeeting = useUiStore((s) => s.setCallMeetingOpen);
-  const meetings = [...(data?.meetings ?? [])].sort((a, b) => b.updatedAt - a.updatedAt);
+  const meetings = meetingsOfKind(data?.meetings, "board");
   return (
     <div className="zui-meetings">
       <button type="button" className="zui-btn zui-btn--primary zui-meetings__convene" onClick={() => openCallMeeting(true)} disabled={!advisors.some((a) => a.hired)}>
