@@ -27,6 +27,8 @@ const BROWSER_READ = `() => {
     lang: (d.documentElement.getAttribute("lang") || "").toLowerCase(),
     title: d.title || "",
     siteName: (d.querySelector('meta[property="og:site_name"]') || {}).content || "",
+    logoAlt: ((d.querySelector('header img[alt], img[class*="logo" i][alt], img[src*="logo" i][alt], a[class*="logo" i] img[alt]') || {}).alt || "").trim(),
+    textSample: body.slice(0, 3000),
     metaDescription: (d.querySelector('meta[name="description"]') || {}).content || "",
     viewport: !!d.querySelector('meta[name="viewport"]'),
     h1: [...d.querySelectorAll("h1")].map(text).slice(0, 5),
@@ -94,6 +96,8 @@ interface PageRecord {
   lang?: string;
   title?: string;
   siteName?: string;
+  logoAlt?: string;
+  textSample?: string;
   metaDescription?: string;
   viewport?: boolean;
   h1?: string[];
@@ -204,24 +208,39 @@ export function summarizeWebsite(website: string, items: readonly Record<string,
 }
 
 export interface HomeRead {
+  /** The brand: og:site_name or the logo's alt text, never a page title ("Tailored Health Nutrition…"). */
   name?: string;
   instagram?: string;
   /** The page looks like a business's own site: a store platform, policy pages, WhatsApp/phone, or commerce schema. */
   business: boolean;
+  /** An Arabic storefront (lang="ar" or mostly Arabic text). */
+  arabic: boolean;
+  /** Title, headings, description and the start of the body, for the category-relevance check. */
+  text: string;
 }
 
-/** A competitor candidate's home page: display name, Instagram handle, and whether it is a business at all. */
+const brandName = (v: string | undefined) => {
+  const name = (v ?? "").replace(/\s+/g, " ").trim();
+  return name.length >= 2 && name.length <= 40 && !/^(logo|home|header|image)$/i.test(name) ? name : undefined;
+};
+
+/** A competitor candidate's home page: its brand, Instagram handle, whether it is a business, and its text. */
 export function summarizeHome(item: Record<string, unknown> | undefined): HomeRead {
-  if (!item) return { business: false };
+  if (!item) return { business: false, arabic: false, text: "" };
   const p = item as PageRecord;
-  const raw = (p.siteName || (p.title ?? "").split(/[|·–—-]/)[0] || "").trim();
   const business =
     !!p.platform ||
     (p.policyLinks ?? []).length > 0 ||
     !!p.contact?.whatsapp ||
     !!p.contact?.phone ||
     (p.jsonLd ?? []).some((t) => /Store|LocalBusiness|Organization|Product|Offer|Restaurant|Clinic|Salon/i.test(t));
-  return { name: raw.length >= 2 && raw.length <= 60 ? raw : undefined, instagram: socialLinksFrom(p.socialLinks ?? []).instagram, business };
+  return {
+    name: brandName(p.siteName) ?? brandName(p.logoAlt?.replace(/\s*logo\s*$/i, "")),
+    instagram: socialLinksFrom(p.socialLinks ?? []).instagram,
+    business,
+    arabic: (p.lang ?? "").startsWith("ar") || num(p.arabicChars) > num(p.latinChars),
+    text: [p.title, p.metaDescription, ...(p.h1 ?? []), ...(p.h2 ?? []), p.textSample].filter(Boolean).join(" \n "),
+  };
 }
 
 export async function collectWebsite(auditId: string, website: string, budget: Budget, flags?: CrmFlags): Promise<StepResult<WebsiteData>> {

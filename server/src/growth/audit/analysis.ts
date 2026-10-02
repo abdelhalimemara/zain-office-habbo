@@ -11,6 +11,7 @@ import {
   type ProspectAudit,
   type Severity,
 } from "../../../../shared/audits";
+import { brandRun } from "./collect/search";
 import { gaps, lcFirst } from "./score";
 import { siteHost } from "./url";
 import type { CollectedData } from "./types";
@@ -47,11 +48,12 @@ export function draftAnalysis(audit: ProspectAudit, score: AuditScore, data: Col
   const open = gaps(score).sort((a, b) => order(a.severity) - order(b.severity) || (a.score ?? 0) - (b.score ?? 0));
   const strong = score.areas.filter((a) => a.status === "strong");
   const notMeasured = score.areas.filter((a) => a.status === "not-measured");
-  const competitors = data.competitors ?? [];
+  // Only vetted peers (the ads step makes the final cut) may be quoted in the report.
+  const competitors = data.ads ? (data.competitors ?? []) : [];
   const traffic = data.ads?.traffic ?? {};
   const own = traffic[host]?.monthlyVisits;
   const leader = competitors.map((c) => ({ c, v: traffic[c.domain]?.monthlyVisits ?? 0 })).sort((a, b) => b.v - a.v)[0];
-  const brandRun = data.search?.runs.find((r) => r.kind === "brand");
+  const brand = brandRun(data.search?.runs);
   const categoryRuns = data.search?.runs.filter((r) => r.kind === "category") ?? [];
   const inCategory = categoryRuns.filter((r) => r.prospectPresent).length;
   const t = data.website?.trackers;
@@ -69,7 +71,7 @@ export function draftAnalysis(audit: ProspectAudit, score: AuditScore, data: Col
   const keyPoints = [
     strong[0]
       ? { title: `${AUDIT_AREA_LABELS[strong[0].area]} holds up`, detail: strong[0].summary }
-      : brandRun?.prospectPresent
+      : brand?.prospectPresent
         ? { title: "Brand is owned in search", detail: `"${name}" returns the official site or its profiles in a live search (quoted).` }
         : { title: "A base to build on", detail: `${score.areasMeasured} of 7 areas could be measured from public data this pass.` },
     top ? { title: `${AUDIT_AREA_LABELS[top.area]}: ${top.status}`, detail: top.summary } : { title: "No material gaps", detail: "Every measured area is strong." },
@@ -113,7 +115,7 @@ export function draftAnalysis(audit: ProspectAudit, score: AuditScore, data: Col
       ? `${strong.length ? `${list3(strong.slice(0, 2).map((a) => lower(a.area)))[0]!.toUpperCase()}${list3(strong.slice(0, 2).map((a) => lower(a.area))).slice(1)} ${strong.length > 1 ? "hold" : "holds"} up, but ` : ""}${strong.length ? lower(top.area) : AUDIT_AREA_LABELS[top.area]} is the biggest gap.`
       : "Every measured area is in good shape.",
     executiveSummary: [
-      brandRun ? (brandRun.prospectPresent ? `A live search for "${name}" returns the official site.` : `A live search for "${name}" does not return the official site.`) : "",
+      brand ? (brand.prospectPresent ? `A live search for "${name}" returns the official site.` : `A live search for "${name}" does not return the official site.`) : "",
       ...open.slice(0, 2).map((a) => a.summary),
       leader && own !== undefined && leader.v > own ? `${leader.c.name} draws an estimated ${fmt(leader.v)} monthly visits against ${fmt(own)} (Similarweb).` : "",
     ]
@@ -122,7 +124,7 @@ export function draftAnalysis(audit: ProspectAudit, score: AuditScore, data: Col
     keyPoints,
     bottomLines: {
       summary: top ? `The gap is ${lower(top.area)}${second ? ` and ${lower(second.area)}` : ""}, not brand presence.` : "A strong base: the work is scale, not repair.",
-      search: categoryRuns.length ? (inCategory === categoryRuns.length ? "The name and the category are both owned." : `${brandRun?.prospectPresent ? "The name is owned" : "Even the name is not owned"}; the category is not — yet.`) : "Search was not measured this pass.",
+      search: categoryRuns.length ? (inCategory === categoryRuns.length ? "The name and the category are both owned." : `${brand?.prospectPresent ? "The name is owned" : "Even the name is not owned"}; the category is not — yet.`) : "Search was not measured this pass.",
       paid: googleRivals ? `Google demand is being fought by ${googleRivals + 1 > 2 ? "several players" : "competitors"}; the open lanes are where they are absent.` : "Paid search in this category is still open.",
       social: igMeasured ? `Instagram has ${fmt(igMeasured.followers ?? 0)} followers at ${(((igMeasured.engagement ?? 0) as number) * 100).toFixed(2)}% engagement.` : "Social presence could not be confirmed this pass.",
       traffic: leader && leader.v ? "The traffic gap tracks the search gap: the business that owns organic search owns the visits." : "Traffic estimates were not available for this set.",

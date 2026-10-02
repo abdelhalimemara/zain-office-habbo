@@ -1,4 +1,6 @@
 import { AUDIT_AREAS, type AreaResult, type AreaStatus, type AuditArea, type AuditProspect, type AuditScore, type Evidence, type Grade, type Severity } from "../../../../shared/audits";
+import { brandRun } from "./collect/search";
+import { shortDate } from "./dates";
 import { semrushSource } from "./collect/seo";
 import { siteHost } from "./url";
 import type { CollectedData, SocialData } from "./types";
@@ -127,7 +129,7 @@ function websiteArea(d: CollectedData, s: Sources): Draft | null {
 }
 
 function brandArea(d: CollectedData, p: AuditProspect, s: Sources): Draft | null {
-  const brand = d.search?.runs.find((r) => r.kind === "brand");
+  const brand = brandRun(d.search?.runs);
   const maps = d.ads?.maps;
   const linked = Object.keys(d.website?.socialLinks ?? {}).length + (d.social?.rows.filter((r) => r.measured).length ?? 0);
   if (!brand && maps === undefined) return null;
@@ -159,10 +161,10 @@ function searchArea(d: CollectedData, s: Sources): Draft | null {
   if (category.length) {
     const present = category.filter((r) => r.prospectPresent).length;
     parts.push([60 * (present / category.length), 60]);
-    const rivals = [...new Set(category.flatMap((r) => r.others))].filter((o) => (d.competitors ?? []).some((c) => c.domain === o)).slice(0, 2);
+    const rivals = [...new Set(category.flatMap((r) => r.others))].filter((o) => (d.ads ? (d.competitors ?? []) : []).some((c) => c.domain === o)).slice(0, 2);
     summary = present
       ? `Present in ${present} of ${category.length} live category searches`
-      : `Absent from ${category.length} live category searches${rivals.length ? ` where ${rivals.join(" and ")} appear` : ""}`;
+      : `Absent from ${category.length} live category searches${rivals.length ? ` where ${rivals.join(" and ")} ${rivals.length > 1 ? "appear" : "appears"}` : ""}`;
     evidence.push(q(`${summary}`, s.search));
   }
   if (seo) {
@@ -217,7 +219,16 @@ function performanceArea(d: CollectedData, domain: string, s: Sources): Draft | 
   const metaActive = m && m !== "none" ? m.active : 0;
   if (g !== undefined) {
     parts.push([googleActive ? 20 : 0, 20]);
-    evidence.push(q(g === "none" ? "No ads in the Google Ads Transparency Center" : `${g.active} active Google ads (${g.total} found)`, s.googleAds));
+    evidence.push(
+      q(
+        g === "none"
+          ? "No ads in the Google Ads Transparency Center"
+          : g.active === 0
+            ? `No active Google ads (${g.total} older ads${g.lastSeen ? `, last seen ${shortDate(g.lastSeen)}` : ""})`
+            : `${g.active} active Google ads (${g.total} found)`,
+        s.googleAds,
+      ),
+    );
   }
   if (m !== undefined) {
     parts.push([metaActive ? 20 : 0, 20]);

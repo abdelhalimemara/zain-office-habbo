@@ -181,13 +181,18 @@ describe("audit collectors", () => {
       youtube: "https://www.youtube.com/@thestudio",
       snapchat: "thestudio",
     });
-    expect(summarizeHome({ siteName: "", title: "Glow Lounge | Riyadh", socialLinks: ["https://instagram.com/glow"] })).toEqual({ name: "Glow Lounge", instagram: "glow", business: false });
+    // Brands are named by og:site_name or the logo's alt text, never by a page title.
+    expect(summarizeHome({ siteName: "", title: "Glow Lounge | Riyadh", socialLinks: ["https://instagram.com/glow"] })).toMatchObject({ name: undefined, instagram: "glow", business: false, arabic: false });
+    expect(summarizeHome({ siteName: "", logoAlt: "Glow Lounge logo", title: "Tailored Health Nutrition For Cats & Dogs" }).name).toBe("Glow Lounge");
     expect(summarizeHome({ title: "Pet House", platform: "Salla" }).business).toBe(true);
   });
 
   it("runs the brand search first and picks competitors from the category searches", () => {
     const q = deriveQueries(prospect, site());
-    expect(q[0]).toEqual({ query: '"THE STUDIO"', kind: "brand" });
+    expect(q.slice(0, 2)).toEqual([
+      { query: '"THE STUDIO"', kind: "brand" },
+      { query: "THE STUDIO Riyadh", kind: "brand" },
+    ]);
     expect(q.filter((x) => x.kind === "category").map((x) => x.query)).toContain("صالون تجميل الرياض");
     const s = summarizeSearch(prospect, q, items("apify/google-search-scraper", { queries: q.map((x) => x.query).join("\n") }));
     expect(s.runs[0]).toMatchObject({ prospectPresent: true, others: [] }); // instagram.com is the brand's own profile here
@@ -198,8 +203,8 @@ describe("audit collectors", () => {
   it("without a CRM category, searches what Semrush says the site ranks for, never UI text or the brand", () => {
     const shop = { ...site(), headings: ["Cart 0 items", "Peak nutrition", "Luxury dog beds", "Sign in"] };
     const paw = { name: "The Paw Concept", website: "https://thepawconcept.co/" };
-    expect(deriveQueries(paw, shop, ["cat food", "the paw concept", "قضيب القط"]).map((x) => x.query)).toEqual(['"The Paw Concept"', "cat food Riyadh", "قضيب القط الرياض"]);
-    expect(deriveQueries(paw, shop, ["cat food"]).map((x) => x.query)).toEqual(['"The Paw Concept"', "cat food Riyadh", "Peak nutrition Riyadh", "Luxury dog beds Riyadh"]);
+    expect(deriveQueries(paw, shop, ["cat food", "the paw concept", "قضيب القط"]).map((x) => x.query)).toEqual(['"The Paw Concept"', "The Paw Concept Riyadh", "cat food Riyadh", "قضيب القط الرياض"]);
+    expect(deriveQueries(paw, shop, ["cat food"]).map((x) => x.query)).toEqual(['"The Paw Concept"', "The Paw Concept Riyadh", "cat food Riyadh", "Peak nutrition Riyadh", "Luxury dog beds Riyadh"]);
   });
 
   it("keeps foreign and platform sites out of the competitors, and prefers Saudi domains", () => {
@@ -231,18 +236,19 @@ describe("audit collectors", () => {
     expect(socialHandles({ ...prospect, instagram: "crm_handle" }, site())).toMatchObject({ instagram: "crm_handle", tiktok: "thestudio" });
   });
 
-  it("keeps the three candidates whose home pages read as businesses", async () => {
+  it("keeps the candidates whose home pages are businesses in the category, Saudi first", async () => {
     const homes = [
-      page("https://expat.com/", { siteName: "Expat.com", platform: "", policyLinks: [], contact: {}, jsonLd: ["Article"], socialLinks: [] }),
-      page("https://pethouse.com/", { siteName: "Pet House", platform: "Salla", socialLinks: [] }),
-      page("https://cats.com/", { siteName: "Cats", platform: "", policyLinks: [], contact: {}, jsonLd: [], socialLinks: [] }),
-      page("https://petzone.com/", { siteName: "Petzone", platform: "Shopify", socialLinks: [] }),
+      page("https://expat.com/", { siteName: "Expat.com", title: "Expat life", platform: "", policyLinks: [], contact: {}, jsonLd: ["Article"], socialLinks: [], textSample: "salon guides" }),
+      page("https://pethouse.com/", { siteName: "Pet House", lang: "en", arabicChars: 0, platform: "Salla", socialLinks: [] }),
+      page("https://shoes.com/", { siteName: "Shoe Co", title: "Boots", h1: [], h2: [], metaDescription: "", platform: "Shopify", socialLinks: [], textSample: "boots and bags" }),
+      page("https://pets.sa/", { siteName: "Pets SA", socialLinks: [] }),
     ];
     const apify = fakeApify({ actors: { ...sampleActors(), "apify/playwright-scraper": homes } });
-    const candidates = ["expat.com", "pethouse.com", "cats.com", "petzone.com", "pets.sa"].map((domain) => ({ domain, name: domain }));
-    const r = await collectSocial("a1", prospect, site(), candidates, new Budget(apify.runner), NOW_MS);
-    expect(r.competitors?.map((c) => c.domain)).toEqual(["pethouse.com", "petzone.com", "pets.sa"]);
-    expect(r.competitors?.[0]?.name).toBe("Pet House");
+    const candidates = ["expat.com", "pethouse.com", "shoes.com", "pets.sa", "unread.sa"].map((domain) => ({ domain, name: domain }));
+    const r = await collectSocial("a1", prospect, site(), candidates, new Budget(apify.runner), NOW_MS, ["صالون تجميل", "beauty salon"]);
+    // expat.com is not a business, shoes.com is off-topic; .sa domains first; an unread page stays a candidate.
+    expect(r.competitors?.map((c) => c.domain)).toEqual(["pets.sa", "unread.sa", "pethouse.com"]);
+    expect(r.competitors?.find((c) => c.domain === "pethouse.com")).toMatchObject({ name: "Pet House", relevant: true, business: true });
   });
 
   it("attributes Meta ads only to the business's own page", () => {

@@ -62,7 +62,7 @@ function services(headings: readonly string[]): string[] {
 }
 
 /**
- * The brand search first (quoted, so Google treats it as a name), then up to six category searches in
+ * Two brand searches first (quoted, and with the city), then up to six category searches in
  * Arabic and English: from the CRM category, else from the keywords Semrush says the site ranks for,
  * else from the site's own service headings.
  */
@@ -83,7 +83,12 @@ export function deriveQueries(prospect: AuditProspect, site?: WebsiteData, keywo
   const clean = (q: string) => q.replace(/\s+/g, " ").trim();
   const brand = clean(prospect.name);
   const targets = [...new Set(category.map(clean).filter((q) => q.length >= 3 && q.toLowerCase() !== brand.toLowerCase()))].slice(0, 6);
-  return [{ query: `"${brand}"`, kind: "brand" }, ...targets.map((query) => ({ query, kind: "category" as const }))];
+  // Two brand searches: Google sometimes reads a quoted name as a phrase to define, the city anchors it locally.
+  return [
+    { query: `"${brand}"`, kind: "brand" },
+    { query: `${brand} ${cityEn}`, kind: "brand" },
+    ...targets.filter((q) => q.toLowerCase() !== `${brand} ${cityEn}`.toLowerCase()).map((query) => ({ query, kind: "category" as const })),
+  ];
 }
 
 export function searchInput(queries: readonly string[]): Record<string, unknown> {
@@ -123,6 +128,12 @@ export function summarizeSearch(
   return { runs };
 }
 
+/** The brand verdict over both brand searches: present if either found the site or its own profiles. */
+export function brandRun(runs: readonly SearchRun[] | undefined): SearchRun | undefined {
+  const brand = (runs ?? []).filter((r) => r.kind === "brand");
+  return brand.find((r) => r.prospectPresent) ?? brand[0];
+}
+
 /** Country-code TLDs other than Saudi Arabia's mark a foreign site; .co/.io/.ai/.me are used as generic TLDs. */
 const GENERIC_CC = new Set(["sa", "co", "io", "ai", "me"]);
 export const foreign = (domain: string) => {
@@ -134,10 +145,10 @@ export const foreign = (domain: string) => {
 const subdomain = (d: string) => d.split(".").length > (/\.(com|net|org|edu|gov)\.[a-z]{2}$/.test(d) ? 3 : 2);
 
 /**
- * Up to five competitor candidates: the Saudi-plausible, non-platform domains seen most across the category
+ * Up to six competitor candidates: the Saudi-plausible, non-platform domains seen most across the category
  * searches (.sa domains first among equals). The social step checks their home pages and keeps three.
  */
-export function pickCompetitors(prospect: AuditProspect, search: SearchData | undefined, semrush: string[] = [], limit = 5): string[] {
+export function pickCompetitors(prospect: AuditProspect, search: SearchData | undefined, semrush: string[] = [], limit = 6): string[] {
   const host = siteHost(prospect.website);
   const counts = new Map<string, number>();
   for (const run of search?.runs ?? []) {
@@ -162,7 +173,7 @@ export async function collectSearch(
   const queries = deriveQueries(prospect, site, keywords);
   const { items, costUsd } = await budget.run(auditId, "serp", searchInput(queries.map((q) => q.query)));
   const data = summarizeSearch(prospect, queries, items, site);
-  const brand = data.runs[0]?.prospectPresent ? "brand owned" : "brand not found";
+  const brand = data.runs.some((r) => r.kind === "brand" && r.prospectPresent) ? "brand owned" : "brand not found";
   const category = data.runs.filter((r) => r.kind === "category");
   return { status: "done", data, costUsd, note: `${brand}; present in ${category.filter((r) => r.prospectPresent).length} of ${category.length} category searches` };
 }

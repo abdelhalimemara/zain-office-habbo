@@ -1,6 +1,8 @@
 import type { AuditProspect, SocialChannelRow } from "../../../../../shared/audits";
 import { CostCapReached, type Budget } from "../budget";
 import type { Competitor, SocialChannel, SocialData, StepResult, WebsiteData } from "../types";
+import { siteHost } from "../url";
+import { isRelevant, screenCandidates, type Candidate } from "./peers";
 import { PAGE_FUNCTION, summarizeHome } from "./website";
 
 const DAY = 86_400_000;
@@ -112,8 +114,6 @@ export function facebookRow(page: readonly Item[], posts: readonly Item[], now: 
   };
 }
 
-export const MAX_COMPETITORS = 3;
-
 const ROW_ORDER: SocialChannel[] = ["instagram", "tiktok", "facebook", "x", "linkedin", "youtube", "snapchat"];
 
 /** Competitors' home pages, one page each, for their name and Instagram handle. */
@@ -134,7 +134,8 @@ export function competitorHomesInput(domains: readonly string[]): Item {
 }
 
 export interface SocialOutcome extends StepResult<SocialData> {
-  competitors?: Competitor[];
+  /** The candidates that passed the home-page check, best first; the ads step makes the final cut. */
+  competitors?: Candidate[];
 }
 
 /**
@@ -149,6 +150,7 @@ export async function collectSocial(
   competitors: readonly Competitor[],
   budget: Budget,
   now = Date.now(),
+  terms: readonly string[] = [],
 ): Promise<SocialOutcome> {
   const handles = socialHandles(prospect, site);
   let costUsd = 0;
@@ -165,14 +167,15 @@ export async function collectSocial(
       return null;
     }
   };
-  // Candidates whose home page reads as a business come first (.sa domains count as one); three are kept.
-  const candidates = competitors.map((c) => ({ ...c }));
-  const homes = candidates.length ? await spend("competitorHomes", competitorHomesInput(candidates.map((c) => c.domain))) : [];
-  const checked = candidates.map((c, i) => {
-    const home = summarizeHome((homes ?? []).find((h) => String(h.url ?? "").includes(c.domain)));
-    return { c: { ...c, ...(home.name ? { name: home.name } : {}), instagram: c.instagram ?? home.instagram }, rank: (home.business || /\.sa$/.test(c.domain) ? 0 : 10) + i };
+  // Home pages decide who stays a candidate: about the category, a business, Saudi/Arabic first (peers.ts).
+  const homes = competitors.length ? await spend("competitorHomes", competitorHomesInput(competitors.map((c) => c.domain))) : [];
+  const read: Candidate[] = competitors.map((c) => {
+    const item = (homes ?? []).find((h) => siteHost(String(h.url ?? "")) === c.domain);
+    if (!item) return { ...c };
+    const home = summarizeHome(item);
+    return { ...c, ...(home.name ? { name: home.name } : {}), instagram: c.instagram ?? home.instagram, relevant: isRelevant(home.text, terms), business: home.business, arabic: home.arabic };
   });
-  const named = homes ? checked.sort((a, b) => a.rank - b.rank).map((x) => x.c).slice(0, MAX_COMPETITORS) : candidates.slice(0, MAX_COMPETITORS);
+  const named = homes ? screenCandidates(read) : read;
   const igHandles = [handles.instagram, ...named.map((c) => c.instagram)].filter((h): h is string => !!h);
   const ig = igHandles.length ? await spend("instagram", { usernames: igHandles, includeAboutSection: false }) : null;
   const igFor = (h: string | undefined) => (h && ig ? ig.find((i) => String(i.username ?? "").toLowerCase() === h.toLowerCase()) : undefined);
