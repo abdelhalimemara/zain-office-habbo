@@ -1,10 +1,13 @@
+import { Fragment } from "react";
 import { findBoardMember } from "@shared/board";
 import { getDivision } from "@shared/divisions";
 import { agentActivity } from "@shared/flow";
+import { displayName } from "@shared/roster";
 import { SKILL_SOURCES, skillSourceFor } from "@shared/skillSources";
 import { useBoard } from "../api/hooks";
 import { useUiStore } from "../state/store";
-import { ACTIVITY_LABEL, ActivityBadge, RANK_LABEL, useRosterAgents } from "./common";
+import { ChannelLabel } from "./ChannelIcon";
+import { ACTIVITY_LABEL, ActivityBadge, agentLabel, RANK_LABEL, useRosterAgents } from "./common";
 import { Portrait } from "./Portrait";
 import { Panel } from "./Panel";
 
@@ -37,20 +40,22 @@ export function AgentCard({ profile }: { profile: string }) {
   const boss = agent.reportsTo ? agents.find((a) => a.profile === agent.reportsTo) : undefined;
   const current = board.data ? agentActivity(profile, board.data) : null;
   const vacant = loaded && !agent.hired;
+  const channels = agent.clientChannels ?? [];
   const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
 
   return (
-    <Panel title={agent.title} accent={d.color} onClose={closePanel}>
+    <Panel title={displayName(agent)} accent={d.color} onClose={closePanel}>
       <div className="zui-profile zui-profile--hero">
-        <Portrait agent={agent} name={member?.name ?? agent.title} color={d.color} size="lg" vacant={vacant} />
+        <Portrait agent={agent} name={member?.name ?? agentLabel(agent)} color={d.color} size="lg" vacant={vacant} />
         <div className="zui-profile__text">
-          <strong>{member?.name ?? agent.title}</strong>
+          <strong>{member?.name ?? agentLabel(agent)}</strong>
           <span className="zui-hint">
-            {RANK_LABEL[agent.rank]} · {d.name}
+            {agent.name ? agent.title : RANK_LABEL[agent.rank]} · {d.name}
           </span>
         </div>
         {loaded && <span className={`zui-status-dot zui-status-dot--${vacant ? "vacant" : (current?.activity ?? "idle")}`} title={vacant ? "Vacant" : current ? ACTIVITY_LABEL[current.activity] : "Hired"} />}
       </div>
+      {channels.length > 0 && <p className="zui-client-note">Handles all client communication. Commitments need HQ approval.</p>}
       <dl className="zui-facts">
         <dt>Profile</dt>
         <dd className="zui-mono">{agent.profile}</dd>
@@ -68,7 +73,20 @@ export function AgentCard({ profile }: { profile: string }) {
         ) : (
           <>
             <dt>Reports to</dt>
-            <dd>{agent.reportsTo ? (boss?.title ?? agent.reportsTo) : "The user (Telegram)"}</dd>
+            <dd>{agent.reportsTo ? (boss ? agentLabel(boss) : agent.reportsTo) : "The user (Telegram)"}</dd>
+          </>
+        )}
+        {channels.length > 0 && (
+          <>
+            <dt>Client channels</dt>
+            <dd className="zui-channels">
+              {channels.map((c, i) => (
+                <Fragment key={c}>
+                  {i > 0 && <span aria-hidden="true">·</span>}
+                  <ChannelLabel channel={c} />
+                </Fragment>
+              ))}
+            </dd>
           </>
         )}
         <dt>Status</dt>

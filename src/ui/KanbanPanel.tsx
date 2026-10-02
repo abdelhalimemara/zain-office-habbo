@@ -5,7 +5,7 @@ import { agentActivity, tasksForTenant } from "@shared/flow";
 import type { KanbanTask } from "@shared/hermes";
 import { useBoard } from "../api/hooks";
 import { useUiStore } from "../state/store";
-import { ActivityBadge, divisionManager, ErrorNote, useRosterAgents } from "./common";
+import { ActivityBadge, agentLabel, divisionManager, ErrorNote, useRosterAgents } from "./common";
 import { DONE_PREVIEW, LANES, defaultLane, groupByLane, type Lane, type LaneId } from "./lanes";
 import { Panel } from "./Panel";
 import { Portrait } from "./Portrait";
@@ -101,9 +101,9 @@ export function KanbanPanel({ division }: { division: DivisionId }) {
     <Panel title={`${d.name} · Kanban`} accent={d.color} onClose={closePanel} wide>
       <section className="zui-manager">
         <div className="zui-profile">
-          <Portrait agent={manager} name={manager.title} color={d.color} size="md" vacant={loaded && !hiredManager} />
+          <Portrait agent={manager} name={agentLabel(manager)} color={d.color} size="md" vacant={loaded && !hiredManager} />
           <div className="zui-profile__text">
-            <strong>{manager.title}</strong>
+            <strong>{agentLabel(manager)}</strong>
             <span className="zui-mono">{manager.profile}</span>
           </div>
           {managerActivity && <ActivityBadge activity={managerActivity} />}

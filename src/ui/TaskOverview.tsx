@@ -1,9 +1,9 @@
 import type { RosterEntry, Subtask } from "@shared/api";
 import type { Division } from "@shared/divisions";
-import { isMandate } from "@shared/flow";
+import { isClientReply, isMandate } from "@shared/flow";
 import type { KanbanTask } from "@shared/hermes";
 import { useUiStore } from "../state/store";
-import { AgentChip } from "./common";
+import { AgentChip, agentLabel } from "./common";
 import { LaneChip, ProgressBar } from "./LaneChip";
 import { Portrait } from "./Portrait";
 
@@ -18,7 +18,7 @@ export function TaskOverviewHeader({ task, division, agents, progress }: HeaderP
   return (
     <section className="zui-overview" aria-label="Overview">
       <div className="zui-overview__row">
-        <LaneChip status={task.status} mandate={isMandate(task, agents)} />
+        <LaneChip status={task.status} hqDecision={isMandate(task, agents) || isClientReply(task, agents)} />
         {division && (
           <span className="zui-overview__division">
             <span className="zui-dot-mark" style={{ background: division.color }} aria-hidden="true" />
@@ -50,7 +50,7 @@ export function SubtaskList({ subtasks, agents }: { subtasks: readonly Subtask[]
     <ul className="zui-subtasks" aria-label="Subtasks">
       {subtasks.map((s) => {
         const agent = agents.find((a) => a.profile === s.assignee);
-        const name = agent?.title ?? s.assignee ?? "Unassigned";
+        const name = agent ? agentLabel(agent) : (s.assignee ?? "Unassigned");
         return (
           <li key={s.id} className="zui-subtask">
             <Portrait agent={agent} name={name} size="md" vacant={agent ? !agent.hired : false} />
@@ -60,7 +60,7 @@ export function SubtaskList({ subtasks, agents }: { subtasks: readonly Subtask[]
               </button>
               <span className="zui-subtask__who">{name}</span>
             </span>
-            <LaneChip status={s.status} mandate={false} />
+            <LaneChip status={s.status} hqDecision={false} />
           </li>
         );
       })}

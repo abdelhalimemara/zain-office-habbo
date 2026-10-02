@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { HealthResponse } from "@shared/api";
 import { getDivision } from "@shared/divisions";
-import { pendingApprovals } from "@shared/flow";
+import { hqDecisionCount } from "@shared/flow";
 import { useBoard, useHealth } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { useRosterAgents } from "./common";
@@ -75,7 +75,7 @@ export function Hud() {
   const board = useBoard();
   const health = useHealth();
   const { agents } = useRosterAgents();
-  const approvals = board.data ? pendingApprovals(board.data, agents).length : 0;
+  const approvals = board.data ? hqDecisionCount(board.data, agents) : 0;
   const division = view.kind === "floor" ? view.division : undefined;
   const d = division ? getDivision(division) : undefined;
   const hermes = health.data?.hermes;

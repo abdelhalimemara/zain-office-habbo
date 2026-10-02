@@ -2,6 +2,7 @@ import type { RosterEntry } from "@shared/api";
 import { splitMandateBody } from "@shared/flow";
 import type { KanbanTask } from "@shared/hermes";
 import { useUiStore } from "../state/store";
+import { agentLabel } from "./common";
 import { LaneChip, ProgressBar } from "./LaneChip";
 import { absoluteTime, mandateDivision, mandateMoment, relativeTime } from "./mandates";
 import { Portrait } from "./Portrait";
@@ -16,7 +17,7 @@ export function MandateCard({ task, agents, now }: Props) {
   const openMandate = useUiStore((s) => s.openMandate);
   const division = mandateDivision(task, agents);
   const vp = agents.find((a) => a.profile === task.assignee);
-  const vpTitle = vp?.title ?? task.assignee ?? "Unassigned";
+  const vpTitle = vp ? agentLabel(vp) : (task.assignee ?? "Unassigned");
   const brief = task.body ? splitMandateBody(task.body).brief : "";
   const progress = task.dependencyProgress;
   const moment = mandateMoment(task);
@@ -30,7 +31,7 @@ export function MandateCard({ task, agents, now }: Props) {
         disabled={!division}
       >
         <span className="zui-mandate__top">
-          <LaneChip status={task.status} mandate />
+          <LaneChip status={task.status} hqDecision />
           <span className="zui-mandate__time" title={`${moment.verb} ${absoluteTime(moment.at)}`}>
             {relativeTime(moment.at, now)}
           </span>

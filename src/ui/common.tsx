@@ -13,10 +13,16 @@ export function useRosterAgents(): { agents: RosterEntry[]; loaded: boolean } {
   return { agents: ROSTER.map((a) => ({ ...a, hired: false, model: null })), loaded: false };
 }
 
+/** How an agent is named in the UI: their personal name when they have one, else their seat. */
+export function agentLabel(agent: Pick<RosterAgent, "name" | "title">): string {
+  return agent.name ?? agent.title;
+}
+
 /** The VP's title when `task` is a mandate, else undefined. */
 export function mandateVpTitle(task: KanbanTask, agents: readonly RosterEntry[]): string | undefined {
   if (!isMandate(task, agents)) return undefined;
-  return agents.find((a) => a.profile === task.assignee)?.title ?? task.assignee ?? undefined;
+  const vp = agents.find((a) => a.profile === task.assignee);
+  return (vp ? agentLabel(vp) : task.assignee) ?? undefined;
 }
 
 export function divisionManager(division: DivisionId, agents: readonly RosterAgent[]): RosterAgent {
@@ -63,7 +69,7 @@ export function AgentChip({ profile, agents, size = "sm" }: AgentChipProps) {
   const { loaded } = useRosterAgents();
   if (!profile) return <span className="zui-person zui-person--muted">Unassigned</span>;
   const agent = agents.find((a) => a.profile === profile);
-  const name = agent?.title ?? profile;
+  const name = agent ? agentLabel(agent) : profile;
   return (
     <span className={`zui-person zui-person--${size}`} title={name === profile ? profile : `${name} (${profile})`}>
       <Portrait

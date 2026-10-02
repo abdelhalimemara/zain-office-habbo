@@ -1,5 +1,6 @@
 import type { RosterEntry, TaskHistoryEntry, TaskHistoryKind } from "@shared/api";
 import { useUiStore } from "../state/store";
+import { agentLabel } from "./common";
 import { absoluteTime, relativeTime } from "./mandates";
 import { Portrait } from "./Portrait";
 
@@ -34,7 +35,7 @@ export function HistoryTimeline({ entries, agents, now = Date.now() / 1000 }: Pr
       {sorted.map((e) => {
         const kind = HISTORY_KINDS[e.kind] ?? HISTORY_KINDS.status;
         const agent = e.actor ? agents.find((a) => a.profile === e.actor) : undefined;
-        const actorName = agent?.title ?? (e.actor === UI_AUTHOR ? "HQ (you)" : e.actor);
+        const actorName = agent ? agentLabel(agent) : e.actor === UI_AUTHOR ? "HQ (you)" : e.actor;
         return (
           <li key={e.id} className={`zui-history__item zui-history__item--${e.kind}`}>
             <span className="zui-history__icon" aria-hidden="true">
