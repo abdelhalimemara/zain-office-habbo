@@ -18,6 +18,7 @@ import {
   type CameraState,
   type Insets,
 } from "./camera";
+import { clearAvatarCache, setAvatarRenderer } from "./avatars";
 import { diffAgents } from "./diff";
 import { PAL, cssColor } from "./palette";
 import { CityScene } from "./scenes/CityScene";
@@ -108,6 +109,7 @@ export class World {
       this.app.destroy({ removeView: true }, { children: true });
       return;
     }
+    setAvatarRenderer(this.app.renderer);
     const canvas = this.app.canvas;
     Object.assign(canvas.style, { display: "block", position: "absolute", left: "0", top: "0" });
     this.host.appendChild(canvas);
@@ -177,6 +179,8 @@ export class World {
       this.app.ticker?.remove(this.onTick);
       this.scene?.destroy();
       this.scene = null;
+      clearAvatarCache();
+      setAvatarRenderer(null);
       try {
         this.app.destroy({ removeView: true }, { children: true });
       } catch {

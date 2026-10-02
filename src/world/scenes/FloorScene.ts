@@ -1,13 +1,16 @@
-import { Assets, ColorMatrixFilter, Container, Graphics, Sprite, type Texture } from "pixi.js";
+import { ColorMatrixFilter, Container, Graphics } from "pixi.js";
 import type { DivisionId } from "../../../shared/divisions";
-import { SPRITE_URLS } from "../assets/floorAssets";
+import { avatarHeight, avatarsReady } from "../avatarSetup";
+import { VoxelAvatar, specFor } from "../avatars";
+import { EmoteDirector } from "../behavior";
 import { spriteFor, type SpriteKey } from "../characters";
 import type { AgentDiff } from "../diff";
 import { drawItem, drawRug } from "../draw/furniture";
 import { STATUS_COLORS, buildPill, clearChildren, fontsReady, type PillItem } from "../draw/pills";
 import { drawBackWalls, drawFloorBase, drawWall } from "../draw/surfaces";
-import { PERSON_H, fitBounds, personBox, planBounds, rankStatics } from "../plan/boxes";
-import { Z_UNIT, dynamicDepth, toScreen, type Ranked, type Rect } from "../iso";
+import { PERSON_H, fitBounds, planBounds, rankStatics } from "../plan/boxes";
+import { hashString as hashSeed } from "../hash";
+import { dynamicDepth, toScreen, type Ranked, type Rect } from "../iso";
 import { PAGE_BACKGROUND, PAL } from "../palette";
 import { PersonBrain, restingSpot } from "../people";
 import { floorPlan, type FloorPlan } from "../plan";
@@ -26,27 +29,17 @@ const ACTIVITY: Record<WorldAgent["activity"], { label: string; color: number }>
 
 const VACANT_ALPHA = 0.5;
 const PILL_GAP = 4;
-function loadTexture(url: string, mipmaps: boolean): Promise<Texture> {
-  return Assets.load<Texture>({
-    src: url,
-    data: { alphaMode: "premultiply-alpha-on-upload", scaleMode: "linear", autoGenerateMipmaps: mipmaps },
-  }).then((t) => {
-    t.source.scaleMode = "linear";
-    if (mipmaps) {
-      t.source.autoGenerateMipmaps = true;
-      t.source.updateMipmaps();
-    }
-    return t;
-  });
-}
-
 interface Person {
   agent: WorldAgent;
   brain: PersonBrain;
   body: Container;
   ring: Graphics;
-  sprite: Sprite | null;
+  avatar: VoxelAvatar | null;
   spriteKey: SpriteKey | null;
+  director: EmoteDirector;
+  /** Time since the avatar's frames were last advanced (updates are capped). */
+  pendingMs: number;
+  seated: boolean;
   status: Container;
   name: Container;
   statusH: number;
@@ -58,6 +51,8 @@ interface Person {
 }
 
 const CACHE_RES = 2;
+/** Avatar frame updates at most every this many ms (30 fps); positions still move every frame. */
+const AVATAR_STEP_MS = 33;
 
 export class FloorScene implements Scene {
   readonly root = new Container();
@@ -69,13 +64,13 @@ export class FloorScene implements Scene {
   private readonly plates = new Container();
   private statics: Ranked[] = [];
   private readonly persons = new Map<string, Person>();
+  private readonly claims = new Set<string>();
   private readonly vacantFilter = new ColorMatrixFilter();
   private viewport: SceneViewport | null = null;
   private hovered: string | null = null;
   private selected: string | null = null;
   private reducedMotion: boolean;
   private destroyed = false;
-  private now = 0;
 
   constructor(
     readonly division: DivisionId,
@@ -194,11 +189,14 @@ export class FloorScene implements Scene {
     this.objects.addChild(body);
     const person: Person = {
       agent,
-      brain: new PersonBrain(this.floor, agent, this.reducedMotion),
+      brain: new PersonBrain(this.floor, agent, this.reducedMotion, this.claims),
       body,
       ring,
-      sprite: null,
+      avatar: null,
       spriteKey: null,
+      director: new EmoteDirector(hashSeed(agent.profile)),
+      pendingMs: 0,
+      seated: false,
       status,
       name,
       statusH: 0,
@@ -209,7 +207,7 @@ export class FloorScene implements Scene {
       widthImg: PERSON_H * 0.36,
     };
     this.persons.set(agent.profile, person);
-    this.applySprite(person);
+    this.applyAvatar(person);
     this.refreshPills(person);
     this.drawRing(person);
   }
@@ -217,36 +215,39 @@ export class FloorScene implements Scene {
   private updatePerson(person: Person, agent: WorldAgent): void {
     person.agent = agent;
     person.brain.setAgent(agent);
-    this.applySprite(person);
+    this.applyAvatar(person);
     this.refreshPills(person);
   }
 
-  private applySprite(person: Person): void {
+  private applyAvatar(person: Person): void {
     const key = spriteFor(person.agent.profile, person.agent.rank);
     if (key !== person.spriteKey) {
       person.spriteKey = key;
-      void loadTexture(SPRITE_URLS[key], true).then((texture) => {
+      void avatarsReady().then(() => {
         if (this.destroyed || person.spriteKey !== key || !this.persons.has(person.agent.profile)) return;
-        person.sprite?.destroy();
-        const sprite = new Sprite(texture);
-        sprite.anchor.set(0.5, 1);
-        const k = PERSON_H / texture.height;
-        sprite.scale.set(k);
-        person.widthImg = texture.width * k;
-        person.sprite = sprite;
-        person.body.addChild(sprite);
-        this.styleSprite(person);
+        person.avatar?.destroy();
+        const pose = person.brain.pose();
+        const avatar = new VoxelAvatar(specFor(key), {
+          height: avatarHeight(key, PERSON_H),
+          facing: pose.facing,
+          pose: pose.pose,
+          reducedMotion: this.reducedMotion,
+        });
+        person.avatar = avatar;
+        person.widthImg = PERSON_H * 0.34;
+        person.body.addChild(avatar);
+        this.styleAvatar(person);
       });
     }
-    this.styleSprite(person);
+    this.styleAvatar(person);
   }
 
-  private styleSprite(person: Person): void {
-    const s = person.sprite;
-    if (!s) return;
+  private styleAvatar(person: Person): void {
+    const a = person.avatar;
+    if (!a) return;
     const vacant = !person.agent.hired;
-    s.alpha = vacant ? VACANT_ALPHA : 1;
-    s.filters = vacant ? [this.vacantFilter] : [];
+    a.alpha = vacant ? VACANT_ALPHA : 1;
+    a.filters = vacant ? [this.vacantFilter] : [];
   }
 
   private drawRing(person: Person): void {
@@ -291,6 +292,7 @@ export class FloorScene implements Scene {
   private drop(profile: string): void {
     const p = this.persons.get(profile);
     if (!p) return;
+    p.brain.release();
     p.body.destroy({ children: true });
     p.status.destroy({ children: true });
     p.name.destroy({ children: true });
@@ -299,13 +301,13 @@ export class FloorScene implements Scene {
   }
 
   hitTest(x: number, y: number): Hit | null {
-    let best: { profile: string; y: number } | null = null;
-    const h = PERSON_H;
+    let best: { profile: string; z: number } | null = null;
     for (const p of this.persons.values()) {
-      const pose = p.brain.pose(this.now);
-      const half = Math.max(p.widthImg / 2, h * 0.16);
-      if (x >= pose.x - half && x <= pose.x + half && y >= pose.y - h && y <= pose.y + h * 0.08 && (!best || pose.y > best.y)) {
-        best = { profile: p.agent.profile, y: pose.y };
+      const half = Math.max(p.widthImg / 2, PERSON_H * 0.16);
+      const top = p.head.y - 2;
+      const bottom = p.body.y + PERSON_H * 0.06;
+      if (x >= p.body.x - half && x <= p.body.x + half && y >= top && y <= bottom && (!best || p.body.zIndex > best.z)) {
+        best = { profile: p.agent.profile, z: p.body.zIndex };
       }
     }
     return best ? { kind: "agent", profile: best.profile } : null;
@@ -338,22 +340,43 @@ export class FloorScene implements Scene {
 
   setReducedMotion(reduced: boolean): void {
     this.reducedMotion = reduced;
-    for (const p of this.persons.values()) p.brain.setReducedMotion(reduced);
+    for (const p of this.persons.values()) {
+      p.brain.setReducedMotion(reduced);
+      p.avatar?.setReducedMotion(reduced);
+    }
   }
 
-  update(dtMs: number, nowMs: number): void {
-    this.now = nowMs;
+  update(dtMs: number, _nowMs: number): void {
     for (const p of this.persons.values()) {
       p.brain.tick(dtMs);
-      const pose = p.brain.pose(nowMs);
-      p.body.position.set(pose.x, pose.y);
-      p.body.zIndex = dynamicDepth(this.statics, personBox(pose.tx, pose.ty));
-      const bob = -pose.bob * Z_UNIT;
-      if (p.sprite) {
-        p.sprite.y = bob;
-        p.sprite.scale.x = Math.abs(p.sprite.scale.x) * (pose.mirror ? -1 : 1);
+      const pose = p.brain.pose();
+      const a = p.avatar;
+      const off = pose.seated && a ? a.seatOffset : { x: 0, y: 0 };
+      p.body.position.set(pose.x - off.x, pose.y - off.y);
+      p.body.zIndex = dynamicDepth(this.statics, pose.sort);
+      p.seated = pose.seated;
+      const headY = a ? a.headTop.y : -PERSON_H;
+      p.head = { x: p.body.x, y: p.body.y + (pose.seated ? headY * 0.8 : headY) };
+      if (!a) continue;
+      a.setFacing(pose.facing);
+      a.setPose(pose.pose);
+      const emote = p.director.next(
+        {
+          activity: p.agent.activity,
+          hired: p.agent.hired,
+          selected: this.selected === p.agent.profile,
+          walking: pose.mode === "walking",
+          restingMs: p.brain.restingMs,
+          current: a.emote,
+        },
+        dtMs,
+      );
+      if (emote !== null) a.setEmote(emote);
+      p.pendingMs += dtMs;
+      if (p.pendingMs >= AVATAR_STEP_MS) {
+        a.update(p.pendingMs);
+        p.pendingMs = 0;
       }
-      p.head = { x: pose.x, y: pose.y + bob - PERSON_H };
     }
     this.placeOverlays();
   }
