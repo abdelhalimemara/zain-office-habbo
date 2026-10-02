@@ -20,7 +20,17 @@ export interface SkillSource {
   skills: readonly string[];
   /** `persona`: each file is an agent persona (frontmatter + body) installed as a role playbook. */
   format?: "skill" | "persona";
+  /**
+   * Repo directory of a multi-file skill. When set, its `references/`, `templates/` and `assets/` files
+   * are installed next to SKILL.md.
+   */
+  skillDir?: (skill: string) => string;
+  /** Lines added under the attribution of every installed skill from this source. */
+  notes?: readonly string[];
 }
+
+/** Zain's product-marketing context, drafted by the VPs; the marketing skills look for it before any task. */
+export const PRODUCT_MARKETING_CONTEXT = "~/ZainGroup/product-marketing.md";
 
 export const SKILL_SOURCES: readonly SkillSource[] = [
   {
@@ -61,6 +71,32 @@ export const SKILL_SOURCES: readonly SkillSource[] = [
     license: "MIT",
     skills: AGENCY_SKILLS,
     format: "persona",
+  },
+  {
+    // Not "marketing": that id is the headcount marketing department (`marketing:brand-voice`).
+    id: "mk",
+    repo: "coreyhaines31/marketingskills",
+    ref: "0baf720ab0c3793aa46beb4b7a7d331d51bf7a00",
+    skillPath: (skill) => `skills/${skill}/SKILL.md`,
+    skillDir: (skill) => `skills/${skill}`,
+    hermesPrefix: "mk",
+    category: "zain-marketing",
+    license: "MIT",
+    skills: [
+      "ab-testing", "ad-creative", "ads", "ai-seo", "analytics", "aso", "attribution", "churn-prevention",
+      "co-marketing", "cold-email", "community-marketing", "competitor-profiling", "competitors",
+      "content-strategy", "copy-editing", "copywriting", "cro", "customer-research", "directory-submissions",
+      "emails", "events", "free-tools", "image", "influencer-marketing", "launch", "lead-magnets",
+      "marketing-council", "marketing-ideas", "marketing-loops", "marketing-plan", "marketing-psychology",
+      "offers", "onboarding", "paywalls", "popups", "pricing", "product-marketing", "programmatic-seo",
+      "prospecting", "public-relations", "referrals", "revops", "sales-enablement", "schema", "seo-audit",
+      "signup", "site-architecture", "sms", "social", "video",
+    ],
+    notes: [
+      `Zain's product marketing context is at \`${PRODUCT_MARKETING_CONTEXT}\`: read it wherever this skill says \`.agents/product-marketing.md\`.`,
+      "Other skills this one names are installed with the `mk-` prefix (`copywriting` is `mk-copywriting`).",
+      "Files cited as `references/...` are in this skill's own folder.",
+    ],
   },
 ];
 

@@ -74,7 +74,8 @@ export function fitDescription(text: string): string {
 function attribution(id: string): string {
   const source = skillSourceFor(id);
   if (!source) return `> Headcount skill \`${id}\` (github.com/cbrock84/headcount).`;
-  return `> Skill \`${id}\` from github.com/${source.repo} at ${source.ref.slice(0, 12)} (${source.license}).`;
+  const line = `> Skill \`${id}\` from github.com/${source.repo} at ${source.ref.slice(0, 12)} (${source.license}).`;
+  return [line, ...(source.notes ?? []).map((n) => `> ${n}`)].join("\n>\n");
 }
 
 /** Frames an agency persona as a role playbook that the agent's Zain charter overrides. */

@@ -1,5 +1,6 @@
 import type { RosterEntry } from "@shared/api";
 import { isClientReply, isMandate } from "@shared/flow";
+import { findUnit } from "@shared/units";
 import type { KanbanTask } from "@shared/hermes";
 import { ChannelIcon } from "./ChannelIcon";
 import { parseClientReply } from "./clientReply";
@@ -26,12 +27,14 @@ function ClientReplyBadge({ task }: { task: KanbanTask }) {
 
 export function TaskCard({ task, agents, now, statusTag, onOpen }: Props) {
   const warnings = task.warnings?.count ?? 0;
+  const unit = findUnit(agents.find((a) => a.profile === task.assignee)?.unit);
   return (
     <li>
       <button type="button" className="zui-card" onClick={() => onOpen(task.id)}>
         <span className="zui-card__title">{task.title}</span>
         <span className="zui-card__meta">
           <AgentChip profile={task.assignee} agents={agents} />
+          {unit && <span className="zui-tag zui-tag--unit" title="Unit">{unit.name}</span>}
           {isMandate(task, agents) && <span className="zui-badge zui-badge--mandate">Mandate</span>}
           {isClientReply(task, agents) && <ClientReplyBadge task={task} />}
           {statusTag && <span className="zui-tag" title="Hermes status">{statusTag}</span>}

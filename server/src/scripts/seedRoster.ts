@@ -9,7 +9,7 @@ import { hermesSkillName } from "../headcount/skillFile";
 
 async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
-  const { hermes, headcount } = defaultClients(process.env);
+  const { hermes, headcount, skillFiles: files } = defaultClients(process.env);
   const hires = fileHireStore(process.cwd());
   const briefs = fileBriefs(process.cwd());
   const teams = fileTeamStore(process.cwd());
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
 
   let failed = 0;
   for (const agent of pending) {
-    const result = await hire(agent, { hermes, headcount, hires, briefs, teams });
+    const result = await hire(agent, { hermes, headcount, hires, briefs, teams, files });
     const failures = result.steps.filter((s) => !s.ok);
     if (failures.length) failed++;
     console.log(`${result.ok ? "hired" : "PARTIAL"} ${agent.profile}`);

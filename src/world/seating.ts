@@ -10,6 +10,8 @@ export interface SeatCandidate {
   title?: string;
   /** Zain Tech role inside a team (shared/techRoster.ts). */
   teamRole?: string;
+  /** Studio / Growth unit id; unit members sit at the seats tagged with it. */
+  unit?: string;
 }
 
 export interface SeatAssignment {
@@ -32,7 +34,8 @@ const ROLE_FOR_RANK: Partial<Record<Rank, SeatRole>> = { ceo: "ceo", vp: "manage
 
 /**
  * Deterministic seating: the CEO, the division manager and board members take their role seats; HQ leads sit in
- * their department; everyone else fills the remaining workstations in roster order.
+ * their department and Studio / Growth specialists in their unit's cluster; everyone else fills the remaining
+ * workstations in roster order.
  */
 export function assignSeats(floor: FloorPlan, agents: readonly SeatCandidate[]): SeatAssignment {
   const seats = new Map<string, PlanSeat>();
@@ -62,7 +65,7 @@ export function assignSeats(floor: FloorPlan, agents: readonly SeatCandidate[]):
   }
   const unplaced: SeatCandidate[] = [];
   for (const a of rest) {
-    const team = HQ_TEAMS[a.profile];
+    const team = a.unit ?? HQ_TEAMS[a.profile];
     if (!team || !take(free((s) => !s.role && s.team === team), a.profile)) unplaced.push(a);
   }
   for (const a of unplaced) {

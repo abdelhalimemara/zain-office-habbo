@@ -1,8 +1,14 @@
+import { findUnit } from "../../../shared/units";
 import { PlanBuilder } from "./builder";
 import type { FloorPlan } from "./types";
 
 const BLUE_RUG = 0x2f4a73;
 const GREY_RUG = 0x8a857d;
+
+/** Floor plate for a Studio / Growth unit's desk cluster. */
+function unitPlate(id: string): string {
+  return (findUnit(id)?.name ?? id).toUpperCase();
+}
 
 /** Zain Studio: glass meeting room and kitchen along the back-left, two long benches, manager office back-right. */
 export function buildStudio(): FloorPlan {
@@ -31,9 +37,11 @@ export function buildStudio(): FloorPlan {
   b.item("plant", 0, 19);
   b.rest(2, 14).rest(3, 17);
 
-  b.deskRow(10, 7, 6, "+y");
+  b.deskRow(10, 7, 3, "+y", { team: "creative" });
+  b.deskRow(13, 7, 3, "+y", { team: "design" });
   for (let x = 10; x <= 15; x++) b.item("chair", x, 9, 1, 1, { facing: "-y" });
-  b.deskRow(7, 11, 6, "+y");
+  b.deskRow(7, 11, 3, "+y", { team: "organic" });
+  b.deskRow(10, 11, 3, "+y");
   for (let x = 7; x <= 12; x++) b.item("chair", x, 13, 1, 1, { facing: "-y" });
 
   b.item("bookcase", 18, 0, 4, 1);
@@ -55,6 +63,7 @@ export function buildStudio(): FloorPlan {
   b.rest(8, 18).rest(15, 17);
 
   b.plate("MEETING ROOM", 4.5, 5.5).plate("KITCHEN", 2, 13).plate("LOUNGE", 2.5, 18.6).plate("MANAGER", 20, 5.6);
+  b.plate(unitPlate("creative"), 11.5, 5.7).plate(unitPlate("design"), 14.5, 5.7).plate(unitPlate("organic"), 8.5, 14.2);
   return b.build();
 }
 
@@ -86,18 +95,18 @@ export function buildGrowth(): FloorPlan {
   b.item("armchair", 23, 3, 1, 1, { facing: "-x" });
   b.item("plant", 23, 0);
 
-  for (const x of [2, 3, 5, 6]) b.seat(x, 5, "+y");
+  for (const x of [2, 3, 5, 6]) b.seat(x, 5, "+y", { team: "performance" });
   for (const x of [2, 3, 5, 6]) b.item("chair", x, 7, 1, 1, { facing: "-y" });
   const big = b.item("meetingTable", 10, 5, 5, 2);
   b.chairsAround(big);
-  for (const x of [18, 19, 21, 22]) b.seat(x, 6, "+y");
+  for (const x of [18, 19, 21, 22]) b.seat(x, 6, "+y", { team: "growth" });
   for (const x of [18, 19, 21, 22]) b.item("chair", x, 8, 1, 1, { facing: "-y" });
 
   b.item("counter", 0, 8, 4, 1, { facing: "+y" });
   for (const x of [1, 2, 3]) b.item("stool", x, 9);
   for (const x of [5, 6, 7]) b.seat(x, 9, "+y");
   for (const x of [5, 6, 7]) b.item("chair", x, 11, 1, 1, { facing: "-y" });
-  for (const x of [18, 19, 21, 22]) b.seat(x, 9, "+y");
+  for (const x of [18, 19, 21, 22]) b.seat(x, 9, "+y", { team: "growth" });
   for (const x of [18, 19, 21, 22]) b.item("chair", x, 11, 1, 1, { facing: "-y" });
   b.rest(2, 10).rest(16, 7).rest(9, 7);
 
@@ -112,6 +121,7 @@ export function buildGrowth(): FloorPlan {
   b.rest(4, 13).rest(2, 13);
 
   b.plate("MEETING ROOM", 4, 3.6).plate("MANAGER", 20.5, 4.6).plate("KITCHEN", 2, 9.8).plate("LOUNGE", 3.5, 13.6);
+  b.plate(unitPlate("performance"), 4, 7.9).plate(unitPlate("growth"), 23.6, 8.5);
   return b.build();
 }
 

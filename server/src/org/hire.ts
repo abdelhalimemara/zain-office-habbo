@@ -7,7 +7,7 @@ import { TEAM_ROLES, type TeamRole } from "../../../shared/techTeams";
 import type { HermesClient } from "../hermes/client";
 import { HermesError } from "../hermes/client";
 import type { HeadcountSource } from "../headcount/catalog";
-import { toHermesSkill } from "../headcount/skillFile";
+import { installSkill, type SkillFileSink } from "../headcount/install";
 import { badRequest, optionalString } from "../http";
 import { fullRoster, type HireStore } from "./hireStore";
 import { profileDescription, soulText } from "./persona";
@@ -23,6 +23,8 @@ export interface HireDeps {
   hires: HireStore;
   briefs: BriefReader;
   teams: TeamStore;
+  /** Writes multi-file skills' references next to SKILL.md; omitted for a remote Hermes. */
+  files?: SkillFileSink;
 }
 
 function stringField(body: Record<string, unknown>, field: string): string {
@@ -130,7 +132,9 @@ export async function parseHireRequest(
   for (const id of agent.skills) {
     if (!(await deps.headcount.hasSkill(id))) throw badRequest(`unknown skill ${id}`);
   }
-  return agent;
+  // A roster position keeps its persona (name, unit, focus, client channels); only the skills are the hirer's.
+  const canonical = ROSTER.find((a) => a.profile === agent.profile);
+  return canonical ? { ...canonical, skills: agent.skills } : agent;
 }
 
 function failure(err: unknown): string {
@@ -151,16 +155,6 @@ async function step(
   } catch (err) {
     steps.push({ step: kind, target, ok: false, error: failure(err) });
     return false;
-  }
-}
-
-async function installSkill(deps: HireDeps, profile: string, id: string): Promise<void> {
-  const skill = toHermesSkill(id, await deps.headcount.skillMarkdown(id));
-  try {
-    await deps.hermes.createSkill({ ...skill, profile });
-  } catch (err) {
-    if (err instanceof HermesError && err.status === 400 && /already exists/i.test(err.detail)) return;
-    throw err;
   }
 }
 
@@ -190,7 +184,9 @@ export async function hire(agent: RosterAgent, deps: HireDeps): Promise<HireResp
   );
   await step(steps, "describe", agent.profile, () => deps.hermes.setDescription(agent.profile, description));
   for (const id of agent.skills) {
-    await step(steps, "install-skill", id, () => installSkill(deps, agent.profile, id));
+    await step(steps, "install-skill", id, async () => {
+      await installSkill(deps, agent.profile, id);
+    });
   }
   for (const manager of managersToBrief(agent, roster).filter((m) => profiles.has(m.profile))) {
     await step(steps, "write-soul", manager.profile, async () =>

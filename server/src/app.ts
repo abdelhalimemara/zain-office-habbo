@@ -21,6 +21,7 @@ import { HttpError, errorResponse, optionalString, readJsonObject, requiredStrin
 import { boardWithProgress } from "./org/board";
 import type { BriefReader } from "./org/privateBriefs";
 import { consultBoard, parseConsult } from "./org/consult";
+import { skillFilesFor, type SkillFileSink } from "./headcount/install";
 import { hire, parseHireRequest } from "./org/hire";
 import { fullRoster, type HireStore } from "./org/hireStore";
 import { mergeRoster } from "./org/rosterView";
@@ -58,6 +59,8 @@ export interface AppDeps {
   teams?: TeamStore;
   /** How POST /api/tech/teams asks `gh` whether a repo exists. */
   gh?: GhCheck;
+  /** Writes multi-file skills' references at hire time; multi-file skills install SKILL.md only when omitted. */
+  skillFiles?: SkillFileSink;
 }
 
 export const DEFAULT_PORT = 8787;
@@ -148,7 +151,7 @@ export function createApp(deps: AppDeps): Hono {
 
   app.post("/api/hire", async (c) => {
     const agent = await parseHireRequest(await readJsonObject(c), { headcount, hires, teams });
-    const result = await hire(agent, { hermes, headcount, hires, briefs: deps.briefs, teams });
+    const result = await hire(agent, { hermes, headcount, hires, briefs: deps.briefs, teams, files: deps.skillFiles });
     return c.json(result);
   });
 
@@ -178,10 +181,11 @@ export function guardOptions(port: number, env: Env): GuardOptions {
   return { port, extraOrigins: parseOriginList(env.ZAIN_ALLOWED_ORIGINS) };
 }
 
-export function defaultClients(env: Env): Pick<AppDeps, "hermes" | "headcount" | "ceoWake"> {
+export function defaultClients(env: Env): Pick<AppDeps, "hermes" | "headcount" | "ceoWake" | "skillFiles"> {
   const hermes = new HermesClient({ baseUrl: env.HERMES_URL, token: env.HERMES_SESSION_TOKEN });
   return {
     hermes,
+    skillFiles: skillFilesFor(hermes.baseUrl),
     headcount: new HeadcountSource({ ref: env.HEADCOUNT_REF }),
     ceoWake: new CeoWake({ hermes, hermesBin: env.HERMES_BIN }),
   };

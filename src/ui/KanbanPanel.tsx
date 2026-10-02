@@ -10,6 +10,7 @@ import { DONE_PREVIEW, LANES, defaultLane, groupByLane, type Lane, type LaneId }
 import { Panel } from "./Panel";
 import { Portrait } from "./Portrait";
 import { TaskCard } from "./TaskCard";
+import { UnitsStrip } from "./UnitsStrip";
 import { useMediaQuery } from "./useMediaQuery";
 
 export const PHONE_QUERY = "(max-width: 699px)";
@@ -93,7 +94,8 @@ export function KanbanPanel({ division }: { division: DivisionId }) {
   const phone = useMediaQuery(PHONE_QUERY);
   const manager = divisionManager(division, agents);
   const hiredManager = agents.find((a) => a.profile === manager.profile)?.hired ?? false;
-  const groups = groupByLane(board.data ? tasksForTenant(board.data, d.tenant) : [], agents);
+  const tasks = board.data ? tasksForTenant(board.data, d.tenant) : [];
+  const groups = groupByLane(tasks, agents);
   const managerActivity = board.data ? agentActivity(manager.profile, board.data).activity : null;
   const now = board.data?.now ?? Date.now() / 1000;
 
@@ -112,6 +114,7 @@ export function KanbanPanel({ division }: { division: DivisionId }) {
           New mandate
         </button>
       </section>
+      <UnitsStrip division={division} agents={agents} tasks={tasks} />
       <ErrorNote error={board.error} />
       {board.isPending && <p className="zui-hint">Loading board…</p>}
       {board.data && LANES.every((l) => groups[l.id].length === 0) ? (

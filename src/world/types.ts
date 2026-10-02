@@ -16,6 +16,8 @@ export interface WorldAgent {
   team?: string;
   /** Role inside a Tech team: "head-engineer", "project-manager" or "specialist". */
   teamRole?: string;
+  /** Studio / Growth unit id (shared/units.ts); unit members share a desk cluster. */
+  unit?: string;
 }
 
 export interface WorldCallbacks {

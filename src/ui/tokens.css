@@ -274,3 +274,4 @@ textarea.zui-input { resize: vertical; line-height: 1.5; }
 .zui-check input { accent-color: var(--ink); width: 15px; height: 15px; }
 
 .zui-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.zui-tag--unit { text-transform: none; }
