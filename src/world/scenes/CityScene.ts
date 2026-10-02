@@ -5,6 +5,7 @@ import { buildBadge, buildCompactMarker, buildNameLabel, buildZainPlate } from "
 import type { Rect } from "../iso";
 import { CITY_BACKGROUND, CITY_HOTSPOTS, HQ_SIGN, cityFitBounds, hotspotAt, type CityHotspot } from "../layouts/cityImage";
 import { divisionColor } from "../palette";
+import { TrafficLayer } from "../traffic/TrafficLayer";
 import type { Hit, WorldStats } from "../types";
 import type { Scene, SceneOptions, SceneViewport } from "./Scene";
 
@@ -30,6 +31,7 @@ export class CityScene implements Scene {
   readonly style = "smooth" as const;
   readonly background = CITY_BACKGROUND;
   private readonly glow = new Graphics();
+  private readonly traffic: TrafficLayer;
   private readonly markers: Marker[] = [];
   private hovered: DivisionId | null = null;
   private viewport: SceneViewport | null = null;
@@ -40,6 +42,7 @@ export class CityScene implements Scene {
 
   constructor(opts: SceneOptions) {
     this.reducedMotion = opts.reducedMotion;
+    this.traffic = new TrafficLayer(opts.reducedMotion);
     const plate = new Container();
     buildZainPlate(plate, HQ_SIGN.w, HQ_SIGN.h);
     plate.position.set(HQ_SIGN.x, HQ_SIGN.y);
@@ -67,6 +70,9 @@ export class CityScene implements Scene {
     texture.source.updateMipmaps();
     const sprite = new Sprite(texture);
     this.root.addChildAt(sprite, 0);
+    this.root.addChildAt(this.traffic.cars, 1);
+    this.root.addChildAt(this.traffic.front, 2);
+    void this.traffic.load(texture);
   }
 
   bounds(area?: Rect): Rect {
@@ -108,9 +114,11 @@ export class CityScene implements Scene {
 
   setReducedMotion(reduced: boolean): void {
     this.reducedMotion = reduced;
+    this.traffic.setReducedMotion(reduced);
   }
 
-  update(_dtMs: number, nowMs: number): void {
+  update(dtMs: number, nowMs: number): void {
+    this.traffic.update(dtMs);
     const hop = this.reducedMotion ? 0 : Math.abs(Math.sin(nowMs / 260)) * 3;
     for (const m of this.markers) if (m.bang) m.bang.pivot.y = Math.round(hop);
   }
@@ -168,6 +176,7 @@ export class CityScene implements Scene {
 
   destroy(): void {
     this.destroyed = true;
+    this.traffic.destroy();
     this.screen.destroy({ children: true });
     this.root.destroy({ children: true });
   }
