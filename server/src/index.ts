@@ -9,6 +9,12 @@ import { fileMemoryStore } from "./board/memory/notes";
 import { MeetingEngine, isStoredMeeting } from "./board/meetings/engine";
 import { fileRecordStore } from "./board/recordStore";
 import { ConnectionsService } from "./connections/service";
+import { ApifyClient, envApifyToken } from "./growth/audit/apify";
+import { TwentyCrm, envCrmKey } from "./growth/audit/crm";
+import { AuditEngine, DEFAULT_PUBLIC_BASE } from "./growth/audit/engine";
+import { NotionAuditSink } from "./growth/audit/notion";
+import { ChromeRenderer } from "./growth/audit/chrome";
+import { isStoredAudit } from "./growth/audit/types";
 import { NotionClient, envToken } from "./notion/client";
 import { NotionBoardSink } from "./notion/sync";
 import { fileHireStore, fullRoster } from "./org/hireStore";
@@ -35,7 +41,8 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 const clients = defaultClients(process.env);
 const hires = fileHireStore(process.cwd());
 const root = process.cwd();
-const sink = new NotionBoardSink(new NotionClient(envToken()), root);
+const notion = new NotionClient(envToken());
+const sink = new NotionBoardSink(notion, root);
 const labs = new ElevenLabsClient(envApiKey());
 const memory = fileMemoryStore(root);
 const voice = new VoiceService({ root, client: labs, store: fileVoiceStore(root), roster: () => fullRoster(hires) });
@@ -77,11 +84,24 @@ const consultations = new ConsultationLog({
   store: fileRecordStore(join(root, ".zain", "consultations.json"), isConsultationRecord),
   sink,
 });
+const tunnel = loadAccessConfig(root);
+const chrome = new ChromeRenderer();
+const audits = new AuditEngine({
+  store: fileRecordStore(join(root, ".zain", "audits.json"), isStoredAudit),
+  apify: new ApifyClient(envApifyToken()),
+  hermes: clients.hermes,
+  crm: new TwentyCrm(envCrmKey()),
+  pdf: chrome,
+  screenshots: chrome,
+  notion: new NotionAuditSink(notion, root),
+  root,
+  publicBase: process.env.ZAIN_PUBLIC_URL ?? (tunnel ? `https://${tunnel.host}` : DEFAULT_PUBLIC_BASE),
+});
 const reconciler = new Reconciler({
   hermes: clients.hermes,
   hires,
   ceoWake: clients.ceoWake,
-  steps: [() => meetings.tick(), () => consultations.tick()],
+  steps: [() => meetings.tick(), () => consultations.tick(), () => audits.tick()],
 });
 const app = createApp({
   ...clients,
@@ -94,6 +114,7 @@ const app = createApp({
   reconcilerStatus: () => reconciler.status(),
   meetings,
   consultations,
+  audits,
   memory,
   voice,
   live,

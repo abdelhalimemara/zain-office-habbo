@@ -11,6 +11,8 @@ import type { MeetingEngine } from "./board/meetings/engine";
 import { meetingRoutes } from "./board/meetings/routes";
 import type { ConnectionsService } from "./connections/service";
 import { localOnly, parseOriginList, type GuardOptions } from "./guard";
+import type { AuditEngine } from "./growth/audit/engine";
+import { auditRoutes } from "./growth/audit/routes";
 import { leadershipRoutes } from "./leadership/routes";
 import type { LeadershipService } from "./leadership/service";
 import { HermesClient } from "./hermes/client";
@@ -59,8 +61,13 @@ export interface AppDeps {
   teams?: TeamStore;
   /** How POST /api/tech/teams asks `gh` whether a repo exists. */
   gh?: GhCheck;
+<<<<<<< HEAD
   /** Writes multi-file skills' references at hire time; multi-file skills install SKILL.md only when omitted. */
   skillFiles?: SkillFileSink;
+=======
+  /** Zain Growth prospect audits; their routes are absent when omitted. */
+  audits?: AuditEngine;
+>>>>>>> feat/audit-server
 }
 
 export const DEFAULT_PORT = 8787;
@@ -142,6 +149,7 @@ export function createApp(deps: AppDeps): Hono {
   meetingRoutes(app, deps.meetings);
   if (deps.leadership) leadershipRoutes(app, deps.leadership);
   if (deps.memory) memoryRoutes(app, deps.memory, hires);
+  if (deps.audits) auditRoutes(app, deps.audits, deps.audits.crm);
   voiceRoutes(app, deps.voice, deps.meetings, deps.live);
 
   app.get("/api/roster", async (c) => {

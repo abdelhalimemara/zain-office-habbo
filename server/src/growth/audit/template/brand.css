@@ -1,0 +1,97 @@
+/*
+ * Zain Growth "Digital Gap Audit" (the founder's template, 16:9 landscape, 960 x 540 pt).
+ * Colours from the template and the Zain brand guide (Growth #33FFA7); type is IBM Plex Sans (Arabic covers Latin too).
+ * The layout reads only these variables.
+ */
+:root {
+  --mint: #21e6a2;
+  --brand: #33ffa7;
+  --green: #059669;
+  --green-dark: #08704d;
+  --green-label: #17a273;
+  --ink: #111827;
+  --body: #4b5563;
+  --muted: #6b7280;
+  --faint: #9ca3af;
+  --line: #e5e7eb;
+  --panel: #f7faf9;
+  --row: #f9fafb;
+  --tint-green: #ecfbf5;
+  --tint-amber: #fff4e5;
+  --tint-blue: #ddf7ff;
+  --tint-red: #fee2e2;
+  --amber: #e9a342;
+  --amber-text: #c27c1a;
+  --blue: #195b80;
+  --purple: #6b5dd3;
+  --red: #e34e4e;
+  --night: #09211a;
+  --font: "IBM Plex Sans Arabic", "IBM Plex Sans", system-ui, sans-serif;
+}
+
+@page { size: 960pt 540pt; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; color: var(--ink); font-family: var(--font); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+.page { width: 1280px; height: 720px; position: relative; overflow: hidden; break-after: page; page-break-after: always; padding: 0 80px; }
+.page:last-child { break-after: auto; page-break-after: auto; }
+.page::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: var(--mint); }
+.logo { position: absolute; top: 34px; left: 75px; height: 48px; }
+.logo img { height: 100%; display: block; }
+.logo.cover-logo { top: 40px; left: 80px; height: 54px; }
+.logo .text-logo { font-weight: 700; font-size: 22px; line-height: 1; color: var(--mint); letter-spacing: -0.01em; }
+.kicker { position: absolute; top: 38px; right: 80px; font-size: 9px; letter-spacing: 0.22em; font-weight: 700; color: var(--green-label); }
+.label { font-size: 9px; letter-spacing: 0.22em; font-weight: 700; color: var(--green-label); text-transform: uppercase; }
+footer { position: absolute; left: 75px; right: 80px; bottom: 26px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; justify-content: space-between; font-size: 8px; letter-spacing: 0.16em; color: var(--faint); }
+footer span:last-child { letter-spacing: 0; font-size: 9px; }
+
+h1.title { position: absolute; top: 112px; left: 75px; margin: 0; font-size: 34px; line-height: 1.1; font-weight: 700; letter-spacing: -0.01em; }
+p.sub { position: absolute; top: 158px; left: 75px; right: 80px; margin: 0; font-size: 12.5px; color: var(--muted); }
+.body { position: absolute; top: 208px; left: 75px; right: 75px; bottom: 74px; }
+
+/* Cards and boxes */
+.box { border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.box.panel { background: var(--panel); }
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.cards.two { grid-template-columns: repeat(2, 1fr); }
+.card { border-radius: 12px; padding: 20px 22px; display: flex; gap: 16px; min-height: 110px; }
+.card.green { background: var(--tint-green); }
+.card.amber { background: var(--tint-amber); }
+.card.blue { background: var(--tint-blue); }
+.card h4 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+.card p { margin: 0; font-size: 9.5px; line-height: 1.45; color: var(--body); }
+.dot { flex: none; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.dot.green { background: var(--green); }
+.dot.amber { background: var(--amber); }
+.dot.blue { background: var(--blue); }
+.dot.purple { background: var(--purple); }
+.bottom { position: absolute; left: 75px; right: 75px; bottom: 82px; height: 54px; border: 1.5px solid var(--mint); border-radius: 12px; background: var(--tint-green); display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 30px; font-size: 11px; font-weight: 700; color: var(--green-dark); }
+.cards-row { position: absolute; left: 75px; right: 75px; bottom: 156px; }
+
+/* Tables */
+.table { padding: 18px 16px 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 10px; }
+th { text-align: start; font-size: 9px; font-weight: 600; color: var(--muted); padding: 6px 10px 12px; }
+td { padding: 7px 10px; color: var(--body); vertical-align: top; }
+td.name { font-weight: 700; color: var(--ink); }
+tr.prospect td { background: var(--tint-green); }
+tbody tr:nth-child(even):not(.prospect) td { background: var(--row); }
+.compact td { padding: 4px 10px; }
+.compact th { padding-bottom: 8px; }
+.areas td { padding: 6px 10px; vertical-align: middle; }
+.source { font-size: 7.5px; color: var(--faint); padding: 12px 10px 0; }
+.dim { color: var(--faint); }
+
+/* Status and severity pills */
+.pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 8px; font-weight: 700; }
+.pill.strong, .pill.low { background: var(--tint-green); color: var(--green); }
+.pill.fair, .pill.high { background: var(--tint-amber); color: var(--amber-text); }
+.pill.weak, .pill.critical { background: var(--tint-red); color: var(--red); }
+.pill.medium { background: var(--tint-blue); color: var(--blue); }
+.pill.not-measured { background: #f3f4f6; color: var(--muted); }
+
+/* Numbered notes */
+.notes { padding: 26px 26px; display: flex; flex-direction: column; gap: 18px; }
+.note { display: flex; gap: 14px; }
+.note h4 { margin: 2px 0 4px; font-size: 12px; font-weight: 700; }
+.note p { margin: 0; font-size: 9px; line-height: 1.45; color: var(--muted); }

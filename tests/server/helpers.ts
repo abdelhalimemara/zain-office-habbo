@@ -4,6 +4,7 @@ import { MeetingEngine, type MeetingSink, type StoredMeeting } from "../../serve
 import { memoryMemoryStore, type MemoryStore } from "../../server/src/board/memory/notes";
 import { memoryRecordStore, type RecordStore } from "../../server/src/board/recordStore";
 import type { GuardOptions } from "../../server/src/guard";
+import type { AuditEngine } from "../../server/src/growth/audit/engine";
 import { fileBriefs, type BriefReader } from "../../server/src/org/privateBriefs";
 import { ConnectionsService, type ConnectionsOptions } from "../../server/src/connections/service";
 import { CeoWake, type ExecFileLike } from "../../server/src/telegram/ceoWake";
@@ -204,6 +205,8 @@ export function setup(
     /** Board members' notes; an empty in-memory store by default. */
     memory?: MemoryStore;
     onTurns?: (meeting: BoardMeeting, from: number) => void;
+    /** Prospect audits over this app's Hermes client. */
+    audits?: (hermes: HermesClient) => AuditEngine;
   } = {},
 ) {
   const hermesFetch = mockFetch({ ...hermesBase, ...routes });
@@ -240,7 +243,8 @@ export function setup(
   const voice = options.voice ?? stubVoice();
   const leadership = options.leadership?.({ meetings, hermes, hires, ceoWake });
   const live = options.live?.(meetings, voice, memory, leadership);
-  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations, memory, voice, live, leadership });
+  const audits = options.audits?.(hermes);
+  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations, memory, voice, live, leadership, audits });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
