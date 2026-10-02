@@ -18,6 +18,16 @@ export interface ReportContext {
   host: string;
 }
 
+/** How the benchmarked competitors were found, for subtitles and source lines. */
+export function peerMethod(ctx: ReportContext): string {
+  const peers = ctx.data.ads ? (ctx.data.competitors ?? []) : [];
+  const semrush = peers.some((c) => c.source === "semrush");
+  const search = peers.some((c) => c.source === "search");
+  if (semrush && search) return "found by keyword overlap (Semrush, est.) and live category searches";
+  if (semrush) return "found by keyword overlap (Semrush, est.)";
+  return "found in live category searches";
+}
+
 export function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }

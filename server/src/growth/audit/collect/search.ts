@@ -142,7 +142,7 @@ export const foreign = (domain: string) => {
 };
 
 /** A site on someone else's subdomain (ar.cats.com, brand.tenereteam.com) is a page, not a competitor's own site. */
-const subdomain = (d: string) => d.split(".").length > (/\.(com|net|org|edu|gov)\.[a-z]{2}$/.test(d) ? 3 : 2);
+export const subdomain = (d: string) => d.split(".").length > (/\.(com|net|org|edu|gov)\.[a-z]{2}$/.test(d) ? 3 : 2);
 
 /**
  * Up to six competitor candidates: the Saudi-plausible, non-platform domains seen most across the category

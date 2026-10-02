@@ -109,7 +109,7 @@ export function draftAnalysis(audit: ProspectAudit, score: AuditScore, data: Col
     return g && g !== "none" && g.active > 0;
   }).length;
   return {
-    coverLine: `An outside-in review of ${host}: what the site and its tags show, what live search and social already say about the brand, and how it compares with ${competitors.length || "its"} Saudi competitors in the same category. Built from public data only.`,
+    coverLine: `An outside-in review of ${host}: what the site and its tags show, what live search and social already say about the brand, and how it compares with ${competitors.length ? `${competitors.length} Saudi competitor${competitors.length > 1 ? "s" : ""} ${competitors.some((c) => c.source === "semrush") ? "competing on the same keywords" : "in the same category"}` : "its category"}. Built from public data only.`,
     goal: `Goal: show where ${name} already wins, and where the category is being taken by others.`,
     headline: top
       ? `${strong.length ? `${list3(strong.slice(0, 2).map((a) => lower(a.area)))[0]!.toUpperCase()}${list3(strong.slice(0, 2).map((a) => lower(a.area))).slice(1)} ${strong.length > 1 ? "hold" : "holds"} up, but ` : ""}${strong.length ? lower(top.area) : AUDIT_AREA_LABELS[top.area]} is the biggest gap.`

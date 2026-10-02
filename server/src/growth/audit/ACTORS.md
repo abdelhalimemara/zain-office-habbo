@@ -32,7 +32,10 @@ The actor ids and limits live in `budget.ts` (`ACTORS`). Every run passes:
   - policy pages, contact paths, review sections, platform (Shopify, Salla, Zid, WordPress, Wix, Webflow)
   - the nine tags in the template: Google Ads conversion, GA4, GTM, Meta, TikTok, Snap, LinkedIn Insight, X pixel, Hotjar/Clarity. Tags are found from script sources, inline code and `window` globals.
 - **Minimum charge:** Google Search and Google Maps refuse a `maxTotalChargeUsd` under $0.50. They reserve $0.50 and are held down by `maxItems`.
-- **Competitors:** the non-platform domains that appear most across the category searches. Marketplaces, social networks and directories are excluded. Semrush's organic competitors fill in, but only `.sa` domains, because its global list is mostly unrelated sites.
+- **Competitors:** competitors are found by keyword overlap first. Semrush's organic competitors for the prospect (domain mode, `organic.competitors`) are ranked by `common_keywords`. A competitor needs at least 2 shared keywords and must not be a marketplace, a social platform, a foreign ccTLD or a subdomain.
+  - The category-search competitors are only a fallback, used when fewer than 2 Semrush peers survive the rules in `collect/peers.ts`: a business homepage about the category, .sa/Arabic/Saudi traffic ≥ 50%, and no more than 30× the prospect's visits unless it is a local storefront.
+  - At most 3 are kept, never padded.
+  - The report names how competitors were found and shows each one's common-keyword count.
 - **Meta Ad Library:** `keyword_unordered` returns unrelated advertisers, so we search `keyword_exact_phrase`. An ad counts only when its page name matches the business or it links to its domain; otherwise the row reads "none attributable". Items carry `inputUrl`, which maps them back to the business.
 - **Google Ads Transparency:** we search by domain. An ad counts as active if it was shown in the last 30 days. Advertisers often appear under their legal entity name.
 - **Similarweb:** percentages arrive on a 0–100 scale and are stored as 0..1. Items do not come back in input order, so they are matched by `SiteName`.

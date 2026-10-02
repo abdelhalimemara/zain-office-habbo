@@ -32,13 +32,15 @@ describe("audit pipeline", () => {
       expect(c.options.maxTotalChargeUsd).toBeLessThanOrEqual(spec.maxChargeUsd);
     }
     const ads = rig.apify.calls.find((c) => c.actor === "scrapesage/google-ads-transparency-scraper")!;
-    expect(ads.input.domains).toEqual(["thestudio.sa", "rival.sa", "glow.sa", "glam.sa"]);
+    // Two Semrush keyword-overlap peers survive (noon.com is a marketplace, petstock.co.nz shares one keyword
+    // and is foreign), so the category-search candidate glow.sa is not used.
+    expect(ads.input.domains).toEqual(["thestudio.sa", "rival.sa", "glam.sa"]);
 
     expect(audit.tags?.find((t) => t.tag === "Google Ads conversion tag")).toEqual({ tag: "Google Ads conversion tag", found: true });
     expect(audit.searchRuns?.[0]).toMatchObject({ kind: "brand", prospectPresent: true });
     expect(audit.seo).toMatchObject({ authorityScore: 12, organicTraffic: 40, source: expect.stringContaining("Semrush via Apify") });
     expect(audit.social?.find((r) => r.channel === "instagram")).toMatchObject({ measured: true, followers: 12_000 });
-    expect(audit.benchmark?.map((b) => b.name)).toEqual(["THE STUDIO", "Rival Beauty", "Glow", "Glam"]);
+    expect(audit.benchmark?.map((b) => b.name)).toEqual(["THE STUDIO", "Rival Beauty", "Glam"]);
     expect(audit.benchmark?.[0]).toMatchObject({ isProspect: true, googleAds: { active: 2, formats: "image/text" }, metaAds: { active: 1 }, instagramFollowers: 12_000, authorityScore: 12 });
     expect(audit.benchmark?.[1]).toMatchObject({ instagramFollowers: 5_400, metaAds: "none", authorityScore: 25, traffic: { monthlyVisits: 10_628 } });
     expect(audit.score?.areas.map((a) => a.area)).toEqual([...AUDIT_AREAS]);

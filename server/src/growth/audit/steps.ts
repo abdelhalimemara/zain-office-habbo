@@ -3,13 +3,12 @@ import { join } from "node:path";
 import { AUDITS_API, AUDIT_AREA_LABELS, type AuditStepId, type ProspectAudit } from "../../../../shared/audits";
 import type { HermesClient } from "../../hermes/client";
 import { ANALYSIS_TITLE_PREFIX, AUDIT_AGENT, FALLBACK_AGENT, analysisTaskBody, draftAnalysis, parseAnalysis } from "./analysis";
-import { nameFromDomain, publicView } from "./benchmark";
+import { publicView } from "./benchmark";
+import { searchStep } from "./searchStep";
 import { shortDate } from "./dates";
 import { CostCapReached, type Budget } from "./budget";
 import type { PdfRenderer, Screenshotter } from "./chrome";
 import { collectAds } from "./collect/ads";
-import { collectSearch, pickCompetitors } from "./collect/search";
-import { semrushAudit, semrushDomains } from "./collect/seo";
 import { categoryTerms } from "./collect/peers";
 import { collectSocial } from "./collect/social";
 import { collectWebsite, tagRead } from "./collect/website";
@@ -93,60 +92,6 @@ async function websiteStep(s: StoredAudit, ctx: StepContext): Promise<Outcome> {
         x.audit.tags = tagRead(r.data.trackers);
       }
       if (captured) x.audit.screenshotPath = screenshotUrl(s.id);
-    },
-  };
-}
-
-/** The Semrush home-page audit, the brand and category searches, then competitors, then Semrush for all. */
-async function searchStep(s: StoredAudit, ctx: StepContext): Promise<Outcome> {
-  const p = s.audit.prospect;
-  const asOf = s.data.asOf ?? asOfLabel(s.audit.createdAt);
-  let costUsd = 0;
-  const notes: string[] = [];
-  // The Semrush home-page audit first: the keywords the site ranks for become the category searches.
-  const [audit] = await Promise.allSettled([semrushAudit(s.id, p.website, ctx.budget)]);
-  const auditItem = audit.status === "fulfilled" ? audit.value.item : undefined;
-  const semrush = (auditItem?.semrush ?? {}) as { organic_competitors?: { domain?: string }[]; top_organic_keywords?: { keyword?: string; volume?: number }[] };
-  const keywords = (semrush.top_organic_keywords ?? [])
-    .filter((k) => typeof k.keyword === "string")
-    .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))
-    .map((k) => k.keyword!);
-  const [serp] = await Promise.allSettled([collectSearch(s.id, p, s.data.website, ctx.budget, p.category ? [] : keywords)]);
-  for (const r of [serp, audit]) {
-    if (r.status === "fulfilled") costUsd += r.value.costUsd;
-    else costUsd += (r.reason as { costUsd?: number }).costUsd ?? 0;
-  }
-  const search = serp.status === "fulfilled" ? serp.value.data : undefined;
-  if (serp.status === "fulfilled") notes.push(serp.value.note);
-  else notes.push(`searches failed (${(serp.reason as Error).message.slice(0, 60)})`);
-  const semrushCompetitors = (semrush.organic_competitors ?? []).map((c) => String(c.domain ?? ""));
-  const domains = pickCompetitors(p, search, semrushCompetitors);
-  let seo: Awaited<ReturnType<typeof semrushDomains>>["seo"] | undefined;
-  try {
-    const r = await semrushDomains(s.id, p.website, domains, auditItem, ctx.budget, asOf);
-    seo = r.seo;
-    costUsd += r.costUsd;
-    notes.push(`Semrush authority ${seo.read.authorityScore ?? "—"}`);
-  } catch (err) {
-    costUsd += (err as { costUsd?: number }).costUsd ?? 0;
-    notes.push(err instanceof CostCapReached ? err.message : `Semrush failed (${(err as Error).message.slice(0, 60)})`);
-  }
-  if (!search && !seo) throw Object.assign(new Error(notes.join("; ")), { costUsd });
-  notes.push(`${domains.length} competitor candidates: ${domains.join(", ") || "none found"}`);
-  return {
-    status: "done",
-    note: notes.join("; "),
-    costUsd,
-    patch: (x) => {
-      if (search) {
-        x.data.search = search;
-        x.audit.searchRuns = search.runs;
-      }
-      if (seo) {
-        x.data.seo = seo;
-        x.audit.seo = seo.read;
-      }
-      x.data.competitors = domains.map((domain) => ({ domain, name: nameFromDomain(domain) }));
     },
   };
 }

@@ -3,7 +3,7 @@ import { PLATFORMS, brandRun } from "../collect/search";
 import { shortDate } from "../dates";
 import { tagRead } from "../collect/website";
 import { gaps } from "../score";
-import { bottomLine, cards, esc, fmt, logo, notes, page, severityPill, statusPill, t, table, type ReportContext } from "./layout";
+import { bottomLine, cards, esc, fmt, logo, notes, page, peerMethod, severityPill, statusPill, t, table, type ReportContext } from "./layout";
 
 const FOCUS = ["Website and technical health", "Non-brand search demand", "Paid media and measurement", "Organic social presence", "Traffic and competitor benchmark"];
 
@@ -178,7 +178,7 @@ export function paid(ctx: ReportContext): string {
     0,
     ["24%", "40%", "36%"],
   )}</div>`;
-  return page(ctx, 7, "Paid Media: Google and Meta", "Prospect first, then competitors, same public measures.", body, `${cards(items)}${bottomLine(ctx.analysis.bottomLines.paid)}`);
+  return page(ctx, 7, "Paid Media: Google and Meta", `Prospect first, then Saudi competitors ${peerMethod(ctx)}, same public measures.`, body, `${cards(items)}${bottomLine(ctx.analysis.bottomLines.paid)}`);
 }
 
 export { googleCell, metaCell };
