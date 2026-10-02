@@ -48,6 +48,8 @@ export interface BoardMeeting {
   createdAt: number;
   updatedAt: number;
   notionPageUrl?: string;
+  /** The last Notion sync failure, cleared by the next successful sync. */
+  notionSyncError?: string;
   relatedTaskId?: string;
 }
 

@@ -151,6 +151,26 @@ describe("reconcileOnce", () => {
 });
 
 describe("Reconciler", () => {
+  it("runs extra steps (meetings, consultations) each run and logs their failures", async () => {
+    const h = hermesWith([], []);
+    const ran: string[] = [];
+    const r = new Reconciler({
+      hermes: h.hermes,
+      hires: memoryHireStore(),
+      log,
+      steps: [
+        async () => void ran.push("meetings"),
+        async () => {
+          throw new Error("boom");
+        },
+        async () => void ran.push("consultations"),
+      ],
+    });
+    await r.run();
+    expect(ran).toEqual(["meetings", "consultations"]);
+    expect(logs).toContain("reconcile: step failed (Error)");
+  });
+
   it("never overlaps runs and records the last result", async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
@@ -208,7 +228,7 @@ describe("Reconciler", () => {
 
 describe("GET /api/health reconciler status", () => {
   it("reports the last run when the server runs a reconciler", async () => {
-    const { headcount, hires, ceoWake, briefs, connections } = setup({});
+    const { headcount, hires, ceoWake, briefs, connections, meetings, consultations } = setup({});
     const statusRoute = mockFetch({ ...hermesBase, "GET /api/status": () => ({ gateway_platforms: {} }) });
     const app = createApp({
       hermes: new HermesClient({ baseUrl: "http://hermes.test", fetchImpl: statusRoute.fetchImpl }),
@@ -217,6 +237,8 @@ describe("GET /api/health reconciler status", () => {
       ceoWake,
       briefs,
       connections,
+      meetings,
+      consultations,
       reconcilerStatus: () => ({ lastRunAt: 1_700_000_000, repaired: 2 }),
     });
     const res = await app.request("/api/health", { headers: { Host: "127.0.0.1:8787" } });

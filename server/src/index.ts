@@ -1,7 +1,13 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { ConnectionsService } from "./connections/service";
+import { join } from "node:path";
 import { DEFAULT_PORT, createApp, defaultClients, guardOptions } from "./app";
+import { ConsultationLog, isConsultationRecord } from "./board/consultLog";
+import { MeetingEngine, isStoredMeeting } from "./board/meetings/engine";
+import { fileRecordStore } from "./board/recordStore";
+import { ConnectionsService } from "./connections/service";
+import { NotionClient, envToken } from "./notion/client";
+import { NotionBoardSink } from "./notion/sync";
 import { fileHireStore } from "./org/hireStore";
 import { fileBriefs } from "./org/privateBriefs";
 import { Reconciler } from "./org/reconcile";
@@ -15,7 +21,26 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 
 const clients = defaultClients(process.env);
 const hires = fileHireStore(process.cwd());
-const reconciler = new Reconciler({ hermes: clients.hermes, hires, ceoWake: clients.ceoWake });
+const root = process.cwd();
+const sink = new NotionBoardSink(new NotionClient(envToken()), root);
+const meetings = new MeetingEngine({
+  hermes: clients.hermes,
+  hires,
+  ceoWake: clients.ceoWake,
+  store: fileRecordStore(join(root, ".zain", "meetings.json"), isStoredMeeting),
+  sink,
+});
+const consultations = new ConsultationLog({
+  hermes: clients.hermes,
+  store: fileRecordStore(join(root, ".zain", "consultations.json"), isConsultationRecord),
+  sink,
+});
+const reconciler = new Reconciler({
+  hermes: clients.hermes,
+  hires,
+  ceoWake: clients.ceoWake,
+  steps: [() => meetings.tick(), () => consultations.tick()],
+});
 const app = createApp({
   ...clients,
   hires,
@@ -23,6 +48,8 @@ const app = createApp({
   briefs: fileBriefs(process.cwd()),
   guard: guardOptions(port, process.env),
   reconcilerStatus: () => reconciler.status(),
+  meetings,
+  consultations,
   connections: new ConnectionsService({ hermes: clients.hermes, ceoWake: clients.ceoWake, hermesBin: process.env.HERMES_BIN }),
 });
 
