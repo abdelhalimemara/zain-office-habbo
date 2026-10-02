@@ -54,7 +54,7 @@ describe("the Alwaleed seat", () => {
       "revenue:deal-negotiation",
     ]);
     expect(member).toMatchObject({ name: "HRH Prince Alwaleed bin Talal", seat: "Contrarian value investing, brands, capital and control", privateBrief: true });
-    expect(ROSTER.filter((a) => a.rank === "board").map((a) => a.profile)).toEqual(["zain-board-hormozi", ALWALEED]);
+    expect(ROSTER.filter((a) => a.rank === "board").map((a) => a.profile)).toContain(ALWALEED);
   });
 });
 

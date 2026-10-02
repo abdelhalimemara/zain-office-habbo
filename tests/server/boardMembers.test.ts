@@ -119,7 +119,7 @@ describe("hiring a board member", () => {
 
   it.each([
     [{ reportsTo: "default" }, "reportsTo must be null"],
-    [{ profile: "zain-board-buffett" }, "not a board seat"],
+    [{ profile: "zain-board-munger" }, "not a board seat"],
     [{ profile: "zain-hq-advisor" }, "zain-board-*"],
     [{ rank: "specialist", reportsTo: "zain-hq-coo" }, "rank board"],
     [{ title: "Board · Someone Else" }, "title must match the roster"],
