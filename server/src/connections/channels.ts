@@ -50,42 +50,31 @@ export function gatewayEntry(status: HermesStatus): Entry {
   return { id: "channel:gateway", kind: "channel", name: "Hermes gateway", status: level, detail };
 }
 
-export function platformEntries(status: HermesStatus, ahmadRoute: boolean): Entry[] {
+/**
+ * Gateway-reported platforms. The default profile's WhatsApp never appears here under multiplex
+ * (only the disabled per-profile slots do), so WhatsApp comes from its bridge instead.
+ */
+export function platformEntries(status: HermesStatus): Entry[] {
   const entries: Entry[] = [];
-  let whatsappSeen = false;
   for (const [key, p] of Object.entries(status.gateway_platforms ?? {})) {
-    if (!p || expectedOff(key, p)) continue;
+    if (!p || expectedOff(key, p) || key === "whatsapp") continue;
     const [profile, platform] = key.includes(":") ? (key.split(":", 2) as [string, string]) : [undefined, key];
-    const whatsappForAhmad = platform === "whatsapp" && !profile && ahmadRoute;
-    if (platform === "whatsapp") whatsappSeen = true;
-    const base = PLATFORM_NAMES[platform] ?? platform;
     const level = platformStatus(p);
     entries.push({
       id: `channel:${profile ? `${profile}:` : ""}${platform}`,
       kind: "channel",
-      name: whatsappForAhmad ? `${base} · Ahmad` : base,
+      name: PLATFORM_NAMES[platform] ?? platform,
       status: level,
       detail: platformDetail(p, level),
-      ...(whatsappForAhmad ? { profile: ACCOUNTS_PROFILE } : profile ? { profile } : {}),
-    });
-  }
-  if (ahmadRoute && !whatsappSeen) {
-    entries.push({
-      id: "channel:whatsapp",
-      kind: "channel",
-      name: "WhatsApp · Ahmad",
-      status: "warn",
-      detail: "Routed to Ahmad but not linked yet — link it in the Hermes dashboard",
-      profile: ACCOUNTS_PROFILE,
+      ...(profile ? { profile } : {}),
     });
   }
   return entries;
 }
 
-export async function hasAhmadRoute(hermes: HermesClient): Promise<boolean> {
-  const config = await hermes.profileConfig("default");
-  const gateway = (config.gateway ?? {}) as Record<string, unknown>;
-  const routes = [gateway.profile_routes, config.profile_routes].flatMap((r) => (Array.isArray(r) ? r : []));
+export function hasAhmadRoute(defaultConfig: Record<string, unknown>): boolean {
+  const gateway = (defaultConfig.gateway ?? {}) as Record<string, unknown>;
+  const routes = [gateway.profile_routes, defaultConfig.profile_routes].flatMap((r) => (Array.isArray(r) ? r : []));
   return routes.some((r) => (r as { name?: unknown })?.name === ROUTE_NAME);
 }
 

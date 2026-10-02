@@ -2,7 +2,7 @@ import { join } from "node:path";
 import type { Connection, ConnectionsResponse } from "../../../shared/api";
 import { checkGmailToken, hermesPython, type PythonRunner } from "../clientChannels/gmail";
 import { hermesHome } from "../clientChannels/hermesPaths";
-import type { HermesClient, HermesStatus } from "../hermes/client";
+import type { FetchLike, HermesClient, HermesStatus } from "../hermes/client";
 import type { CeoWake } from "../telegram/ceoWake";
 import {
   ahmadInboxJob,
@@ -15,6 +15,7 @@ import {
 } from "./channels";
 import { redact, runCommand, withTimeout, type RunCommand } from "./run";
 import { CLI_PROBES, fileTokenStores, mcpEntries, type McpTokenStores } from "./tools";
+import { whatsappEntry, whatsappSettings } from "./whatsapp";
 
 const CACHE_MS = 30_000;
 const TOKEN_CACHE_MS = 5 * 60_000;
@@ -30,6 +31,8 @@ export interface ConnectionsOptions {
   defaultPython?: PythonRunner;
   tokens?: McpTokenStores;
   home?: string;
+  /** For the WhatsApp bridge's local /health endpoint. */
+  fetchImpl?: FetchLike;
   hermesBin?: string;
   now?: () => number;
   timeoutMs?: number;
@@ -128,12 +131,16 @@ export class ConnectionsService {
   private async channels(status: HermesStatus | null): Promise<Entry[]> {
     const { hermes } = this.options;
     if (!status) return [{ id: "channel:gateway", kind: "channel", name: "Hermes gateway", status: "error", detail: "Hermes isn't reachable" }];
-    const [route, gmail] = await Promise.all([
-      this.probe(() => hasAhmadRoute(hermes)).catch(() => false),
+    const [whatsapp, gmail] = await Promise.all([
+      this.probe(async () => {
+        const defaultConfig = await hermes.profileConfig("default").catch(() => ({}));
+        const settings = await whatsappSettings(this.options.home ?? hermesHome(), defaultConfig);
+        return whatsappEntry(settings, hasAhmadRoute(defaultConfig), this.options.fetchImpl ?? ((url, init) => fetch(url, init)));
+      }).catch((err) => failed("channel:whatsapp", "channel", "WhatsApp", err)),
       this.probe(async () => gmailEntry(await this.ahmadToken(), await ahmadInboxJob(hermes), Math.floor(this.now() / 1000))).catch((err) =>
         failed("channel:gmail-ahmad", "channel", "Gmail · Ahmad", err),
       ),
     ]);
-    return [gatewayEntry(status), ...platformEntries(status, route), gmail];
+    return [gatewayEntry(status), ...platformEntries(status), whatsapp, gmail];
   }
 }

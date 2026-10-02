@@ -56,19 +56,16 @@ describe("channel state mapping", () => {
     expect(gatewayEntry({ gateway_state: "stopped" }).status).toBe("error");
   });
 
-  it("hides Ahmad's expected multiplex-disabled WhatsApp and names the routed one", () => {
-    const linked = platformEntries({ gateway_platforms: { ...STATUS.gateway_platforms, whatsapp: { state: "connected" } } }, true);
-    expect(linked.map((e) => [e.id, e.name, e.status, e.profile ?? null])).toEqual([
-      ["channel:telegram", "Telegram", "ok", null],
-      ["channel:whatsapp", "WhatsApp · Ahmad", "ok", "zain-hq-accounts"],
+  it("leaves WhatsApp to the bridge probe and hides Ahmad's expected multiplex-disabled slot", () => {
+    const entries = platformEntries({ gateway_platforms: { ...STATUS.gateway_platforms, whatsapp: { state: "disconnected" }, slack: { state: "connected" } } });
+    expect(entries.map((e) => [e.id, e.name, e.status])).toEqual([
+      ["channel:telegram", "Telegram", "ok"],
+      ["channel:slack", "Slack", "ok"],
     ]);
-    expect(platformEntries({ gateway_platforms: { whatsapp: { state: "connected" } } }, false)[0]!.name).toBe("WhatsApp");
-    const unlinked = platformEntries(STATUS, true);
-    expect(unlinked.at(-1)).toMatchObject({ name: "WhatsApp · Ahmad", status: "warn", detail: expect.stringContaining("not linked yet") });
   });
 
   it("explains errors from the platform message without secrets", () => {
-    const [e] = platformEntries({ gateway_platforms: { discord: { state: "error", error_message: "401 for token ghp_abcdefghijklmnop1234" } } }, false);
+    const [e] = platformEntries({ gateway_platforms: { discord: { state: "error", error_message: "401 for token ghp_abcdefghijklmnop1234" } } });
     expect(e).toMatchObject({ name: "Discord", status: "error" });
     expect(e!.detail).not.toContain("ghp_");
   });
@@ -119,7 +116,10 @@ describe("GET /api/connections", () => {
   let home: string;
   beforeEach(async () => {
     home = await mkdtemp(join(tmpdir(), "zain-conn-home-"));
-    await writeFile(join(home, ".env"), "NOTION_API_TOKEN='ntn_supersecret0123456'\n");
+    await writeFile(
+      join(home, ".env"),
+      "NOTION_API_TOKEN='ntn_supersecret0123456'\nWHATSAPP_ENABLED=true\nWHATSAPP_DM_POLICY=open\nWHATSAPP_ALLOWED_USERS=*,966500000000\n",
+    );
   });
   afterEach(() => rm(home, { recursive: true, force: true }));
 
@@ -133,6 +133,7 @@ describe("GET /api/connections", () => {
           ahmadPython: async () => ({ code: 0, stdout: "AUTHENTICATED" }),
           defaultPython: async () => ({ code: 0, stdout: "AUTHENTICATED" }),
           tokens: { hermesToken: async () => false, mcpRemoteToken: async (url) => url === "https://mcp.adspirer.com/mcp" },
+          fetchImpl: async (url) => (String(url) === "http://127.0.0.1:3000/health" ? json({ status: "connected", queueLength: 0 }) : json({}, 404)),
           ...overrides,
         }),
     });
@@ -156,7 +157,7 @@ describe("GET /api/connections", () => {
       ["channel:gateway", "ok"],
       ["channel:telegram", "ok"],
       ["channel:telegram-approvals", "ok"],
-      ["channel:whatsapp", "warn"],
+      ["channel:whatsapp", "ok"],
       ["channel:gmail-ahmad", "ok"],
       ["mcp:adspirer", "ok"],
       ["mcp:linear", "error"],
@@ -170,6 +171,8 @@ describe("GET /api/connections", () => {
     expect(connections.find((c) => c.id === "cli:gh")!.detail).toBe("Logged in to github.com as octo");
     expect(text).not.toContain("ntn_supersecret");
     expect(text).not.toContain("gho_");
+    expect(text).not.toContain("966500000000");
+    expect(connections.find((c) => c.id === "channel:whatsapp")).toMatchObject({ name: "WhatsApp · Ahmad", detail: "Connected · open to anyone" });
     expect(calls.find((c) => c.file === "ntn")!.env!.NOTION_API_TOKEN).toBe("ntn_supersecret0123456");
   });
 

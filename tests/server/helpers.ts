@@ -139,6 +139,9 @@ export function stubConnections(hermes: HermesClient, ceoWake: CeoWake, override
     tokens: { hermesToken: async () => false, mcpRemoteToken: async () => false },
     home: "/nonexistent/zain-test-home",
     hermesBin: "/nonexistent/hermes",
+    fetchImpl: async () => {
+      throw new TypeError("no network in tests");
+    },
     ...overrides,
   });
 }
