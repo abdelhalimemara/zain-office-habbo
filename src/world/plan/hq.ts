@@ -6,6 +6,10 @@ import type { FloorPlan } from "./types";
  * area top-centre, marble reception with the "Zain Group" wall and lounge in the middle, print/copy, Finance / HR /
  * Legal down the right, Executive Lounge bottom-right, entrance at the front.
  */
+/** Board room tiles; its table sits centred with chairs on both long sides and the head, and a free ring to the walls. */
+export const BOARD_ROOM = { x: 0, y: 0, w: 9, d: 8 } as const;
+export const BOARD_TABLE = { x: 2, y: 3, w: 6, d: 2 } as const;
+
 export function buildHq(): FloorPlan {
   const b = new PlanBuilder("hq", 30, 17);
 
@@ -27,12 +31,12 @@ export function buildHq(): FloorPlan {
   b.wall("x", 4, 22, 30).wall("x", 8, 22, 30).wall("x", 12, 22, 30);
   b.wall("x", 17, 0, 30, "parapet", [[14, 17]]).wall("y", 30, 0, 17, "parapet");
 
-  const board = b.item("boardTable", 2, 3, 6, 2);
-  b.chairsAround(board);
-  for (let x = 2; x <= 6; x++) b.seat(x, 1, "+y", { role: "board", desk: "none", table: board.id, chair: "none", reach: 2 });
-  b.item("plant", 0, 0);
-  b.item("plant", 0, 7);
-  b.item("credenza", 3, 0, 4, 1);
+  const board = b.item("boardTable", BOARD_TABLE.x, BOARD_TABLE.y, BOARD_TABLE.w, BOARD_TABLE.d);
+  const atTable = { role: "board" as const, desk: "none" as const, table: board.id, chair: "execChair" as const };
+  b.seat(BOARD_TABLE.x - 1, BOARD_TABLE.y, "+x", atTable);
+  b.seat(BOARD_TABLE.x - 1, BOARD_TABLE.y + 1, "+x", atTable);
+  for (let i = 0; i < 3; i++) b.seat(BOARD_TABLE.x + i, BOARD_TABLE.y - 1, "+y", atTable);
+  b.chairsAround(board, { right: false });
 
   for (const x of [1, 2, 5, 6]) b.seat(x, 9, "+y", { team: "ops" });
   for (const x of [1, 2, 5, 6]) b.item("chair", x, 11, 1, 1, { facing: "-y" });
