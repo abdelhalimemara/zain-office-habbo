@@ -48,7 +48,8 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "zain-voice-"));
   logs.length = 0;
 });
-afterEach(() => rm(root, { recursive: true, force: true }));
+// Fire-and-forget prefetches may still be writing into the cache while the directory is removed.
+afterEach(() => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
 
 function voiceRoom(opts: { key?: string | null; respond?: Parameters<typeof fakeLabs>[0]; own?: Record<string, string> } = {}) {
   const labs = fakeLabs(opts.respond);
