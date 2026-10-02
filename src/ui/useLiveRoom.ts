@@ -43,6 +43,27 @@ export interface LiveRoom {
 /** How often the mic meter, speaker estimate and call timer refresh. */
 export const LIVE_TICK_MS = 100;
 
+/** sessionStorage key for a meeting's sessions not yet handed to the server, so a reload doesn't lose them. */
+export const UNSAVED_KEY_PREFIX = "zui.live.unsaved.";
+
+function loadUnsaved(meetingId: string): string[] {
+  try {
+    const raw: unknown = JSON.parse(window.sessionStorage.getItem(UNSAVED_KEY_PREFIX + meetingId) ?? "[]");
+    return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string" && x.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUnsaved(meetingId: string, ids: readonly string[]): void {
+  try {
+    if (ids.length) window.sessionStorage.setItem(UNSAVED_KEY_PREFIX + meetingId, JSON.stringify(ids));
+    else window.sessionStorage.removeItem(UNSAVED_KEY_PREFIX + meetingId);
+  } catch {
+    return;
+  }
+}
+
 async function checkMic(): Promise<void> {
   if (!navigator.mediaDevices?.getUserMedia) throw new DOMException("No microphone API", "NotFoundError");
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -64,7 +85,9 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
   const [agentSince, setAgentSince] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<LiveError | null>(null);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  /** Sessions held but not yet posted to /live/end; each must reach the server or its turns are lost. */
+  const [unsaved, setUnsavedState] = useState<string[]>(() => loadUnsaved(meeting.id));
+  const unsavedRef = useRef(unsaved);
 
   const convRef = useRef<Session | null>(null);
   /** Bumped on every join, leave and end, so callbacks from an older session are ignored. */
@@ -73,6 +96,28 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
   const mutedRef = useRef(false);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+
+  const setUnsaved = useCallback(
+    (ids: string[]) => {
+      unsavedRef.current = ids;
+      saveUnsaved(meeting.id, ids);
+      setUnsavedState(ids);
+    },
+    [meeting.id],
+  );
+  const remember = useCallback((id: string) => !unsavedRef.current.includes(id) && setUnsaved([...unsavedRef.current, id]), [setUnsaved]);
+
+  /** Saves earlier sessions' transcripts while the meeting stays live, so the next session picks up from them. */
+  const checkpoint = useCallback(
+    async (ids: readonly string[]) => {
+      for (const id of ids) {
+        const res = await api.endLive(meeting.id, { conversationId: id, final: false });
+        qc.setQueryData(meetingKeys.one(meeting.id), res);
+        setUnsaved(unsavedRef.current.filter((x) => x !== id));
+      }
+    },
+    [meeting.id, qc, setUnsaved],
+  );
 
   const resetCall = useCallback(() => {
     setStatus("disconnected");
@@ -100,6 +145,8 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
     void (async () => {
       try {
         await checkMic();
+        await checkpoint(unsavedRef.current);
+        if (stale()) return;
         const session = await api.liveSession(meeting.id);
         if (stale()) return;
         speakersRef.current = session.speakers;
@@ -110,7 +157,7 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
           overrides: session.overrides as PartialOptions["overrides"],
           onConnect: ({ conversationId: id }) => {
             if (stale()) return;
-            setConversationId(id);
+            remember(id);
             setConnectedAt(Date.now());
             setPhase("connected");
           },
@@ -154,7 +201,7 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
         }
         convRef.current = conv;
         conv.setMicMuted(mutedRef.current);
-        setConversationId((id) => id ?? (conv.getId() || null));
+        if (conv.getId()) remember(conv.getId());
         setConnectedAt((at) => at ?? Date.now());
         setPhase("connected");
       } catch (err) {
@@ -164,7 +211,7 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
         setError(joinError(err));
       }
     })();
-  }, [meeting.id, hangUp, resetCall]);
+  }, [meeting.id, hangUp, resetCall, checkpoint, remember]);
 
   const leave = useCallback(() => {
     void hangUp();
@@ -178,10 +225,11 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
     setMuted(mutedRef.current);
   }, []);
 
-  const handoverId = conversationId ?? meeting.liveConversationIds?.at(-1) ?? null;
+  const handoverId = unsaved.at(-1) ?? meeting.liveConversationIds?.at(-1) ?? null;
 
   const end = useCallback(() => {
     if (!handoverId || phaseRef.current === "ending") return;
+    const last = unsavedRef.current.at(-1) ?? handoverId;
     setError(null);
     setPhase("ending");
     phaseRef.current = "ending";
@@ -189,7 +237,9 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
       await hangUp();
       resetCall();
       try {
-        const res = await api.endLive(meeting.id, { conversationId: handoverId });
+        await checkpoint(unsavedRef.current.filter((id) => id !== last));
+        const res = await api.endLive(meeting.id, { conversationId: last, final: true });
+        setUnsaved([]);
         qc.setQueryData(meetingKeys.one(meeting.id), res);
         void qc.invalidateQueries({ queryKey: meetingKeys.list });
         setPhase("ended");
@@ -198,7 +248,7 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
         setError({ kind: "end", message: `Couldn't hand the meeting to the board: ${err instanceof Error ? err.message : String(err)}` });
       }
     })();
-  }, [handoverId, meeting.id, hangUp, resetCall, qc]);
+  }, [handoverId, meeting.id, hangUp, resetCall, qc, checkpoint, setUnsaved]);
 
   // Leaving the panel or the page ends the call; rejoining opens a new session.
   useEffect(() => {

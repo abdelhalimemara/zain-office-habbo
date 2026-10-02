@@ -96,6 +96,8 @@ describe("live errors and timer", () => {
     expect(joinError(new DOMException("none", "NotFoundError")).kind).toBe("no-mic");
     expect(joinError(new ApiRequestError("ElevenLabs is not configured", 503))).toMatchObject({ kind: "not-configured", message: expect.stringContaining("ELEVENLABS_API_KEY") });
     expect(joinError(new ApiRequestError("not live", 409)).kind).toBe("not-live");
+    expect(joinError(new ApiRequestError("busy", 429)).message).toMatch(/busy or out of quota/);
+    expect(joinError(new ApiRequestError("slow", 504)).message).toMatch(/took too long/);
     expect(joinError(new ApiRequestError("boom", 500))).toEqual({ kind: "session", message: "Couldn't open the room: boom" });
     expect(joinError(new Error("socket closed"))).toEqual({ kind: "session", message: "Couldn't connect to the room: socket closed" });
     expect(joinError("??").message).toBe("Couldn't connect to the room.");

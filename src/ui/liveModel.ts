@@ -95,6 +95,8 @@ export function joinError(err: unknown): LiveError {
   if (err instanceof ApiRequestError) {
     if (err.status === 503) return { kind: "not-configured", message: "ElevenLabs isn't connected. Add ELEVENLABS_API_KEY to the Hermes .env, then try again." };
     if (err.status === 409) return { kind: "not-live", message: "This meeting isn't live any more." };
+    if (err.status === 429) return { kind: "session", message: "ElevenLabs is busy or out of quota. Wait a moment, then try again." };
+    if (err.status === 504) return { kind: "session", message: "ElevenLabs took too long to answer. Try again." };
     return { kind: "session", message: `Couldn't open the room: ${err.message}` };
   }
   return { kind: "session", message: `Couldn't connect to the room${err instanceof Error && err.message ? `: ${err.message}` : "."}` };
