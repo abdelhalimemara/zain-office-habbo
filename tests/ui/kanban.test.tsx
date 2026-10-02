@@ -116,7 +116,7 @@ describe("KanbanPanel on desktop", () => {
     expect(within(card).getByText("Mandate")).toBeInTheDocument();
     expect(within(card).getByText("1/3 subtasks")).toBeInTheDocument();
     expect(within(card).getByText("2h")).toBeInTheDocument();
-    expect(within(card).getByText("VP Studio")).toBeInTheDocument();
+    expect(within(card).getByText("Lina Haddad")).toBeInTheDocument();
     const child = screen.getByText("Logo concepts").closest("button")!;
     expect(within(child).queryByText("Mandate")).not.toBeInTheDocument();
     expect(within(child).getByText(/⚠ 2/)).toBeInTheDocument();

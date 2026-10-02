@@ -214,6 +214,9 @@ describe("a live session", () => {
     expect(prompt).toMatch(/no stage directions/);
     expect(prompt).toMatch(/answers in Arabic/);
     expect(prompt).not.toMatch(/kanban_complete|Hard limits|## Your lens/);
+    // Peer address: a member a colleague names answers next, not only when the founder asks.
+    expect(prompt).toContain("Whoever is addressed by name answers next, in their own tag, whether Abdelhalim or another member asked");
+    expect(prompt).toContain("never ignore a colleague's question");
   });
 
   it("goes item by item when the brief has an agenda", async () => {

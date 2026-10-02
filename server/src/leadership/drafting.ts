@@ -14,8 +14,8 @@ export const DRAFTING_STUCK_SECONDS = 60 * 60;
 const TRANSCRIPT_MAX_CHARS = 60_000;
 const HQ_TENANT = "zain-hq";
 
-export const DRAFT_FAILED = "Drafting failed: the CEO agent's action list could not be read. Add this week's priorities and tasks by hand.";
-export const DRAFT_TIMED_OUT = "Drafting failed: the CEO agent did not draft the actions in time. Add this week's priorities and tasks by hand.";
+export const DRAFT_FAILED = "Drafting failed: Susu's (the CEO agent's) action list could not be read. Add this week's priorities and tasks by hand.";
+export const DRAFT_TIMED_OUT = "Drafting failed: Susu (the CEO agent) did not draft the actions in time. Add this week's priorities and tasks by hand.";
 
 /** Stable tag in the drafting task's body, so it can be found again on the board. */
 export function draftMarker(meetingId: string): string {
@@ -30,18 +30,18 @@ export function leadershipTranscript(m: BoardMeeting): string {
 
 export function draftTaskBody(m: BoardMeeting): string {
   const owners = DIVISIONS.map((d) => {
-    const head = Object.values(SEATS).find((s) => s.division === d.id)?.name ?? "its head";
-    return `- "${d.id}": ${d.name} (${d.tagline}), owned by the ${head}`;
+    const head = Object.values(SEATS).find((s) => s.division === d.id);
+    return `- "${d.id}": ${d.name} (${d.tagline}), owned by ${head ? `${head.name}, the ${head.title}` : "its head"}`;
   });
   return [
     draftMarker(m.id),
-    `You are the CEO agent. The founder, Abdelhalim, has just held the weekly leadership meeting "${m.topic}" with you, the COO and the division VPs, by voice. Turn it into the week's priorities and the action items he gave.`,
+    `You are ${SEATS.default.name}, the CEO agent. The founder, Abdelhalim, has just held the weekly leadership meeting "${m.topic}" with you, the COO and the division VPs, by voice. In the transcript each exec is named with their seat, e.g. "${leadershipName("zain-growth-vp")}". Turn it into the week's priorities and the action items he gave.`,
     "",
     "## Rules",
     "- Include ONLY tasks the founder actually gave, or explicitly agreed to, in the transcript. Never invent tasks, owners or dates; a suggestion nobody agreed to is not a task.",
     "- Give each task to the division that owns it:",
     ...owners.map((o) => `  ${o}`),
-    "- Work that is about the whole group, operations, finance or HQ support goes to \"hq\" (the COO).",
+    `- Work that is about the whole group, operations, finance or HQ support goes to "hq" (${SEATS["zain-hq-coo"].name}, the COO).`,
     `- title: a short imperative, at most ${ACTION_TITLE_MAX} characters. detail: what done looks like, the context from the meeting and any constraint the founder gave.`,
     "- priority: P1 (this week's top priority), P2 (this week), P3 (if there is room). due: YYYY-MM-DD only when a date or day was said; otherwise leave it out.",
     `- priorities: the week's priorities as agreed in the room, 3 to 6 short lines. At most ${ACTIONS_MAX} actions.`,

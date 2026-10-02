@@ -54,7 +54,7 @@ export function StartLeadershipDialog() {
   return (
     <Dialog title="Call a VP meeting" accent={LEADERSHIP_COLOR} onClose={onClose}>
       <form className="zui-form zui-lead-start" onSubmit={submit} noValidate aria-label="VP meeting details">
-        <p className="zui-hint">A live voice room with your CEO agent, COO and VPs. It ends with tasks you review and assign, not a vote.</p>
+        <p className="zui-hint">A live voice room with Susu, your COO and VPs. It ends with tasks you review and assign, not a vote.</p>
         {voices.data && !voices.data.configured && <VoicesOffNotice detail="The meeting can still be called; the room opens once it is." />}
         <label className="zui-label" htmlFor={ids.topic}>
           Topic

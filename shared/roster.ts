@@ -33,9 +33,9 @@ export const CEO_PROFILE = "default";
 export const COO_PROFILE = "zain-hq-coo";
 
 const hq: RosterAgent[] = [
-  { profile: CEO_PROFILE, title: "CEO · Main Hermes", division: "hq", rank: "ceo", reportsTo: null,
+  { profile: CEO_PROFILE, name: "Susu", title: "CEO · Main Hermes", division: "hq", rank: "ceo", reportsTo: null,
     skills: ["executive:chief-executive", "executive:ceo-advisor", "executive:agent-hierarchy"] },
-  { profile: COO_PROFILE, title: "COO", division: "hq", rank: "vp", reportsTo: CEO_PROFILE,
+  { profile: COO_PROFILE, name: "Faisal Al-Harbi", title: "COO", division: "hq", rank: "vp", reportsTo: CEO_PROFILE,
     skills: ["operations:chief-operating-officer", "operations:operating-cadence", "operations:process-design", "pmo:portfolio-governance"] },
   { profile: "zain-hq-ops", title: "Ops / PMO Lead", division: "hq", rank: "lead", reportsTo: COO_PROFILE,
     skills: ["pmo:program-management", "pmo:dependency-and-risk-management", "operations:service-level-management"] },
@@ -53,7 +53,7 @@ const hq: RosterAgent[] = [
 ];
 
 const studio: RosterAgent[] = [
-  { profile: "zain-studio-vp", title: "VP Studio", division: "studio", rank: "vp", reportsTo: CEO_PROFILE,
+  { profile: "zain-studio-vp", name: "Lina Haddad", title: "VP Studio", division: "studio", rank: "vp", reportsTo: CEO_PROFILE,
     skills: ["marketing:chief-content-officer", "product:chief-product-officer"] },
   { profile: "zain-studio-brand", title: "Brand Strategist", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp",
     skills: ["product:brand-identity", "marketing:positioning-and-messaging", "marketing:brand-voice"] },
@@ -68,7 +68,7 @@ const studio: RosterAgent[] = [
 ];
 
 const growth: RosterAgent[] = [
-  { profile: "zain-growth-vp", title: "VP Growth", division: "growth", rank: "vp", reportsTo: CEO_PROFILE,
+  { profile: "zain-growth-vp", name: "Omar Khalid", title: "VP Growth", division: "growth", rank: "vp", reportsTo: CEO_PROFILE,
     skills: ["marketing:chief-marketing-officer", "marketing:marketing-planning"] },
   { profile: "zain-growth-paid", title: "Paid Ads Manager", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp",
     skills: ["demand-generation:paid-advertising", "demand-generation:experimentation"] },
@@ -85,7 +85,7 @@ const growth: RosterAgent[] = [
 ];
 
 const labs: RosterAgent[] = [
-  { profile: "zain-labs-vp", title: "VP Labs", division: "labs", rank: "vp", reportsTo: CEO_PROFILE,
+  { profile: "zain-labs-vp", name: "Noura Al-Qahtani", title: "VP Labs", division: "labs", rank: "vp", reportsTo: CEO_PROFILE,
     skills: ["revenue:chief-revenue-officer", "executive:business-growth-consultant"] },
   { profile: "zain-labs-deals", title: "Partnerships & Deals", division: "labs", rank: "specialist", reportsTo: "zain-labs-vp",
     skills: ["revenue:deal-negotiation", "corporate-strategy:strategic-alliances"] },
@@ -100,7 +100,7 @@ const labs: RosterAgent[] = [
 ];
 
 const tech: RosterAgent[] = [
-  { profile: "zain-tech-vp", title: "VP Tech", division: "tech", rank: "vp", reportsTo: CEO_PROFILE,
+  { profile: "zain-tech-vp", name: "Yousef Al-Mutairi", title: "VP Tech", division: "tech", rank: "vp", reportsTo: CEO_PROFILE,
     skills: ["technology:chief-technology-officer", "technology:solution-architecture"] },
   { profile: "zain-tech-fullstack", title: "Full-stack Engineer", division: "tech", rank: "specialist", reportsTo: "zain-tech-vp",
     skills: ["technology:test-driven-development", "technology:api-design", "technology:systematic-debugging"] },

@@ -21,9 +21,9 @@ describe("Portrait", () => {
     }
   });
 
-  it("dresses the CEO in the dark suit and gives workers their floor character", () => {
-    const ceo = render(<Portrait agent={{ profile: CEO_PROFILE, rank: "ceo" }} name="CEO" />);
-    expect(sprite(ceo.container)).toBe("people/male-1");
+  it("dresses Susu in the dark skirt suit and gives workers their floor character", () => {
+    const ceo = render(<Portrait agent={{ profile: CEO_PROFILE, rank: "ceo" }} name="Susu" />);
+    expect(sprite(ceo.container)).toBe("people/female-2");
     ceo.unmount();
     for (const profile of ["zain-studio-art", "zain-tech-vp", "zain-growth-seo"]) {
       const { container, unmount } = render(<Portrait agent={{ profile, rank: "specialist" }} name={profile} />);
@@ -78,7 +78,7 @@ describe("AgentChip portraits", () => {
         <AgentChip profile="zain-hq-ui" agents={agents} />
       </>,
     );
-    expect(screen.getByText("VP Studio")).toBeInTheDocument();
+    expect(screen.getByText("Lina Haddad")).toBeInTheDocument();
     const portraits = container.querySelectorAll(".zui-portrait");
     expect(portraits).toHaveLength(2);
     expect(portraits[0]).toHaveAttribute("data-sprite", spriteFor("zain-studio-vp", "vp"));

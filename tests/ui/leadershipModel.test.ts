@@ -35,9 +35,11 @@ describe("leadershipModel", () => {
     expect(meetingsOfKind(undefined, "board")).toEqual([]);
   });
 
-  it("labels seats by role and anyone else by roster name", () => {
-    expect(seatLabel("default", rosterEntries)).toBe("CEO");
-    expect(seatLabel("zain-labs-vp", rosterEntries)).toBe("VP Labs");
+  it("labels execs by name and seat, and anyone else by roster name", () => {
+    expect(seatLabel("default", rosterEntries)).toBe("Susu · CEO");
+    expect(seatLabel("zain-hq-coo", rosterEntries)).toBe("Faisal Al-Harbi · COO");
+    expect(seatLabel("zain-labs-vp", rosterEntries)).toBe("Noura Al-Qahtani · VP Labs");
+    expect(seatLabel("zain-labs-vp", [])).toBe("Noura Al-Qahtani · VP Labs");
     expect(seatLabel("zain-hq-accounts", rosterEntries)).toBe("Ahmad Al Zain");
   });
 

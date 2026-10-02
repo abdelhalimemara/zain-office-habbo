@@ -170,7 +170,7 @@ describe("HQ mandate → VP fan-out → approval", () => {
     await page.waitFor("__e2e.text('.zui-panel h2') === 'Approvals (1)'", "approvals inbox");
 
     await page.click(".zui-approval button", "Send back to VP");
-    await page.waitFor("__e2e.text('.zui-approval .zui-error') === 'Write instructions for VP Studio to send this back.'", "inline instructions error");
+    await page.waitFor("__e2e.text('.zui-approval .zui-error') === 'Write instructions for Lina Haddad to send this back.'", "inline instructions error");
     expect(await page.eval("document.querySelector('.zui-approval textarea').getAttribute('aria-invalid')")).toBe("true");
     expect(hermes.called("PATCH", `${TASKS}/${task.id}`)).toHaveLength(0);
 

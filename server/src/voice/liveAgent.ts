@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { CHAIR_PROFILE, type VoiceAssignment } from "../../../shared/voice";
 import { speakerName } from "../board/meetings/rounds";
-import { isLeadershipSeat, leadershipName, leadershipTag } from "../leadership/seats";
+import { execName, isLeadershipSeat, leadershipTag } from "../leadership/seats";
 import { HttpError } from "../http";
 import { AGENT_ID, type ElevenLabsClient } from "./elevenlabs";
 
@@ -52,9 +52,9 @@ export const LEADERSHIP_ROOM: LiveRoom = {
   key: "leadershipRoom",
   name: LEADERSHIP_AGENT_NAME,
   basePrompt:
-    "You voice Zain Group's executives (the CEO agent, the COO and the division VPs) in the founder's weekly priorities meeting. Each session supplies the meeting's prompt; without one, say only that the meeting has not been set up.",
+    "You voice Zain Group's executives (Susu the CEO agent, the COO and the division VPs) in the founder's weekly priorities meeting. Each session supplies the meeting's prompt; without one, say only that the meeting has not been set up.",
   tag: leadershipTag,
-  speakerName: leadershipName,
+  speakerName: execName,
 };
 
 /**
