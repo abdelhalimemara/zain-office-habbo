@@ -1,6 +1,7 @@
 import { createApp } from "../../server/src/app";
 import type { GuardOptions } from "../../server/src/guard";
 import { fileBriefs, type BriefReader } from "../../server/src/org/privateBriefs";
+import { ConnectionsService, type ConnectionsOptions } from "../../server/src/connections/service";
 import { CeoWake, type ExecFileLike } from "../../server/src/telegram/ceoWake";
 import { HEADCOUNT_REF, HeadcountSource } from "../../server/src/headcount/catalog";
 import { HermesClient, type FetchLike } from "../../server/src/hermes/client";
@@ -126,6 +127,22 @@ export function mockExec(fail: (args: readonly string[]) => boolean = () => fals
   return { execFile, calls };
 }
 
+/** Connections that never run real binaries or read real tokens. */
+export function stubConnections(hermes: HermesClient, ceoWake: CeoWake, overrides: Partial<ConnectionsOptions> = {}): ConnectionsService {
+  const missing = async () => ({ code: 127, stdout: "", stderr: "" });
+  return new ConnectionsService({
+    hermes,
+    ceoWake,
+    run: missing,
+    ahmadPython: async () => ({ code: 1, stdout: "" }),
+    defaultPython: async () => ({ code: 1, stdout: "" }),
+    tokens: { hermesToken: async () => false, mcpRemoteToken: async () => false },
+    home: "/nonexistent/zain-test-home",
+    hermesBin: "/nonexistent/hermes",
+    ...overrides,
+  });
+}
+
 /** Tests never read the real `.zain/board` briefs: this root has none. */
 export const NO_BRIEFS = fileBriefs("/nonexistent/zain-test-root");
 
@@ -139,6 +156,7 @@ export function setup(
     guard?: GuardOptions;
     exec?: ReturnType<typeof mockExec>;
     briefs?: BriefReader;
+    connections?: (hermes: HermesClient, ceoWake: CeoWake) => ConnectionsService;
   } = {},
 ) {
   const hermesFetch = mockFetch({ ...hermesBase, ...routes });
@@ -149,7 +167,8 @@ export function setup(
   const exec = options.exec ?? mockExec();
   const ceoWake = new CeoWake({ hermes, execFile: exec.execFile, hermesBin: "/opt/hermes/bin/hermes", log: () => undefined });
   const briefs = options.briefs ?? NO_BRIEFS;
-  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, guard: options.guard });
+  const connections = options.connections?.(hermes, ceoWake) ?? stubConnections(hermes, ceoWake);
+  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
@@ -160,5 +179,5 @@ export function setup(
       },
       body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
     });
-  return { app, send, hermes, headcount, hires, hermesFetch, gh, exec, ceoWake, briefs };
+  return { app, send, hermes, headcount, hires, hermesFetch, gh, exec, ceoWake, briefs, connections };
 }

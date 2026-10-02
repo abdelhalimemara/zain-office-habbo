@@ -24,15 +24,20 @@ export interface PythonResult {
   stdout: string;
 }
 
-/** Runs Hermes' Python with Ahmad's profile as HERMES_HOME, so the skill uses his google_token.json. */
+/** Runs Hermes' Python with a profile as HERMES_HOME, so the skill uses that profile's google_token.json. */
 export type PythonRunner = (args: string[]) => Promise<PythonResult>;
 
-export function hermesPython(env: NodeJS.ProcessEnv = process.env, home = hermesHome(env)): PythonRunner {
+/** Defaults to Ahmad's profile; pass the Hermes home itself for the default profile. */
+export function hermesPython(
+  env: NodeJS.ProcessEnv = process.env,
+  home = hermesHome(env),
+  profileHome = join(home, "profiles", ACCOUNTS_PROFILE),
+): PythonRunner {
   const run = promisify(execFile);
   const python = env.ZAIN_HERMES_PYTHON || DEFAULT_PYTHON;
   const childEnv = {
     ...env,
-    HERMES_HOME: join(home, "profiles", ACCOUNTS_PROFILE),
+    HERMES_HOME: profileHome,
     PYTHONPATH: join(home, "hermes-agent"),
   };
   return async (args) => {
