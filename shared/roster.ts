@@ -15,6 +15,10 @@ export interface RosterAgent {
   skills: string[];
   /** Reviewer-class (headcount security / legal-risk): may block work it reviews. */
   reviewer?: boolean;
+  /** Person name for agents with a persona (e.g. "Ahmad Al Zain"). */
+  name?: string;
+  /** External channels this agent talks to clients on. */
+  clientChannels?: readonly ("email" | "whatsapp")[];
 }
 
 export const CEO_PROFILE = "default";
@@ -29,7 +33,8 @@ const hq: RosterAgent[] = [
     skills: ["pmo:program-management", "pmo:dependency-and-risk-management", "operations:service-level-management"] },
   { profile: "zain-hq-care", title: "Customer Care Lead", division: "hq", rank: "lead", reportsTo: COO_PROFILE,
     skills: ["customer-experience:support-operations", "customer-experience:escalation-management", "customer-experience:self-service-and-knowledge"] },
-  { profile: "zain-hq-accounts", title: "Account Manager", division: "hq", rank: "lead", reportsTo: COO_PROFILE,
+  { profile: "zain-hq-accounts", name: "Ahmad Al Zain", title: "Account Management Lead", division: "hq", rank: "lead",
+    reportsTo: COO_PROFILE, clientChannels: ["email", "whatsapp"],
     skills: ["customer-experience:customer-success-management", "customer-experience:customer-onboarding-and-implementation", "revenue:retention"] },
   { profile: "zain-hq-finance", title: "Finance Lead", division: "hq", rank: "lead", reportsTo: COO_PROFILE,
     skills: ["finance:chief-financial-officer", "finance:budgeting-and-forecasting", "finance:financial-reporting-and-close", "finance:tax"] },
@@ -129,4 +134,9 @@ export function managerOf(division: DivisionId, roster: readonly RosterAgent[] =
 
 export function findAgent(profile: string, roster: readonly RosterAgent[] = ROSTER): RosterAgent | undefined {
   return roster.find((a) => a.profile === profile);
+}
+
+/** "Ahmad Al Zain · Account Management Lead" when named, else the title. */
+export function displayName(agent: Pick<RosterAgent, "name" | "title">): string {
+  return agent.name ? `${agent.name} · ${agent.title}` : agent.title;
 }
