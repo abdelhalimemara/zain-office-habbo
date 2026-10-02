@@ -253,6 +253,27 @@ export interface StartAuditRequest {
   website?: string;
   name?: string;
   socials?: Pick<AuditProspect, "instagram" | "tiktok" | "facebook" | "x" | "linkedin">;
+  /** The kanban task of the agent running this audit (Rami): when the audit ends, its result is commented there and the task unblocked. */
+  parentTaskId?: string;
+}
+
+/**
+ * Susu (or anyone) asks Rami for an audit: Zain HQ creates a kanban task for zain-growth-audit and subscribes the CEO
+ * agent's wake to it, so Susu hears back when Rami completes it and can deliver the PDF.
+ */
+export interface AuditRequest {
+  leadId?: string;
+  companyId?: string;
+  website?: string;
+  name?: string;
+  socials?: StartAuditRequest["socials"];
+  /** Anything the requester wants Rami to look at. */
+  notes?: string;
+}
+
+export interface AuditRequestResponse {
+  taskId: string;
+  assignee: string;
 }
 
 export interface AuditsResponse {
@@ -265,6 +286,8 @@ export interface AuditResponse {
 
 export const AUDITS_API = {
   list: "/api/growth/audits",
+  /** POST AuditRequest: ask Rami (zain-growth-audit) to run an audit. */
+  request: "/api/growth/audit-requests",
   one: (id: string) => `/api/growth/audits/${encodeURIComponent(id)}`,
   pdf: (id: string) => `/api/growth/audits/${encodeURIComponent(id)}/pdf`,
   /** POST: rerun the failed or skipped steps from the first one that did not finish. */
