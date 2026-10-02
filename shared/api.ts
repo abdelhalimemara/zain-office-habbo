@@ -23,6 +23,7 @@ export const API = {
   roster: "/api/roster",
   hire: "/api/hire",
   headcountCatalog: "/api/headcount/catalog",
+  connections: "/api/connections",
 } as const;
 
 export interface HealthResponse {
@@ -195,4 +196,28 @@ export interface HeadcountCatalogResponse {
 
 export interface ApiError {
   error: string;
+}
+
+/** Green = ok, yellow = degraded or needs attention, red = down or misconfigured, grey = intentionally off. */
+export type ConnectionStatus = "ok" | "warn" | "error" | "off";
+
+export type ConnectionKind = "channel" | "mcp" | "cli";
+
+export interface Connection {
+  /** Stable id, e.g. "channel:telegram", "channel:whatsapp", "mcp:adspirer", "cli:ntn". */
+  id: string;
+  kind: ConnectionKind;
+  /** Display name, e.g. "Telegram", "WhatsApp · Ahmad", "Notion CLI". */
+  name: string;
+  status: ConnectionStatus;
+  /** One plain-text line explaining the status (never secrets). */
+  detail: string;
+  /** Hermes profile it belongs to, when not the default/global one. */
+  profile?: string;
+  /** Unix seconds of the last check. */
+  checkedAt: number;
+}
+
+export interface ConnectionsResponse {
+  connections: Connection[];
 }
