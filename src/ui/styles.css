@@ -421,3 +421,23 @@
   .zui-backdrop { animation: none; }
   .zui-card { transition: none; }
 }
+
+.zui-units {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.zui-unit {
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+}
+.zui-unit__name {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}

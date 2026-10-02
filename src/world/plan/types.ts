@@ -93,7 +93,7 @@ export interface PlanSeat {
   y: number;
   facing: "+x" | "+y";
   role?: SeatRole;
-  /** HQ department (see HQ_TEAMS), or "platform" for the Tech VP's shared specialists. */
+  /** HQ department (see HQ_TEAMS), a Studio / Growth unit (shared/units.ts), or "platform" for the Tech VP's shared specialists. */
   team?: string;
   /** Index into `FloorPlan.pods` for team-pod seats. */
   pod?: number;

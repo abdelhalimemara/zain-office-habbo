@@ -1,7 +1,9 @@
 import { getDivision, type Division } from "../../../shared/divisions";
 import { CEO_PROFILE, agentsInDivision, findAgent, type RosterAgent } from "../../../shared/roster";
 import { findBoardMember } from "../../../shared/board";
+import { PRODUCT_MARKETING_CONTEXT, skillSourceFor } from "../../../shared/skillSources";
 import { TECH_TEAMS, type TechTeam } from "../../../shared/techTeams";
+import { findUnit, unitsOf } from "../../../shared/units";
 import { skillLabel } from "../headcount/skillFile";
 import { boardDescription, boardSoul } from "./boardPersona";
 import { clientCommsSection } from "./clientPersona";
@@ -43,7 +45,39 @@ export function profileDescription(agent: RosterAgent): string {
 function teamLines(agent: RosterAgent, roster: readonly RosterAgent[]): string[] {
   return agentsInDivision(agent.division, roster)
     .filter((a) => a.profile !== agent.profile && a.rank !== "ceo" && a.rank !== "board")
-    .map((a) => `- \`${a.profile}\` — ${a.title}`);
+    .map((a) => {
+      const unit = findUnit(a.unit);
+      return `- \`${a.profile}\` — ${a.title}${unit ? ` (${unit.name})` : ""}`;
+    });
+}
+
+/** Studio and Growth: the unit this agent sits in, or for the VP the units they run. */
+function unitSection(agent: RosterAgent): string[] {
+  const unit = findUnit(agent.unit);
+  if (unit) return ["## Your unit", "", `You work in the ${unit.name} unit of ${getDivision(agent.division).name}: ${unit.summary}`];
+  const units = agent.rank === "vp" ? unitsOf(agent.division) : [];
+  if (!units.length) return [];
+  return [
+    "## Your units",
+    "",
+    "Your team is organised in units. Everyone still reports to you; route each piece of work to the unit that owns it:",
+    ...units.map((u) => `- ${u.name}: ${u.summary}`),
+  ];
+}
+
+/** Agents with the marketingskills skills (`mk:`), which look for a product-marketing context file. */
+export function isMarketingRole(agent: Pick<RosterAgent, "skills">): boolean {
+  return agent.skills.some((id) => skillSourceFor(id)?.id === "mk");
+}
+
+function marketingContextSection(agent: RosterAgent): string[] {
+  if (!isMarketingRole(agent)) return [];
+  return [
+    "## Marketing context",
+    "",
+    `- Zain's product marketing context is at \`${PRODUCT_MARKETING_CONTEXT}\`; read it before marketing work.`,
+    `- Your \`mk-*\` marketing skills look for \`.agents/product-marketing.md\`: use \`${PRODUCT_MARKETING_CONTEXT}\` instead. If it is missing or thin, say so in your result rather than inventing positioning.`,
+  ];
 }
 
 /** The VP-owned fan-out, spelled out in the Hermes worker tools the VP actually has. */
@@ -60,6 +94,36 @@ function fanOutProtocol(division: Division, team: readonly string[]): string[] {
     "",
     "Never complete the mandate yourself (`kanban_complete`), and never assign work outside your team. When HQ requests changes, read their comment and repeat from step 1 for what is missing.",
   ];
+}
+
+const BLOCK_START = "<!-- zain-hq:marketing -->";
+const BLOCK_END = "<!-- /zain-hq:marketing -->";
+
+/** The unit and marketing-context sections soulFor writes, for patching into a SOUL hired before them. */
+export function marketingSections(agent: RosterAgent): string[] {
+  const unit = unitSection(agent);
+  const marketing = marketingContextSection(agent);
+  return [...unit, ...(unit.length && marketing.length ? [""] : []), ...marketing];
+}
+
+/**
+ * Adds (or replaces) a marked block with marketingSections at the end of an existing SOUL, keeping
+ * everything else in it, including hand-written parts. A SOUL that soulFor wrote with the sections
+ * already in place is returned unchanged.
+ */
+export function withMarketingBlock(soul: string, agent: RosterAgent): string {
+  const sections = marketingSections(agent);
+  const start = soul.indexOf(BLOCK_START);
+  const end = soul.indexOf(BLOCK_END);
+  const marked = start >= 0 && end > start;
+  if (!marked && (!sections.length || sections.every((l) => !l.startsWith("## ") || soul.includes(l)))) return soul;
+  const block = sections.length ? [BLOCK_START, ...sections, BLOCK_END].join("\n") : "";
+  if (marked) {
+    const before = soul.slice(0, start).replace(/\s+$/, "");
+    const after = soul.slice(end + BLOCK_END.length).replace(/^\s+/, "");
+    return [before, block, after].filter(Boolean).join("\n\n") + "\n";
+  }
+  return `${soul.replace(/\s+$/, "")}\n\n${block}\n`;
 }
 
 /** soulFor, plus a board member's private brief read from disk when its seat has one. */
@@ -123,6 +187,11 @@ export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[], team
     if (!agent.team && agent.rank === "specialist") lines.push("", ...platformSections());
     lines.push("", ...gitRules());
   }
+  const unit = unitSection(agent);
+  if (unit.length) lines.push("", ...unit);
+  if (agent.focus && agent.division !== "tech") lines.push("", "## Your focus", "", `- ${agent.focus}`);
+  const marketing = marketingContextSection(agent);
+  if (marketing.length) lines.push("", ...marketing);
   const clientComms = clientCommsSection(agent);
   if (clientComms.length) lines.push("", ...clientComms);
   if (agent.reviewer) {

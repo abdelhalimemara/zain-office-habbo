@@ -27,9 +27,14 @@ export interface RosterAgent {
   teamRole?: TeamRole;
   /** One line on what this agent works on (for repo teams: the part of the stack they own). */
   focus?: string;
+  /** Sub-team inside a Studio or Growth division (see shared/units.ts); reporting stays with the VP. */
+  unit?: string;
 }
 
 export const CEO_PROFILE = "default";
+
+/** coreyhaines31/marketingskills skill ids (source `mk`, shared/skillSources.ts). */
+const mk = (...skills: string[]) => skills.map((s) => `mk:${s}`);
 export const COO_PROFILE = "zain-hq-coo";
 
 const hq: RosterAgent[] = [
@@ -54,34 +59,57 @@ const hq: RosterAgent[] = [
 
 const studio: RosterAgent[] = [
   { profile: "zain-studio-vp", name: "Lina Haddad", title: "VP Studio", division: "studio", rank: "vp", reportsTo: CEO_PROFILE,
-    skills: ["marketing:chief-content-officer", "product:chief-product-officer"] },
-  { profile: "zain-studio-brand", title: "Brand Strategist", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp",
-    skills: ["product:brand-identity", "marketing:positioning-and-messaging", "marketing:brand-voice"] },
-  { profile: "zain-studio-art", title: "Art Director", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp",
-    skills: ["marketing:visual-content", "product:design-system", "product:visual-reference-generation"] },
-  { profile: "zain-studio-copy", title: "Copywriter", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp",
-    skills: ["marketing:marketing-copywriting", "marketing:social-post-craft", "marketing:newsletter-writer"] },
-  { profile: "zain-studio-video", title: "Video Producer", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp",
-    skills: ["marketing:video-content", "marketing:youtube-producer"] },
-  { profile: "zain-studio-ux", title: "UX / Web Designer", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp",
-    skills: ["product:interface-craft", "product:ux-product-auditor", "product:design-styles"] },
+    skills: ["marketing:chief-content-officer", "product:chief-product-officer",
+      ...mk("product-marketing", "content-strategy", "marketing-psychology", "marketing-plan")] },
+  { profile: "zain-studio-art", title: "Art Director", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp", unit: "creative",
+    skills: ["marketing:visual-content", "product:design-system", "product:visual-reference-generation", ...mk("image", "ad-creative")] },
+  { profile: "zain-studio-video", title: "Video Producer", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp", unit: "creative",
+    skills: ["marketing:video-content", "marketing:youtube-producer", ...mk("video", "ad-creative")] },
+  { profile: "zain-studio-copy", title: "Copywriter", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp", unit: "creative",
+    skills: ["marketing:marketing-copywriting", "marketing:social-post-craft", "marketing:newsletter-writer",
+      ...mk("copywriting", "copy-editing", "marketing-psychology")] },
+  { profile: "zain-studio-social", name: "Dana Al-Shammari", title: "Organic Social Lead", division: "studio", rank: "specialist",
+    reportsTo: "zain-studio-vp", unit: "organic",
+    skills: mk("social", "community-marketing", "influencer-marketing", "content-strategy") },
+  { profile: "zain-studio-content", name: "Karim Mansour", title: "Content & PR Lead", division: "studio", rank: "specialist",
+    reportsTo: "zain-studio-vp", unit: "organic",
+    skills: mk("content-strategy", "public-relations", "copywriting", "ai-seo") },
+  { profile: "zain-studio-brand", title: "Brand Strategist", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp", unit: "design",
+    skills: ["product:brand-identity", "marketing:positioning-and-messaging", "marketing:brand-voice", ...mk("product-marketing", "customer-research")] },
+  { profile: "zain-studio-ux", title: "UX / Web Designer", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp", unit: "design",
+    skills: ["product:interface-craft", "product:ux-product-auditor", "product:design-styles",
+      ...mk("site-architecture", "cro", "signup", "onboarding")] },
 ];
 
 const growth: RosterAgent[] = [
   { profile: "zain-growth-vp", name: "Omar Khalid", title: "VP Growth", division: "growth", rank: "vp", reportsTo: CEO_PROFILE,
-    skills: ["marketing:chief-marketing-officer", "marketing:marketing-planning"] },
-  { profile: "zain-growth-paid", title: "Paid Ads Manager", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp",
-    skills: ["demand-generation:paid-advertising", "demand-generation:experimentation"] },
-  { profile: "zain-growth-seo", title: "SEO & AI Search", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp",
-    skills: ["demand-generation:seo-strategy", "demand-generation:ai-search-optimization", "demand-generation:programmatic-seo"] },
-  { profile: "zain-growth-cro", title: "CRO Specialist", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp",
-    skills: ["demand-generation:landing-page-cro-expert", "demand-generation:lead-capture"] },
-  { profile: "zain-growth-lifecycle", title: "Lifecycle / CRM", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp",
-    skills: ["demand-generation:lifecycle-messaging", "marketing:newsletter-writer"] },
-  { profile: "zain-growth-campaigns", title: "Campaign Planner", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp",
-    skills: ["marketing:marketing-campaign-planner", "marketing:partnership-marketing"] },
-  { profile: "zain-growth-analyst", title: "Marketing Analyst", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp",
-    skills: ["demand-generation:marketing-analytics", "data-analytics:quantitative-analysis"] },
+    skills: ["marketing:chief-marketing-officer", "marketing:marketing-planning",
+      ...mk("marketing-plan", "marketing-council", "marketing-loops", "offers", "pricing", "launch", "analytics", "revops")] },
+  { profile: "zain-growth-paid", title: "Paid Ads Manager", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp", unit: "performance",
+    skills: ["demand-generation:paid-advertising", "demand-generation:experimentation", ...mk("ads", "ad-creative", "attribution", "ab-testing")] },
+  { profile: "zain-growth-cro", title: "CRO Specialist", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp", unit: "performance",
+    skills: ["demand-generation:landing-page-cro-expert", "demand-generation:lead-capture",
+      ...mk("cro", "ab-testing", "signup", "onboarding", "popups", "paywalls", "lead-magnets", "free-tools")] },
+  { profile: "zain-growth-analyst", title: "Marketing Analyst", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp", unit: "performance",
+    skills: ["demand-generation:marketing-analytics", "data-analytics:quantitative-analysis",
+      ...mk("analytics", "attribution", "customer-research", "competitor-profiling")] },
+  { profile: "zain-growth-seo", title: "SEO & AI Search", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp", unit: "growth",
+    skills: ["demand-generation:seo-strategy", "demand-generation:ai-search-optimization", "demand-generation:programmatic-seo",
+      ...mk("seo-audit", "ai-seo", "programmatic-seo", "schema", "site-architecture", "competitors", "aso", "directory-submissions")] },
+  { profile: "zain-growth-lifecycle", title: "Lifecycle / CRM", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp", unit: "growth",
+    skills: ["demand-generation:lifecycle-messaging", "marketing:newsletter-writer",
+      ...mk("emails", "sms", "churn-prevention", "referrals", "onboarding")] },
+  { profile: "zain-growth-campaigns", title: "Campaign Planner", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp", unit: "growth",
+    skills: ["marketing:marketing-campaign-planner", "marketing:partnership-marketing",
+      ...mk("launch", "events", "co-marketing", "influencer-marketing", "marketing-ideas")] },
+  { profile: "zain-growth-audit", name: "Rami Saleh", title: "Prospect Audit Lead", division: "growth", rank: "specialist",
+    reportsTo: "zain-growth-vp", unit: "growth",
+    focus: "Runs prospect audits (SEO, competitors, ads, analytics) that Zain Growth sends to potential clients.",
+    skills: mk("seo-audit", "competitors", "competitor-profiling", "ads", "analytics", "prospecting") },
+  { profile: "zain-growth-outbound", name: "Hadi Nasser", title: "Outbound & Partnerships", division: "growth", rank: "specialist",
+    reportsTo: "zain-growth-vp", unit: "growth",
+    focus: "Prospect lists, outreach drafts and partner pitches. Ahmad (zain-hq-accounts) sends every client and prospect email; you never contact anyone outside Zain yourself.",
+    skills: mk("prospecting", "cold-email", "sales-enablement", "co-marketing") },
 ];
 
 const labs: RosterAgent[] = [

@@ -23,7 +23,8 @@ export function isValidAgent(a: unknown): a is WorldAgent {
     typeof o.hired === "boolean" &&
     (o.bubble === undefined || typeof o.bubble === "string") &&
     (o.team === undefined || typeof o.team === "string") &&
-    (o.teamRole === undefined || typeof o.teamRole === "string")
+    (o.teamRole === undefined || typeof o.teamRole === "string") &&
+    (o.unit === undefined || typeof o.unit === "string")
   );
 }
 
@@ -36,7 +37,8 @@ export function sameAgent(a: WorldAgent, b: WorldAgent): boolean {
     a.bubble === b.bubble &&
     a.hired === b.hired &&
     a.team === b.team &&
-    a.teamRole === b.teamRole
+    a.teamRole === b.teamRole &&
+    a.unit === b.unit
   );
 }
 

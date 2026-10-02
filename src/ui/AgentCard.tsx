@@ -4,6 +4,7 @@ import { getDivision } from "@shared/divisions";
 import { agentActivity } from "@shared/flow";
 import { displayName } from "@shared/roster";
 import { SKILL_SOURCES, skillSourceFor } from "@shared/skillSources";
+import { findUnit } from "@shared/units";
 import { useBoard } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { ChannelLabel } from "./ChannelIcon";
@@ -42,6 +43,7 @@ export function AgentCard({ profile }: { profile: string }) {
   const vacant = loaded && !agent.hired;
   const channels = agent.clientChannels ?? [];
   const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
+  const unit = findUnit(agent.unit);
 
   return (
     <Panel title={displayName(agent)} accent={d.color} onClose={closePanel}>
@@ -63,6 +65,12 @@ export function AgentCard({ profile }: { profile: string }) {
         <dd>{d.name}</dd>
         <dt>Rank</dt>
         <dd>{RANK_LABEL[agent.rank]}</dd>
+        {unit && (
+          <>
+            <dt>Unit</dt>
+            <dd title={unit.summary}>{unit.name}</dd>
+          </>
+        )}
         {member ? (
           <>
             <dt>Role</dt>

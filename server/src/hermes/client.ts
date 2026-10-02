@@ -251,6 +251,20 @@ export class HermesClient {
     await this.request("POST", "/api/skills", input);
   }
 
+  /** Names of the profile's enabled skills (GET /api/skills leaves disabled ones out). */
+  async listSkills(profile: string): Promise<string[]> {
+    const data = await this.request<{ name?: unknown }[]>("GET", `/api/skills?profile=${encodeURIComponent(profile)}`);
+    return (Array.isArray(data) ? data : []).flatMap((s) => (typeof s?.name === "string" ? [s.name] : []));
+  }
+
+  /** Absolute path of a profile skill's SKILL.md on the Hermes host. */
+  async skillPath(profile: string, name: string): Promise<string> {
+    const query = `name=${encodeURIComponent(name)}&profile=${encodeURIComponent(profile)}`;
+    const data = await this.request<{ path?: unknown }>("GET", `/api/skills/content?${query}`);
+    if (typeof data.path !== "string") throw new Error(`Hermes gave no path for skill ${name}`);
+    return data.path;
+  }
+
   async ensureBoard(): Promise<void> {
     this.boardReady ??= this.createBoardIfMissing().catch((err: unknown) => {
       this.boardReady = undefined;

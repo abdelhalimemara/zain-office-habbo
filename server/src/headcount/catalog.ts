@@ -9,6 +9,11 @@ const REPO = "cbrock84/headcount";
 const SKILL_PATH = /^plugins\/([a-z0-9-]+)\/skills\/([a-z0-9-]+)\/SKILL\.md$/;
 const SKILL_ID = /^([a-z0-9-]+):((?:[a-z0-9-]+\/)?[a-z0-9-]+)$/;
 const CACHE_MS = 60 * 60 * 1000;
+/**
+ * A skill's supporting file relative to its folder, in a subdirectory Hermes serves to the agent
+ * (tools/skill_manager_tool.py ALLOWED_SUBDIRS minus scripts/). No segment may start with a dot.
+ */
+export const SUPPORTING_FILE = /^(?:references|templates|assets)\/(?:[A-Za-z0-9_][A-Za-z0-9._-]*\/)*[A-Za-z0-9_][A-Za-z0-9._-]*$/;
 const TIMEOUT_MS = 10_000;
 
 export interface HeadcountSourceOptions {
@@ -73,6 +78,8 @@ export class HeadcountSource {
   private readonly now: () => number;
   private readonly ref: string;
   private cached: { at: number; catalog: HeadcountCatalogResponse } | undefined;
+  /** Blob paths per source; a pinned ref never changes, so a good listing is kept for the process. */
+  private readonly trees = new Map<string, Promise<string[]>>();
 
   constructor(options: HeadcountSourceOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init));
@@ -122,6 +129,49 @@ export class HeadcountSource {
       : `https://raw.githubusercontent.com/${REPO}/${this.ref}/plugins/${parsed.department}/skills/${parsed.skill}/SKILL.md`;
     const res = await this.get(url, {});
     return res.text();
+  }
+
+  /** Supporting files of a multi-file source skill (see SkillSource.skillDir), relative to its folder. */
+  async supportingFiles(id: string): Promise<string[]> {
+    const target = this.sourceSkill(id);
+    if (!target) return [];
+    const prefix = `${target.dir}/`;
+    return (await this.sourceTree(target.source))
+      .filter((p) => p.startsWith(prefix))
+      .map((p) => p.slice(prefix.length))
+      .filter((p) => SUPPORTING_FILE.test(p))
+      .sort();
+  }
+
+  async supportingFile(id: string, path: string): Promise<string> {
+    const target = this.sourceSkill(id);
+    if (!target || !SUPPORTING_FILE.test(path)) throw new Error(`invalid supporting file ${path} for ${id}`);
+    const { source, dir } = target;
+    const file = `${dir}/${path}`.split("/").map(encodeURIComponent).join("/");
+    const res = await this.get(`https://raw.githubusercontent.com/${source.repo}/${encodeURIComponent(source.ref)}/${file}`, {});
+    return res.text();
+  }
+
+  private sourceSkill(id: string): { source: SkillSource; dir: string } | null {
+    const parsed = parseSkillId(id);
+    const source = skillSourceFor(id);
+    if (!parsed || !source?.skillDir || !source.skills.includes(parsed.skill)) return null;
+    return { source, dir: source.skillDir(parsed.skill) };
+  }
+
+  private sourceTree(source: SkillSource): Promise<string[]> {
+    let tree = this.trees.get(source.id);
+    if (!tree) {
+      const url = `https://api.github.com/repos/${source.repo}/git/trees/${encodeURIComponent(source.ref)}?recursive=1`;
+      tree = this.get(url, { Accept: "application/vnd.github+json" }).then(async (res) => {
+        const data = (await res.json()) as { tree?: { path?: unknown; type?: unknown }[]; truncated?: unknown };
+        if (!Array.isArray(data.tree) || data.truncated === true) throw new Error(`GitHub tree for ${source.repo} is incomplete`);
+        return data.tree.flatMap((e) => (e.type === "blob" && typeof e.path === "string" ? [e.path] : []));
+      });
+      tree.catch(() => this.trees.delete(source.id));
+      this.trees.set(source.id, tree);
+    }
+    return tree;
   }
 
   private async get(url: string, headers: Record<string, string>): Promise<Response> {
