@@ -16,6 +16,8 @@ function mockAgents(): WorldAgent[] {
     activity: a.rank === "board" ? "working" : ACTIVITIES[i % ACTIVITIES.length]!,
     bubble: i % 3 === 0 ? "Q4 launch brief" : undefined,
     hired: params.get("vacant") === "all" ? false : a.rank === "board" || i % 7 !== 6,
+    ...(a.team ? { team: a.team } : {}),
+    ...((a as { teamRole?: string }).teamRole ? { teamRole: (a as { teamRole?: string }).teamRole } : {}),
   }));
   const extraBoard = [
     { profile: "zain-board-bezos", title: "Board · Jeff Bezos" },
