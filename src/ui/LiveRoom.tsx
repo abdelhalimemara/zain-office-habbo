@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { RosterEntry } from "@shared/api";
 import type { BoardMeeting } from "@shared/meetings";
-import { formatElapsed, type Caption } from "./liveModel";
+import { seatLabel } from "./leadershipModel";
+import { formatElapsed, liveCopy, type Caption, type LiveCopy } from "./liveModel";
 import { FOUNDER, speakerName } from "./meetingModel";
 import { Portrait } from "./Portrait";
 import { useLiveRoom, type LiveRoom as Room } from "./useLiveRoom";
@@ -12,10 +13,15 @@ interface Seat {
   name: string;
 }
 
-/** Board seats in the room: the session's speakers once joined, the invited members before. */
+/**
+ * Seats in the room: the session's speakers once joined, the invited members before. The VP room labels its seats
+ * by role (CEO, COO, VP Studio…) whatever the session calls them.
+ */
 function seatsFor(meeting: BoardMeeting, room: Room, agents: readonly RosterEntry[]): Seat[] {
-  const fromSession = room.speakers.map((s) => ({ profile: s.profile, name: s.name }));
-  const seats = fromSession.length ? fromSession : meeting.members.map((m) => ({ profile: m, name: speakerName(m, agents) }));
+  const leadership = meeting.kind === "leadership";
+  const name = (profile: string, given?: string) => (leadership ? seatLabel(profile, agents) : (given ?? speakerName(profile, agents)));
+  const fromSession = room.speakers.map((s) => ({ profile: s.profile, name: name(s.profile, s.name) }));
+  const seats = fromSession.length ? fromSession : meeting.members.map((m) => ({ profile: m, name: name(m) }));
   return seats.filter((s, i) => seats.findIndex((x) => x.profile === s.profile) === i);
 }
 
@@ -86,7 +92,7 @@ function Captions({ captions, seats, agents, speaker }: { captions: readonly Cap
   );
 }
 
-function statusLine(room: Room): string {
+function statusLine(room: Room, copy: LiveCopy): string {
   switch (room.phase) {
     case "joining":
       return "Connecting to the room…";
@@ -97,7 +103,7 @@ function statusLine(room: Room): string {
     case "ending":
       return "Call ended";
     case "ended":
-      return "Handed over to the board";
+      return copy.ended;
     default:
       return "Not in the room";
   }
@@ -112,18 +118,18 @@ function LevelMeter({ level, muted }: { level: number; muted: boolean }) {
   );
 }
 
-function EndControl({ room }: { room: Room }) {
+function EndControl({ room, copy }: { room: Room; copy: LiveCopy }) {
   const [confirming, setConfirming] = useState(false);
   if (!room.canEnd || room.phase === "ending" || room.phase === "ended") return null;
   if (!confirming)
     return (
       <button type="button" className="zui-btn zui-btn--primary" onClick={() => setConfirming(true)}>
-        End meeting &amp; vote
+        {copy.endButton}
       </button>
     );
   return (
     <div className="zui-confirm" role="group" aria-label="Confirm end meeting">
-      <span>End the discussion and go to the vote?</span>
+      <span>{copy.confirmQuestion}</span>
       <button
         type="button"
         className="zui-btn zui-btn--primary"
@@ -132,7 +138,7 @@ function EndControl({ room }: { room: Room }) {
           room.end();
         }}
       >
-        End &amp; vote
+        {copy.confirmButton}
       </button>
       <button type="button" className="zui-btn" onClick={() => setConfirming(false)}>
         Keep talking
@@ -141,9 +147,10 @@ function EndControl({ room }: { room: Room }) {
   );
 }
 
-/** A voice meeting's live room: always-on mic, the board in their own voices, captions per speaker. */
+/** A voice meeting's live room: always-on mic, the board (or the execs) in their own voices, captions per speaker. */
 export function LiveRoom({ meeting, agents }: { meeting: BoardMeeting; agents: readonly RosterEntry[] }) {
   const room = useLiveRoom(meeting);
+  const copy = liveCopy(meeting.kind);
   const seats = seatsFor(meeting, room, agents);
   const inCall = room.phase === "connected";
   const busy = room.phase === "joining" || room.phase === "ending";
@@ -154,11 +161,11 @@ export function LiveRoom({ meeting, agents }: { meeting: BoardMeeting; agents: r
       <div className="zui-live__top">
         <span className="zui-live__status" role="status" aria-live="polite">
           <span className="zui-live__dot" aria-hidden="true" />
-          {statusLine(room)}
+          {statusLine(room, copy)}
         </span>
         {inCall && (
           <span className="zui-hint">
-            {room.mode === "speaking" ? "The board is speaking. Jump in any time." : room.captions.length === 0 ? "The board is waiting for you to open." : "The floor is open. Just talk."}
+            {room.mode === "speaking" ? copy.speaking : room.captions.length === 0 ? copy.waiting : "The floor is open. Just talk."}
           </span>
         )}
       </div>
@@ -181,7 +188,7 @@ export function LiveRoom({ meeting, agents }: { meeting: BoardMeeting; agents: r
             <MicIcon />
             {room.phase === "joining" ? "Joining…" : room.saving ? "Saving the last session…" : "Join the room"}
           </button>
-          <p className="zui-hint">You lead the meeting, so the board waits for you to open. Your mic stays on the whole time; anyone can jump in.</p>
+          <p className="zui-hint">{copy.joinHint}</p>
         </div>
       )}
 
@@ -200,7 +207,7 @@ export function LiveRoom({ meeting, agents }: { meeting: BoardMeeting; agents: r
           <button type="button" className="zui-btn zui-live__leave" onClick={room.leave}>
             Leave
           </button>
-          <EndControl room={room} />
+          <EndControl room={room} copy={copy} />
         </div>
       )}
 
@@ -211,10 +218,10 @@ export function LiveRoom({ meeting, agents }: { meeting: BoardMeeting; agents: r
             <span />
             <span />
           </span>
-          Handing over to the board for the vote…
+          {copy.ending}
         </p>
       ) : (
-        !inCall && <EndControl room={room} />
+        !inCall && <EndControl room={room} copy={copy} />
       )}
 
       {room.captions.length > 0 ? (

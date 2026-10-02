@@ -10,7 +10,7 @@ export const meetingKeys = {
 export const MEETING_POLL_ACTIVE_MS = 5_000;
 export const MEETING_POLL_IDLE_MS = 30_000;
 
-const SETTLED: ReadonlySet<BoardMeeting["status"]> = new Set(["concluded", "cancelled"]);
+const SETTLED: ReadonlySet<BoardMeeting["status"]> = new Set(["concluded", "assigned", "cancelled"]);
 
 export function isMeetingActive(m: Pick<BoardMeeting, "status">): boolean {
   return !SETTLED.has(m.status);
@@ -37,7 +37,7 @@ export function useMeeting(id: string) {
   });
 }
 
-function useInvalidateMeetings() {
+export function useInvalidateMeetings() {
   const qc = useQueryClient();
   return (id?: string) => {
     void qc.invalidateQueries({ queryKey: meetingKeys.list });

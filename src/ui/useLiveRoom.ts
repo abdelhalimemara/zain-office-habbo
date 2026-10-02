@@ -5,7 +5,7 @@ import type { BoardMeeting } from "@shared/meetings";
 import type { LiveSpeaker } from "@shared/voice";
 import { api, ApiRequestError } from "../api/client";
 import { meetingKeys } from "../api/meetingHooks";
-import { addMessage, currentSpeaker, joinError, latestAgentParts, nextUserTalking, type Caption, type LiveError } from "./liveModel";
+import { addMessage, currentSpeaker, joinError, latestAgentParts, liveCopy, nextUserTalking, type Caption, type LiveError } from "./liveModel";
 
 type Session = Awaited<ReturnType<typeof Conversation.startSession>>;
 
@@ -79,9 +79,13 @@ async function checkMic(): Promise<void> {
   stream.getTracks().forEach((t) => t.stop());
 }
 
-/** One live board room on @elevenlabs/client: always-on mic, captions per speaker, and the hand-over to the vote. */
-export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversationIds">): LiveRoom {
+/**
+ * One live room on @elevenlabs/client: always-on mic, captions per speaker, and the final hand-over (to the board's
+ * vote, or to the CEO agent drafting a leadership meeting's tasks).
+ */
+export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversationIds" | "kind">): LiveRoom {
   const qc = useQueryClient();
+  const copy = liveCopy(meeting.kind);
   const [phase, setPhase] = useState<LivePhase>("idle");
   const [status, setStatus] = useState<Status>("disconnected");
   const [mode, setMode] = useState<Mode>("listening");
@@ -164,9 +168,9 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
 
   const saveEnded = useCallback(() => {
     flush().catch((err: unknown) => {
-      if (mountedRef.current) setError({ kind: "save", message: `Couldn't save the last session for the board: ${errorText(err)}` });
+      if (mountedRef.current) setError({ kind: "save", message: `${copy.saveError}: ${errorText(err)}` });
     });
-  }, [flush]);
+  }, [flush, copy]);
 
   const resetCall = useCallback(() => {
     setStatus("disconnected");
@@ -201,7 +205,7 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
           if (stale()) return;
           resetCall();
           setPhase("idle");
-          setError({ kind: "save", message: `Couldn't save the last session, so the board can't pick up from it: ${errorText(err)}` });
+          setError({ kind: "save", message: `${copy.rejoinSaveError}: ${errorText(err)}` });
           return;
         }
         if (stale()) return;
@@ -275,7 +279,7 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
         setError(joinError(err));
       }
     })();
-  }, [meeting.id, hangUp, resetCall, flush, remember, saveEnded]);
+  }, [meeting.id, hangUp, resetCall, flush, remember, saveEnded, copy]);
 
   const leave = useCallback(() => {
     void hangUp().then(saveEnded);
@@ -309,10 +313,10 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
         setPhase("ended");
       } catch (err) {
         setPhase("idle");
-        setError({ kind: "end", message: `Couldn't hand the meeting to the board: ${errorText(err)}` });
+        setError({ kind: "end", message: `${copy.endError}: ${errorText(err)}` });
       }
     })();
-  }, [handoverId, meeting.id, hangUp, resetCall, qc, flush, postEnd, setUnsaved]);
+  }, [handoverId, meeting.id, hangUp, resetCall, qc, flush, postEnd, setUnsaved, copy]);
 
   // A session left unsaved by an earlier visit (reload, crash) is saved before the founder can rejoin.
   useEffect(() => {

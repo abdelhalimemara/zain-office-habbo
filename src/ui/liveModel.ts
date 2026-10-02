@@ -1,3 +1,4 @@
+import type { MeetingKind } from "@shared/meetings";
 import { splitBySpeaker, type LiveSpeaker } from "@shared/voice";
 import { ApiRequestError } from "../api/client";
 import { FOUNDER } from "./meetingModel";
@@ -116,4 +117,56 @@ export function formatElapsed(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
   const m = Math.floor(s / 60);
   return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** The words that differ between the board room (ends in a vote) and the VP room (ends in tasks to review). */
+export interface LiveCopy {
+  /** Who sits across the table, e.g. "the board". */
+  room: string;
+  endButton: string;
+  confirmQuestion: string;
+  confirmButton: string;
+  ending: string;
+  ended: string;
+  waiting: string;
+  speaking: string;
+  joinHint: string;
+  endError: string;
+  saveError: string;
+  rejoinSaveError: string;
+}
+
+export const LIVE_COPY: Record<MeetingKind, LiveCopy> = {
+  board: {
+    room: "the board",
+    endButton: "End meeting & vote",
+    confirmQuestion: "End the discussion and go to the vote?",
+    confirmButton: "End & vote",
+    ending: "Handing over to the board for the vote…",
+    ended: "Handed over to the board",
+    waiting: "The board is waiting for you to open.",
+    speaking: "The board is speaking. Jump in any time.",
+    joinHint: "You lead the meeting, so the board waits for you to open. Your mic stays on the whole time; anyone can jump in.",
+    endError: "Couldn't hand the meeting to the board",
+    saveError: "Couldn't save the last session for the board",
+    rejoinSaveError: "Couldn't save the last session, so the board can't pick up from it",
+  },
+  leadership: {
+    room: "your execs",
+    endButton: "End meeting & draft tasks",
+    confirmQuestion: "End the meeting? The CEO agent turns it into tasks for you to review.",
+    confirmButton: "End & draft tasks",
+    ending: "Handing over to the CEO agent to draft the tasks…",
+    ended: "Handed to the CEO agent",
+    waiting: "Your execs are waiting for you to open.",
+    speaking: "Your execs are speaking. Jump in any time.",
+    joinHint: "You lead the meeting, so your execs wait for you to open. Your mic stays on the whole time; anyone can jump in.",
+    endError: "Couldn't end the meeting and hand it to the CEO agent",
+    saveError: "Couldn't save the last session",
+    rejoinSaveError: "Couldn't save the last session, so your execs can't pick up from it",
+  },
+};
+
+export function liveCopy(kind: MeetingKind | undefined): LiveCopy {
+  return LIVE_COPY[kind ?? "board"];
 }

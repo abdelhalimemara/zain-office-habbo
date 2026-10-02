@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { RosterEntry } from "@shared/api";
 import { FOUNDER_REMARK_MAX, MAX_DISCUSSION_ROUNDS, type BoardMeeting, type FounderRemarkRequest, type MeetingTurn } from "@shared/meetings";
 import { isMeetingActive, useCancelMeeting, useFounderRemark, useMeeting } from "../api/meetingHooks";
@@ -21,10 +21,11 @@ export const DEFAULT_REMARK: Record<NonNullable<FounderRemarkRequest["next"]>, s
   "to-vote": "Please move to the vote.",
 };
 
-function Bubble({ turn, agents, now }: { turn: MeetingTurn; agents: readonly RosterEntry[]; now: number }) {
+/** One transcript turn; `name` overrides how the speaker is shown (the VP room labels seats by role). */
+export function Bubble({ turn, agents, now, name: given }: { turn: MeetingTurn; agents: readonly RosterEntry[]; now: number; name?: string }) {
   const founder = turn.speaker === FOUNDER;
   const agent = agents.find((a) => a.profile === turn.speaker);
-  const name = speakerName(turn.speaker, agents);
+  const name = founder ? "You" : (given ?? speakerName(turn.speaker, agents));
   return (
     <li className={`zui-turn${founder ? " zui-turn--founder" : ""}`}>
       {!founder && <Portrait agent={agent} name={name} size="md" />}
@@ -204,6 +205,11 @@ export function MeetingRoom({ id }: { id: string }) {
   const hasMinutes = meeting?.turns.some(isMinutes) ?? false;
   const isVoice = meeting?.mode === "voice";
   const live = isVoice && meeting?.status === "live";
+  const leadership = meeting?.kind === "leadership";
+  // A leadership meeting opened from a board link moves to the VP room.
+  useEffect(() => {
+    if (leadership) openPanel({ kind: "leadership", id });
+  }, [leadership, id, openPanel]);
 
   return (
     <Panel title={meeting?.topic ?? "Board meeting"} accent={BOARD_COLOR} onClose={closePanel} className="zui-panel--meeting">
