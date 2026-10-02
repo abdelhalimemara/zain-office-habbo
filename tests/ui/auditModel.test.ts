@@ -124,7 +124,9 @@ describe("audit state", () => {
   });
 
   it("offers retry after failure or cancel and cancel while working", () => {
-    expect([canRetry(failedAudit), canRetry({ status: "cancelled" }), canRetry(doneAudit), canRetry(runningAudit)]).toEqual([true, true, false, false]);
+    expect([canRetry(failedAudit), canRetry({ status: "cancelled", steps: [] }), canRetry(doneAudit), canRetry(runningAudit)]).toEqual([true, true, false, false]);
+    const filingFailed = { ...doneAudit, steps: doneAudit.steps.map((s) => (s.id === "notion" ? { ...s, status: "failed" as const } : s)) };
+    expect(canRetry(filingFailed)).toBe(true);
     expect([canCancel(runningAudit), canCancel({ status: "queued" }), canCancel(doneAudit), canCancel(failedAudit)]).toEqual([true, true, false, false]);
   });
 

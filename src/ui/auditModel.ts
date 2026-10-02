@@ -201,8 +201,10 @@ export function groupFindings(findings: readonly AuditFinding[]): { section: Sec
   })).filter((g) => g.findings.length > 0);
 }
 
-export function canRetry(audit: Pick<ProspectAudit, "status">): boolean {
-  return audit.status === "failed" || audit.status === "cancelled";
+/** Failed or cancelled audits, and finished ones with a failed step (a CRM or Notion filing, say), can be rerun. */
+export function canRetry(audit: Pick<ProspectAudit, "status" | "steps">): boolean {
+  if (audit.status === "failed" || audit.status === "cancelled") return true;
+  return audit.status === "done" && audit.steps.some((s) => s.status === "failed");
 }
 
 export function canCancel(audit: Pick<ProspectAudit, "status">): boolean {
