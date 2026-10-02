@@ -52,8 +52,8 @@ export interface AuditProspect {
 export type Grade = "A" | "B" | "C" | "D" | "E";
 
 /**
- * The seven areas of the Zain Growth "Digital Gap Audit" template (~/ZainGroup/templates/Digital Marketing Audit
- * Gap Template.pdf). Every area gets a status and, when it is a gap, a severity; "not-measured" is honest coverage,
+ * The seven areas of the Zain Growth "Digital Gap Audit" template (/Users/abdelhalimemara/Desktop/Zain Studio/Zain_Documents/Templates/
+ * Digital Marketing Audit Gap Template.pdf, outside the repo). Every area gets a status and, when it is a gap, a severity; "not-measured" is honest coverage,
  * not a finding.
  */
 export type AuditArea =
@@ -124,6 +124,23 @@ export interface BenchmarkRow {
   instagramFollowers?: number | "not-measured";
   /** Similarweb-style estimates, directional only. */
   traffic?: { monthlyVisits: number; bounceRate?: number; topSource?: string; saudiShare?: number; period: string } | "not-measured";
+  /** Semrush via Apify, estimated. */
+  authorityScore?: number;
+  organicTraffic?: number;
+}
+
+/** Semrush (via Apify) SEO read of the prospect's domain; every figure is an estimate. */
+export interface SeoRead {
+  source: string;
+  authorityScore?: number;
+  organicKeywords?: number;
+  organicTraffic?: number;
+  backlinks?: number;
+  referringDomains?: number;
+  topKeywords: { keyword: string; position: number; volume?: number; url?: string }[];
+  topPages: { url: string; traffic?: number }[];
+  issues: { title: string; severity: Severity; count?: number }[];
+  competitors: { domain: string; commonKeywords?: number; authorityScore?: number }[];
 }
 
 export interface SearchRun {
@@ -212,6 +229,7 @@ export interface ProspectAudit {
   searchRuns?: SearchRun[];
   social?: SocialChannelRow[];
   tags?: TagRead[];
+  seo?: SeoRead;
   /** Served by the Zain HQ server: the mobile home-page capture for "What a Visitor Sees". */
   screenshotPath?: string;
   analysis?: AuditAnalysis;
