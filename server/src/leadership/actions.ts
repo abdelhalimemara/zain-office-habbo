@@ -98,8 +98,9 @@ export function parseUpdateActions(body: Record<string, unknown>): UpdateActions
     const a = draftedAction(raw);
     if (typeof a === "string") throw badRequest(`action ${i + 1}: ${a}`);
     const id = (raw as Record<string, unknown>).id;
-    if (id !== undefined && (typeof id !== "string" || !ACTION_ID.test(id))) throw badRequest(`action ${i + 1}: invalid id`);
-    return { id: (id as string | undefined) ?? "", ...a };
+    if (id !== undefined && id !== null && (typeof id !== "string" || id.length > 64)) throw badRequest(`action ${i + 1}: invalid id`);
+    // Only server ids are kept; a client's own id for a new row (e.g. "local-…") means a new action.
+    return { id: typeof id === "string" && ACTION_ID.test(id) ? id : "", ...a };
   });
   return { ...(typeof priorities === "string" ? { priorities: priorities.trim() } : {}), actions: parsed };
 }

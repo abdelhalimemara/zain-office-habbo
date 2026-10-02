@@ -41,6 +41,14 @@ export interface LeadershipServiceOptions {
   log?: (line: string) => void;
 }
 
+/** One action's outcome in an assign call. */
+export interface AssignResult {
+  id: string;
+  ok: boolean;
+  taskId?: string;
+  error?: string;
+}
+
 /** Stable tag in an assigned action's mandate body, so a retry adopts the mandate instead of creating it twice. */
 export function actionMarker(meetingId: string, actionId: string): string {
   return `<!-- zain-leadership-action:${meetingId}:${actionId} -->`;
@@ -124,7 +132,7 @@ export class LeadershipService {
    * skipped, and a mandate already on the board for an action is adopted. A failed action stays proposed; when none
    * is left, the meeting is assigned and the weekly priorities file is written.
    */
-  assign(id: string, ids?: readonly string[]): Promise<BoardMeeting> {
+  assign(id: string, ids?: readonly string[]): Promise<{ meeting: BoardMeeting; results: AssignResult[] }> {
     return this.locked(id, async () => {
       const stored = await this.reviewing(id);
       const m = stored.meeting;
@@ -136,14 +144,17 @@ export class LeadershipService {
       const board = targets.length ? await this.options.hermes.board().then(allTasks).catch(() => [] as KanbanTask[]) : [];
       const teams = targets.length ? ((await this.options.teams?.()) ?? undefined) : undefined;
       const failures: string[] = [];
+      const results: AssignResult[] = [];
       for (const action of targets) {
         try {
           action.taskId = (board.find((t) => (t.body ?? "").includes(actionMarker(m.id, action.id))) ?? (await this.mandate(m, action, teams))).id;
           action.status = "assigned";
           await this.options.meetings.persist(stored, false);
+          results.push({ id: action.id, ok: true, taskId: action.taskId });
         } catch (err) {
-          const why = err instanceof Error ? err.message : "error";
+          const why = (err instanceof Error ? err.message : "error").slice(0, 200);
           failures.push(why);
+          results.push({ id: action.id, ok: false, error: why });
           this.log(`leadership: assigning ${action.id} of ${m.id} failed (${why})`);
         }
       }
@@ -156,7 +167,7 @@ export class LeadershipService {
       if (targets.length > 0 && failures.length === targets.length) {
         throw new HttpError(502, `no action could be assigned (${failures[0]})`);
       }
-      return m;
+      return { meeting: m, results };
     });
   }
 

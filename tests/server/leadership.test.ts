@@ -294,7 +294,7 @@ describe("reviewing the actions", () => {
       { actions: [{ ...ok, title: "x".repeat(201) }] },
       { actions: [{ ...ok, detail: "x".repeat(4001) }] },
       { actions: [{ ...ok, due: "2026-02-30" }] },
-      { actions: [{ ...ok, id: "bogus" }] },
+      { actions: [{ ...ok, id: 42 }] },
       { actions: Array.from({ length: 26 }, () => ok) },
       { priorities: "x".repeat(2001), actions: [] },
     ]) {
@@ -312,6 +312,7 @@ describe("reviewing the actions", () => {
         { ...studio, title: "Ship the Acme brand book v2", status: "assigned", taskId: "t_99" },
         { division: "hq", title: "Close September books", detail: "", priority: "P2", due: "2026-10-06" },
         { id: "act_00000000", division: "growth", title: "Unknown id", detail: "", priority: "P3" },
+        { id: "local-1f3a", division: "labs", title: "Client row", detail: "", priority: "P3" },
       ],
     });
     expect(res.status).toBe(200);
@@ -321,9 +322,11 @@ describe("reviewing the actions", () => {
       [true, "Ship the Acme brand book v2", "proposed", undefined],
       [false, "Close September books", "proposed", undefined],
       [false, "Unknown id", "proposed", undefined],
+      [false, "Client row", "proposed", undefined],
       [false, tech!.title, "dropped", undefined],
     ]);
-    expect(outcome!.actions[3]!.id).toBe(tech!.id);
+    expect(outcome!.actions[3]!.id).toMatch(/^act_[a-f0-9]{8}$/);
+    expect(outcome!.actions[4]!.id).toBe(tech!.id);
     expect(outcome!.actions[2]!.id).not.toBe("act_00000000");
   });
 });
@@ -343,9 +346,14 @@ describe("assigning the actions", () => {
     const { meeting } = await reviewed(r);
     const res = await r.assign(meeting.id);
     expect(res.status).toBe(200);
-    let m = (await res.json()).meeting as BoardMeeting;
+    const first = (await res.json()) as { meeting: BoardMeeting; results: { id: string; ok: boolean; taskId?: string; error?: string }[] };
+    let m = first.meeting;
     expect(m.status).toBe("review");
     const [studio, tech] = m.outcome!.actions;
+    expect(first.results).toEqual([
+      { id: studio!.id, ok: true, taskId: studio!.taskId },
+      { id: tech!.id, ok: false, error: expect.any(String) },
+    ]);
     expect(studio).toMatchObject({ status: "assigned", taskId: expect.stringMatching(/^t_/) });
     expect(tech).toMatchObject({ status: "proposed" });
     const mandate = r.kanban.tasks.get(studio!.taskId!)!;
