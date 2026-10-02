@@ -53,6 +53,7 @@ export async function taskDetail(id: string, hermes: HermesClient, hires: HireSt
     parents: detail.links?.parents ?? [],
     children: detail.links?.children ?? [],
     subtasks: await mandateSubtasks(detail, roster, hermes),
+    history: [],
   };
 }
 

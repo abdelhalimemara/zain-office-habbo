@@ -64,6 +64,33 @@ export interface TaskDetailResponse {
   children: string[];
   /** The mandate's subtasks (from its parents); empty for non-mandates. */
   subtasks: Subtask[];
+  /** Human-readable timeline, oldest first; noise (heartbeats, spawns, workspace tips) removed. */
+  history: TaskHistoryEntry[];
+}
+
+export type TaskHistoryKind =
+  | "created"
+  | "started"
+  | "subtask-linked"
+  | "blocked"
+  | "unblocked"
+  | "review-requested"
+  | "sent-back"
+  | "completed"
+  | "commented"
+  | "status";
+
+export interface TaskHistoryEntry {
+  id: number;
+  kind: TaskHistoryKind;
+  /** Unix seconds. */
+  at: number;
+  /** Roster profile or UI author when known. */
+  actor: string | null;
+  /** One line, plain text, ≤ 280 chars (summary, reason, comment excerpt, linked task id…). */
+  text: string | null;
+  /** Related task id (e.g. the linked subtask). */
+  relatedTaskId?: string;
 }
 
 /** POST taskComments → 201 TaskDetailResponse (refreshed). */

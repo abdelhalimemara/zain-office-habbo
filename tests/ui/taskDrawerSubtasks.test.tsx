@@ -7,6 +7,7 @@ import { TaskDrawer } from "../../src/ui/TaskDrawer";
 import { mockFetch, renderUi, resetStore, rosterEntries, task } from "./helpers";
 
 const mandate: TaskDetailResponse = {
+  history: [],
   task: task({ id: "m1", title: "Rebrand", status: "blocked", assignee: "zain-studio-vp", progress: { done: 0, total: 1 } }),
   comments: [],
   parents: ["s1", "s2"],

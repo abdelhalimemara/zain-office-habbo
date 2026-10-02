@@ -11,6 +11,7 @@ function detail(status: "review" | "running" | "done", assignee = "zain-tech-vp"
   return {
     task: task({ id: "t1", title: "Launch site", status, assignee, body: `Line one\n${evil}`, result: "Done\n  indented" }),
     comments: [{ id: 1, task_id: "t1", author: "zain-tech-qa", body: evil, created_at: 0 }],
+    history: [],
     parents: [],
     children: [],
     subtasks: [],
