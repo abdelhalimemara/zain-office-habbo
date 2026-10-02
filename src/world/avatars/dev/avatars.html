@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voxel avatars</title>
+    <style>
+      html, body { margin: 0; background: #c8c8cd; font: 12px system-ui, sans-serif; color: #222; }
+      #bar { position: fixed; top: 6px; left: 6px; z-index: 2; display: flex; gap: 4px; flex-wrap: wrap; }
+      #bar a { background: #fff; color: #222; border: 1px solid #999; padding: 3px 8px; text-decoration: none; border-radius: 3px; }
+      #stage canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <div id="bar"></div>
+    <div id="stage"></div>
+    <script type="module" src="./avatars.ts"></script>
+  </body>
+</html>
