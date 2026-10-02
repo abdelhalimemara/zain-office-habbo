@@ -26,6 +26,8 @@ export function toWorldAgents(roster: RosterEntry[], board: KanbanBoard | undefi
       rank: agent.rank,
       activity,
       hired: agent.hired,
+      ...(agent.team ? { team: agent.team } : {}),
+      ...(agent.teamRole ? { teamRole: agent.teamRole } : {}),
       ...(task ? { bubble: truncate(task.title) } : {}),
     };
   });

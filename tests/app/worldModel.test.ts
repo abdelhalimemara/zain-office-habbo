@@ -71,3 +71,12 @@ describe("worldModel", () => {
     expect(isManager(undefined)).toBe(false);
   });
 });
+
+describe("tech teams in the world", () => {
+  it("passes team and teamRole through for tech team members", () => {
+    const agents = toWorldAgents(rosterOrFallback(undefined), undefined);
+    const lead = agents.find((a) => a.team === "storelens" && a.teamRole === "head-engineer");
+    expect(lead).toBeDefined();
+    expect(agents.find((a) => a.profile === "zain-tech-vp")?.team).toBeUndefined();
+  });
+});
