@@ -261,10 +261,10 @@ describe("turn audio", () => {
     expect(live.labs.calls).toEqual([]);
     live.kanban.completeAll("· Vote", () => "VOTE: approve\nCairo is promising.");
     await live.meetings.tick();
-    await flush();
     const m = await live.meetings.get(meeting.id);
     expect(m.turns.map((t) => t.speaker)).toEqual([HORMOZI, HORMOZI, BUFFETT]);
-    expect(live.labs.calls).toHaveLength(2);
+    // Prefetch is fire-and-forget: wait for it rather than for a fixed delay.
+    await vi.waitFor(() => expect(live.labs.calls).toHaveLength(2), { timeout: 2000 });
     expect((await live.audio(m.id, 1)).status).toBe(200);
     expect(live.labs.calls).toHaveLength(2);
   });
