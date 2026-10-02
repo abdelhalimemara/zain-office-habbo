@@ -23,10 +23,17 @@ export const BOARD_SPRITE_BY_PROFILE: Readonly<Record<string, BoardSprite>> = {
 /** The CEO always wears the sharp dark suit. */
 export const CEO_SPRITE: SpriteKey = "people/male-1";
 
+/** Named agents with a fixed look. */
+export const NAMED_SPRITE_BY_PROFILE: Readonly<Record<string, SpriteKey>> = {
+  "zain-hq-accounts": "people/male-2",
+};
+
 export function spriteFor(profile: string, rank: Rank): SpriteKey {
   const board = BOARD_SPRITE_BY_PROFILE[profile];
   if (board) return `board/${board}`;
   if (rank === "ceo" || profile === CEO_PROFILE) return CEO_SPRITE;
+  const named = NAMED_SPRITE_BY_PROFILE[profile];
+  if (named) return named;
   const h = hashString(profile);
   return `people/${WORKER_SPRITES[h % WORKER_SPRITES.length]!}`;
 }

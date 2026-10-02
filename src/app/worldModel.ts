@@ -21,7 +21,7 @@ export function toWorldAgents(roster: RosterEntry[], board: KanbanBoard | undefi
     const { activity, task } = board ? agentActivity(agent.profile, board) : { activity: "idle" as const, task: null };
     return {
       profile: agent.profile,
-      title: agent.title,
+      title: agent.name ?? agent.title,
       division: agent.division,
       rank: agent.rank,
       activity,

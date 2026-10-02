@@ -41,7 +41,8 @@ export function useCreateMandate() {
 export function useApprove() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, note }: { id: string } & ApproveRequest) => api.approve(id, note ? { note } : {}),
+    mutationFn: ({ id, note, finalText }: { id: string } & ApproveRequest) =>
+      api.approve(id, { ...(note ? { note } : {}), ...(finalText ? { finalText } : {}) }),
     onSuccess: (_data, { id }) => {
       void qc.invalidateQueries({ queryKey: queryKeys.board });
       void qc.invalidateQueries({ queryKey: queryKeys.task(id) });
