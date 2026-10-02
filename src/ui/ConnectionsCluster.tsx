@@ -206,6 +206,9 @@ export function ConnectionsRow() {
   }, [openId]);
 
   const connections = data?.connections ?? [];
+  // Hold the row's height while the first check runs (CLI probes take seconds): the world fits under
+  // the HUD, so a row appearing late would shift every building out from under the pointer.
+  if (!data && !error) return <div className="zui-conn-row zui-conn-row--loading" aria-hidden="true" data-testid="connections-placeholder" />;
   if (error || connections.length === 0) return null;
   const kinds = CONNECTION_GROUPS.map((g) => connections.filter((c) => c.kind === g.kind)).filter((list) => list.length > 0);
   const open = connections.find((c) => c.id === openId);

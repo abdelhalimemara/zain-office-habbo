@@ -29,16 +29,18 @@ const tree = Object.entries(SKILLS).flatMap(([dept, skills]) =>
   skills.map((skill) => ({ path: `plugins/${dept}/skills/${skill}/SKILL.md`, type: "blob" })),
 );
 
-// The server shells out to the `hermes` CLI (HERMES_BIN), which writes to the user's real ~/.hermes.
-// Record what HERMES_BIN this process sees, and refuse to run any `hermes` binary but the stub.
+// The server shells out to the `hermes` CLI (HERMES_BIN), which writes to the user's real ~/.hermes,
+// and its connection checks run gh, ntn and Hermes' Python against the user's real credentials.
+// Record what HERMES_BIN and HOME this process sees, and run nothing but node, project binaries
+// (tsx's esbuild) and the hermes stub.
 const stubBin = process.env.E2E_HERMES_STUB;
 if (process.env.E2E_SERVER_ENV_FILE) {
-  appendFileSync(process.env.E2E_SERVER_ENV_FILE, `${JSON.stringify({ pid: process.pid, HERMES_BIN: process.env.HERMES_BIN ?? null })}\n`);
+  appendFileSync(process.env.E2E_SERVER_ENV_FILE, `${JSON.stringify({ pid: process.pid, HERMES_BIN: process.env.HERMES_BIN ?? null, HOME: process.env.HOME ?? null, HERMES_HOME: process.env.HERMES_HOME ?? null })}\n`);
 }
 const mayRun = (file) => {
   const f = String(file);
   if (/(^|\/)hermes$/.test(f) || f.includes("/.local/bin/hermes")) return false;
-  return f === stubBin || !/hermes/i.test(f.split("/").pop() ?? "");
+  return f === stubBin || f === process.execPath || f === "node" || f.includes("/node_modules/");
 };
 const refused = (file) => new Error(`e2e isolation: refused to run ${file}`);
 for (const name of ["execFile", "spawn", "execFileSync", "spawnSync"]) {

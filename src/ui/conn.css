@@ -22,6 +22,8 @@
 .zui-conns--compact .zui-conn-pill { width: 32px; padding: 0; justify-content: center; }
 
 .zui-conn-row { position: relative; flex-basis: 100%; min-width: 0; margin: -2px 0 0; padding-top: 6px; border-top: 1px solid var(--line); }
+/* One pill (26px) plus the scroll row's 1px padding on each side. */
+.zui-conn-row--loading { box-sizing: content-box; height: 28px; }
 .zui-conn-row__scroll {
   display: flex;
   align-items: center;

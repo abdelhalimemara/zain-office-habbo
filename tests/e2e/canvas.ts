@@ -107,20 +107,57 @@ export async function clickThrough(
   return outcomes;
 }
 
-/** From the city, click buildings until the breadcrumb shows `divisionName`. */
+/**
+ * Scans until two sweeps 600ms apart agree. The world re-fits (with a short tween) whenever the
+ * space beside the HUD and panels changes, e.g. the HUD's connections row arriving, so hit points
+ * taken mid-fit point at the wrong building a moment later.
+ */
+export async function stableHits(page: Page, timeoutMs = 10_000): Promise<Pt[]> {
+  const deadline = Date.now() + timeoutMs;
+  let previous = await scanHits(page);
+  for (;;) {
+    await sleep(600);
+    const next = await scanHits(page);
+    if (JSON.stringify(next) === JSON.stringify(previous) && next.length > 0) return next;
+    if (Date.now() > deadline) return next;
+    previous = next;
+  }
+}
+
+/**
+ * From the city, click buildings until the breadcrumb shows `divisionName`. The city is re-scanned
+ * after every miss: returning to it can move the layout (rail, HUD), so old points go stale.
+ */
 export async function enterBuilding(page: Page, divisionName: string): Promise<ClickOutcome[]> {
   await page.waitFor("document.querySelector('.app-world canvas')?.width > 64", "world canvas sized");
-  await sleep(500);
-  const hits = await scanHits(page);
   const breadcrumb = () => page.eval<string>("__e2e.text('.zui-breadcrumb [aria-current=page]') ?? ''");
-  return clickThrough(
-    page,
-    hits,
-    6,
-    breadcrumb,
-    (o) => o[o.length - 1]!.result === divisionName,
-    async (result) => {
-      if (result !== "City") await page.click(".zui-breadcrumb button", "‹ City");
-    },
-  );
+  const outcomes: ClickOutcome[] = [];
+  const tried = new Set<string>();
+  for (let round = 0; round < 40; round++) {
+    const hits = await stableHits(page);
+    const layout = `${divisionName}|${JSON.stringify(hits)}`;
+    const known = remembered.get(layout);
+    // Adjacent hotspots merge into one blob (Studio sits in front of Growth), so spread the tries out.
+    const tries = [...(known ? [known] : []), ...blobs(hits).flatMap((b) => candidates(b, 36, 12))];
+    const next = tries.find((p) => !tried.has(cell(p)));
+    if (!next) break;
+    tried.add(cell(next));
+    await page.mouseClick(next[0], next[1]);
+    await sleep(350);
+    const result = await breadcrumb();
+    outcomes.push({ at: next, result });
+    if (result === divisionName) {
+      remembered.set(layout, next);
+      return outcomes;
+    }
+    if (result !== "City") await page.click(".zui-breadcrumb button", "‹ City");
+    await sleep(250);
+  }
+  return outcomes;
 }
+
+/** Point that entered a building, per identical city layout, so later tests click it first. */
+const remembered = new Map<string, Pt>();
+
+/** Coarse cell so a re-scan's nearby point counts as the same building spot. */
+const cell = (p: Pt) => `${Math.round(p[0] / 24)},${Math.round(p[1] / 24)}`;

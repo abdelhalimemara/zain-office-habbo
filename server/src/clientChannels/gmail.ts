@@ -74,7 +74,9 @@ export function hermesPython(
   profileHome = join(home, "profiles", ACCOUNTS_PROFILE),
 ): PythonRunner {
   const run = promisify(execFile);
-  const python = resolveHermesPython(env, home);
+  // Resolved on first use, never at construction: an eager promise that rejects (no Hermes install
+  // under this home) with nobody awaiting it yet is an unhandled rejection, which kills the server.
+  let python: Promise<string> | null = null;
   const childEnv = {
     ...env,
     HERMES_HOME: profileHome,
@@ -82,6 +84,10 @@ export function hermesPython(
   };
   return async (args) => {
     try {
+      python ??= resolveHermesPython(env, home).catch((err: unknown) => {
+        python = null;
+        throw err;
+      });
       const { stdout } = await run(await python, args, { env: childEnv, timeout: 60_000 });
       return { code: 0, stdout };
     } catch (err) {

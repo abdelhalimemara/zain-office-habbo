@@ -52,7 +52,7 @@ export function mockFetch(routes: Record<string, Handler | unknown>): MockFetch 
     const key = `${init?.method ?? "GET"} ${url}`;
     const route = key in routes ? routes[key] : routes[url];
     if (route === undefined) return new Response(JSON.stringify({ error: `no route ${key}` }), { status: 404 });
-    const data = typeof route === "function" ? (route as Handler)(init, url) : route;
+    const data = typeof route === "function" ? await (route as Handler)(init, url) : route;
     if (data instanceof Response) return data;
     return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
   });
