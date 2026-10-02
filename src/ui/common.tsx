@@ -4,6 +4,8 @@ import { isMandate, type AgentActivity } from "@shared/flow";
 import type { KanbanTask } from "@shared/hermes";
 import { managerOf, ROSTER, type RosterAgent } from "@shared/roster";
 import { useRoster } from "../api/hooks";
+import type { AvatarSize } from "./Avatar";
+import { Portrait } from "./Portrait";
 
 export function useRosterAgents(): { agents: RosterEntry[]; loaded: boolean } {
   const { data } = useRoster();
@@ -49,27 +51,28 @@ export function formatAge(createdAt: number, now: number): string {
   return `${Math.floor(s / 86400)}d`;
 }
 
-export function initials(name: string): string {
-  const words = (name.split("·").pop() ?? name).match(/[A-Za-z0-9]+/g) ?? [];
-  const letters = words.length > 1 ? words[0]![0]! + words[1]![0]! : (words[0] ?? "?").slice(0, 2);
-  return letters.toUpperCase();
+export { Avatar, initials } from "./Avatar";
+
+interface AgentChipProps {
+  profile: string | null;
+  agents: readonly RosterEntry[];
+  size?: AvatarSize;
 }
 
-export function Avatar({ name, color, size = "sm" }: { name: string; color?: string; size?: "sm" | "md" | "lg" }) {
-  return (
-    <span className={`zui-avatar zui-avatar--${size}`} style={color ? { background: color } : undefined} aria-hidden="true">
-      {initials(name)}
-    </span>
-  );
-}
-
-export function AgentChip({ profile, agents }: { profile: string | null; agents: readonly RosterEntry[] }) {
+export function AgentChip({ profile, agents, size = "sm" }: AgentChipProps) {
+  const { loaded } = useRosterAgents();
   if (!profile) return <span className="zui-person zui-person--muted">Unassigned</span>;
   const agent = agents.find((a) => a.profile === profile);
   const name = agent?.title ?? profile;
   return (
-    <span className="zui-person" title={name === profile ? profile : `${name} (${profile})`}>
-      <Avatar name={name} color={agent ? getDivision(agent.division).color : undefined} />
+    <span className={`zui-person zui-person--${size}`} title={name === profile ? profile : `${name} (${profile})`}>
+      <Portrait
+        agent={agent}
+        name={name}
+        size={size}
+        color={agent ? getDivision(agent.division).color : undefined}
+        vacant={loaded && agent?.hired === false}
+      />
       <span className="zui-person__name">{name}</span>
     </span>
   );

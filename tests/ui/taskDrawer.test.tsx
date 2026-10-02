@@ -25,7 +25,7 @@ describe("TaskDrawer", () => {
     const { container } = renderUi(<TaskDrawer id="t1" />);
     expect(await screen.findByText(/Line one/)).toBeInTheDocument();
     expect(container.querySelector("script")).toBeNull();
-    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("img:not(.zui-portrait__img), img[src=x]")).toBeNull();
     expect(screen.getAllByText(/<script>window.__pwned = true<\/script>/)).toHaveLength(2);
     expect(screen.getByText(/Done/).textContent).toBe("Done\n  indented");
     expect((window as unknown as { __pwned?: boolean }).__pwned).toBeUndefined();
@@ -116,7 +116,7 @@ describe("TaskDrawer", () => {
     expect(details).not.toHaveAttribute("open");
     expect(details).toHaveTextContent("**Instructions for VP Studio");
     expect(brief).not.toHaveTextContent("Instructions for");
-    expect(container.querySelector("script, img")).toBeNull();
+    expect(container.querySelector("script, img:not(.zui-portrait__img), img[src=x]")).toBeNull();
   });
 
   it("mutes the no-brief placeholder", async () => {

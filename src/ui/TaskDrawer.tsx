@@ -143,7 +143,7 @@ export function TaskDrawer({ id }: { id: string }) {
             </dd>
             <dt>Assignee</dt>
             <dd>
-              <AgentChip profile={task.assignee} agents={agents} />
+              <AgentChip profile={task.assignee} agents={agents} size="md" />
             </dd>
             {division && (
               <>
