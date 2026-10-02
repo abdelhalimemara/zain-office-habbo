@@ -113,7 +113,10 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
         await page.screenshot(path);
         return path;
       },
-      cliCalls: () => readLines(cliLog).map((line) => JSON.parse(line) as string[]),
+      cliCalls: () =>
+        readLines(cliLog)
+          .map((line) => JSON.parse(line) as string[])
+          .filter((argv) => argv[0] !== "--version"),
       stop,
     };
   } catch (err) {
