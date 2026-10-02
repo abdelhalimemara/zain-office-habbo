@@ -44,6 +44,7 @@ describe("board and task detail", () => {
       parents: ["t_p"],
       children: ["t_c1", "t_c2"],
       subtasks: [{ id: "t_p", title: "Draft copy", status: "running", assignee: "zain-growth-paid" }],
+      history: [],
     });
   });
 
