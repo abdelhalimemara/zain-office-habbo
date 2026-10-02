@@ -5,10 +5,11 @@
  */
 
 export type AuditStepId =
-  | "website" // Apify crawl of the site: pages, titles, meta, headings, content, schema, tracking tags
-  | "search" // Apify Google SERP: what they rank for, who outranks them (competitors), SEO gaps
-  | "social" // Apify profile scrapes: followers, posting cadence, engagement per channel
-  | "ads" // Apify ad libraries: Meta Ad Library, Google Ads Transparency (and TikTok where available)
+  | "website" // Apify crawl of the site (pages, titles, meta, headings, content, schema), tag read, mobile screenshot
+  | "search" // Apify Google SERP: brand and category queries, who else appears (competitors), SEO gaps
+  | "social" // Apify profile scrapes: followers, posting cadence, engagement per channel (prospect + competitors)
+  | "ads" // Apify ad libraries: Google Ads Transparency, Meta Ad Library (prospect + competitors); traffic estimates
+        // (Similarweb) and Google Maps rating/reviews are collected here too
   | "score" // deterministic scoring from the collected data
   | "analysis" // the Growth audit agent writes the findings and recommendations (Hermes kanban task)
   | "pdf" // branded Zain Growth PDF
@@ -50,33 +51,121 @@ export interface AuditProspect {
 
 export type Grade = "A" | "B" | "C" | "D" | "E";
 
-export interface SectionScore {
-  /** 0..100 */
-  score: number;
-  /** Share of the overall score, 0..1; the weights sum to 1. */
+/**
+ * The seven areas of the Zain Growth "Digital Gap Audit" template (~/ZainGroup/templates/Digital Marketing Audit
+ * Gap Template.pdf). Every area gets a status and, when it is a gap, a severity; "not-measured" is honest coverage,
+ * not a finding.
+ */
+export type AuditArea =
+  | "website" // Website and Infrastructure
+  | "brand" // Brand and Local Presence
+  | "search" // Non-brand Search Demand
+  | "social" // Social and Content
+  | "performance" // Performance Media and Measurement
+  | "conversion" // Conversion and CRM
+  | "reputation"; // Reputation and Compliance
+
+export const AUDIT_AREAS: readonly AuditArea[] = ["website", "brand", "search", "social", "performance", "conversion", "reputation"];
+
+export const AUDIT_AREA_LABELS: Record<AuditArea, string> = {
+  website: "Website and Infrastructure",
+  brand: "Brand and Local Presence",
+  search: "Non-brand Search Demand",
+  social: "Social and Content",
+  performance: "Performance Media and Measurement",
+  conversion: "Conversion and CRM",
+  reputation: "Reputation and Compliance",
+};
+
+/** Strong: nothing material missing. Fair: real gaps, fixable inside a programme. Weak: missing or broken. */
+export type AreaStatus = "strong" | "fair" | "weak" | "not-measured";
+export type Severity = "critical" | "high" | "medium" | "low";
+
+/** How a fact is known: quoted from a live source, estimated by a third party, or not measured this pass. */
+export type EvidenceKind = "quoted" | "estimated" | "not-measured";
+
+export interface Evidence {
+  text: string;
+  kind: EvidenceKind;
+  /** Source label shown in the report, e.g. "research_search (Apify, live)", "Similarweb, Aug 2026". */
+  source: string;
+}
+
+export interface AreaResult {
+  area: AuditArea;
+  status: AreaStatus;
+  /** Only for a gap (fair/weak). */
+  severity?: Severity;
+  /** 0..100 for the overall score; absent when not measured (its weight is redistributed). */
+  score?: number;
+  /** Share of the overall score, 0..1; the weights of the seven areas sum to 1. */
   weight: number;
-  /** The 2-4 facts that drove this score, short. */
-  drivers: string[];
+  /** One-line summary shown in the "Seven Areas, At a Glance" table. */
+  summary: string;
+  evidence: Evidence[];
 }
 
 export interface AuditScore {
-  /** 0..100 */
+  /** 0..100 over the measured areas. */
   overall: number;
   grade: Grade;
-  sections: {
-    website: SectionScore; // on-page SEO and content quality
-    search: SectionScore; // rankings and visibility vs competitors
-    social: SectionScore; // audience, cadence, engagement
-    ads: SectionScore; // paid presence and maturity (a gap = opportunity, not a failing)
-    tracking: SectionScore; // pixel, GTM, analytics, conversion readiness
-  };
+  /** e.g. 5 of 7. */
+  areasMeasured: number;
+  areas: AreaResult[];
+}
+
+/** One business in the benchmark: the prospect first, then up to three competitors, same public measures. */
+export interface BenchmarkRow {
+  name: string;
+  domain?: string;
+  isProspect: boolean;
+  googleAds?: { active: number; formats?: string; since?: string } | "none" | "not-measured";
+  metaAds?: { active: number; note?: string } | "none" | "not-measured";
+  instagramFollowers?: number | "not-measured";
+  /** Similarweb-style estimates, directional only. */
+  traffic?: { monthlyVisits: number; bounceRate?: number; topSource?: string; saudiShare?: number; period: string } | "not-measured";
+}
+
+export interface SearchRun {
+  query: string;
+  kind: "brand" | "category";
+  prospectPresent: boolean;
+  /** Who else appears (domains). */
+  others: string[];
+}
+
+export interface SocialChannelRow {
+  channel: "instagram" | "tiktok" | "facebook" | "x" | "linkedin" | "youtube" | "snapchat";
+  followers?: number;
+  posts?: number;
+  postsPer30Days?: number;
+  /** Engagement rate on the sampled posts, 0..1. */
+  engagement?: number;
+  lastPost?: string;
+  measured: boolean;
+}
+
+export interface TagRead {
+  /** e.g. "GA4", "Google Tag Manager", "Meta Pixel", "TikTok Pixel", "Snapchat Pixel", "LinkedIn Insight Tag", "X Pixel", "Hotjar / Clarity", "Google Ads conversion tag". */
+  tag: string;
+  found: boolean;
 }
 
 export interface AuditFinding {
-  section: keyof AuditScore["sections"];
+  area: AuditArea;
   title: string;
   detail: string;
-  severity: "high" | "medium" | "low";
+  severity: Severity;
+  evidence?: EvidenceKind;
+  source?: string;
+}
+
+/** The template's three-phase fix: Foundation, Demand Capture, Demand Generation. */
+export interface FixPhase {
+  phase: 1 | 2 | 3;
+  name: string;
+  headline: string;
+  detail: string;
 }
 
 export interface AuditOpportunity {
@@ -88,11 +177,27 @@ export interface AuditOpportunity {
 }
 
 export interface AuditAnalysis {
-  /** Three to five sentences a founder can read in 30 seconds. */
+  /** Cover subtitle: one sentence on what the audit covers. */
+  coverLine: string;
+  /** The goal box on the cover, e.g. "show where X already wins, and where the category is being taken by others." */
+  goal: string;
+  /** Executive summary sub-headline (one sentence). */
+  headline: string;
+  /** "What we found": three to five sentences. */
   executiveSummary: string;
+  /** The three summary cards. */
+  keyPoints: { title: string; detail: string }[];
+  /** One-line bottom line per page key ("summary", "search", "paid", "social", "traffic", "competitive", "close"). */
+  bottomLines: Record<string, string>;
+  /** Ordered by severity. */
   findings: AuditFinding[];
+  fix: FixPhase[];
+  northStar: string;
+  nextStep: string;
+  /** Closing page: headline and the three numbered next steps. */
+  closingHeadline: string;
+  closingSteps: string[];
   opportunities: AuditOpportunity[];
-  competitors: { name: string; domain?: string; note: string }[];
   /** How Ahmad should open the conversation, one or two sentences. */
   pitchAngle: string;
 }
@@ -103,6 +208,12 @@ export interface ProspectAudit {
   status: AuditStatus;
   steps: AuditStep[];
   score?: AuditScore;
+  benchmark?: BenchmarkRow[];
+  searchRuns?: SearchRun[];
+  social?: SocialChannelRow[];
+  tags?: TagRead[];
+  /** Served by the Zain HQ server: the mobile home-page capture for "What a Visitor Sees". */
+  screenshotPath?: string;
   analysis?: AuditAnalysis;
   /** Served by the Zain HQ server once rendered. */
   pdfPath?: string;
