@@ -88,16 +88,16 @@ describe("HQ floor", () => {
   });
 
   it("puts board members at the board table in roster order and never at a desk", () => {
-    const extra = ["zain-board-bezos", "zain-board-buffett", "zain-board-jobs", "zain-board-zz-sixth"].map((profile) => ({
-      profile,
+    const boardSeats = hq.seats.filter((s) => s.role === "board");
+    const members = agentsInDivision("hq").filter((a) => a.rank === "board");
+    const extra = Array.from({ length: boardSeats.length - members.length + 1 }, (_, i) => ({
+      profile: `zain-board-zz-${i}`,
       rank: "board" as const,
     }));
     const { seats, overflow } = assignSeats(hq, [...agentsInDivision("hq"), ...extra]);
-    const boardSeats = hq.seats.filter((s) => s.role === "board");
-    const members = agentsInDivision("hq").filter((a) => a.rank === "board");
     members.forEach((m, i) => expect(seats.get(m.profile)?.id).toBe(boardSeats[i]!.id));
-    for (const e of extra.slice(0, 5 - members.length)) expect(seats.get(e.profile)?.role).toBe("board");
-    expect(overflow).toContain("zain-board-zz-sixth");
+    for (const e of extra.slice(0, -1)) expect(seats.get(e.profile)?.role).toBe("board");
+    expect(overflow).toEqual([extra.at(-1)!.profile]);
   });
 });
 
