@@ -41,8 +41,9 @@ export function ApprovalsInbox() {
       {[...groups, { d: { id: "other", name: "Other", color: "#8A93A3" }, tasks: other }]
         .filter((g) => g.tasks.length > 0)
         .map(({ d, tasks }) => (
-          <section key={d.id} className="zui-group" style={{ borderColor: d.color }}>
-            <h3 className="zui-group__title" style={{ color: d.color }}>
+          <section key={d.id} className="zui-group">
+            <h3 className="zui-group__title">
+              <span className="zui-dot-mark" style={{ background: d.color }} aria-hidden="true" />
               {d.name}
             </h3>
             {tasks.map((t) => (

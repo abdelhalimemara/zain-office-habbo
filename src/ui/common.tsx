@@ -49,13 +49,28 @@ export function formatAge(createdAt: number, now: number): string {
   return `${Math.floor(s / 86400)}d`;
 }
 
-export function AgentChip({ profile, agents }: { profile: string | null; agents: readonly RosterEntry[] }) {
-  if (!profile) return <span className="zui-chip zui-chip--muted">Unassigned</span>;
-  const agent = agents.find((a) => a.profile === profile);
-  const color = agent ? getDivision(agent.division).color : undefined;
+export function initials(name: string): string {
+  const words = (name.split("·").pop() ?? name).match(/[A-Za-z0-9]+/g) ?? [];
+  const letters = words.length > 1 ? words[0]![0]! + words[1]![0]! : (words[0] ?? "?").slice(0, 2);
+  return letters.toUpperCase();
+}
+
+export function Avatar({ name, color, size = "sm" }: { name: string; color?: string; size?: "sm" | "md" | "lg" }) {
   return (
-    <span className="zui-chip" style={color ? { borderColor: color, color } : undefined} title={profile}>
-      {agent?.title ?? profile}
+    <span className={`zui-avatar zui-avatar--${size}`} style={color ? { background: color } : undefined} aria-hidden="true">
+      {initials(name)}
+    </span>
+  );
+}
+
+export function AgentChip({ profile, agents }: { profile: string | null; agents: readonly RosterEntry[] }) {
+  if (!profile) return <span className="zui-person zui-person--muted">Unassigned</span>;
+  const agent = agents.find((a) => a.profile === profile);
+  const name = agent?.title ?? profile;
+  return (
+    <span className="zui-person" title={name === profile ? profile : `${name} (${profile})`}>
+      <Avatar name={name} color={agent ? getDivision(agent.division).color : undefined} />
+      <span className="zui-person__name">{name}</span>
     </span>
   );
 }

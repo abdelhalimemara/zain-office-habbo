@@ -133,7 +133,7 @@ function ReviewActions({ taskId }: { taskId: string }) {
         <button type="button" className="zui-btn zui-btn--primary" onClick={onApprove} disabled={pending}>
           {approve.isPending ? "Approving…" : "Approve"}
         </button>
-        <button type="submit" className="zui-btn zui-btn--danger" disabled={pending}>
+        <button type="submit" className="zui-btn" disabled={pending}>
           {reject.isPending ? "Sending…" : "Send back"}
         </button>
       </div>

@@ -1,9 +1,11 @@
 import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { API } from "@shared/api";
 import { useUiStore } from "../../src/state/store";
+import { initials } from "../../src/ui/common";
 import { Hud } from "../../src/ui/Hud";
+import { PHONE_QUERY } from "../../src/ui/KanbanPanel";
 import { UiRoot } from "../../src/ui/UiRoot";
 import { board, mockFetch, renderUi, resetStore, rosterEntries, task } from "./helpers";
 
@@ -97,5 +99,52 @@ describe("UiRoot", () => {
     expect(dialog).toContainElement(document.activeElement as HTMLElement);
     for (let i = 0; i < 10; i++) await userEvent.tab();
     expect(dialog).toContainElement(document.activeElement as HTMLElement);
+  });
+});
+
+describe("Hud on a phone", () => {
+  beforeEach(() => {
+    resetStore();
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === PHONE_QUERY,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("keeps the main actions in the bar and moves Board into the overflow menu", async () => {
+    mockFetch(routes);
+    renderUi(<Hud />);
+    expect(await screen.findByRole("button", { name: "Approvals, 2 pending" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New mandate" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hire" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Board" })).not.toBeInTheDocument();
+
+    const more = screen.getByRole("button", { name: "More" });
+    await userEvent.click(more);
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Board" }));
+    expect(useUiStore.getState().panel).toEqual({ kind: "board" });
+    expect(screen.queryByRole("button", { name: "Board" })).not.toBeInTheDocument();
+  });
+
+  it("closes the overflow menu on Escape without closing an open panel", async () => {
+    mockFetch(routes);
+    act(() => useUiStore.getState().openPanel({ kind: "approvals" }));
+    renderUi(<UiRoot />);
+    await userEvent.click(await screen.findByRole("button", { name: "More" }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("button", { name: "Board" })).not.toBeInTheDocument();
+    expect(useUiStore.getState().panel).toEqual({ kind: "approvals" });
+  });
+});
+
+describe("initials", () => {
+  it("uses the first letters of the name after any seat prefix", () => {
+    expect(initials("VP Studio")).toBe("VS");
+    expect(initials("Board · Jeff Bezos")).toBe("JB");
+    expect(initials("Copywriter")).toBe("CO");
+    expect(initials("zain-hq-ui")).toBe("ZH");
   });
 });
