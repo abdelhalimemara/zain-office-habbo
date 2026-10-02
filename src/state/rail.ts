@@ -5,7 +5,7 @@ export const RAIL_MARGIN = 12;
 export const RAIL_SHEET_BAR = 64;
 export const RAIL_SHEET_HEIGHT = 0.6;
 
-const SIDE_PANELS: ReadonlySet<Panel["kind"]> = new Set(["kanban", "approvals", "board", "meeting", "leadership", "agent", "task"]);
+const SIDE_PANELS: ReadonlySet<Panel["kind"]> = new Set(["kanban", "approvals", "board", "meeting", "leadership", "audits", "agent", "task"]);
 
 /** The mandates rail lives on the city overview and steps aside while a side panel uses the right edge. */
 export function railVisible(view: View, panelKind: Panel["kind"] | null): boolean {

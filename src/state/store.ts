@@ -13,6 +13,8 @@ export type Panel =
   | { kind: "meeting"; id: string }
   /** The VP room: the list of leadership meetings, or one of them. */
   | { kind: "leadership"; id?: string }
+  /** Zain Growth prospect audits: the list, the new-audit form, or one audit. */
+  | { kind: "audits"; id?: string; compose?: boolean }
   | { kind: "agent"; profile: string }
   | { kind: "task"; id: string }
   | { kind: "mandate"; division?: DivisionId }

@@ -87,4 +87,9 @@ describe("board panels", () => {
     expect(worldInsets("board", desktop, 56).right).toBe(448);
     expect(worldInsets("meeting", desktop, 56).right).toBe(764);
   });
+
+  it("insets the world beside the prospect audits panel, or above it as a phone sheet", () => {
+    expect(worldInsets("audits", { width: 1400, height: 900 }, 56).right).toBe(568);
+    expect(worldInsets("audits", { width: 390, height: 800 }, 56)).toEqual({ top: 64, right: 0, bottom: 600, left: 0 });
+  });
 });

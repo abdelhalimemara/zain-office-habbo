@@ -11,6 +11,9 @@ import { ACTIVITY_LABEL, ActivityBadge, agentLabel, RANK_LABEL, useRosterAgents 
 import { Portrait } from "./Portrait";
 import { Panel } from "./Panel";
 
+/** Ahmad, account management, pitches from the prospect audits. */
+const AUDITS_OWNER = "zain-hq-accounts";
+
 /** Headcount skills stay one flat list; skills from a registered source are grouped under it. */
 function skillGroups(skills: readonly string[]): { label: string | null; skills: string[] }[] {
   const headcount = skills.filter((s) => !skillSourceFor(s));
@@ -140,6 +143,11 @@ export function AgentCard({ profile }: { profile: string }) {
         {agent.rank === "vp" && (
           <button type="button" className="zui-btn zui-btn--primary" onClick={() => openPanel({ kind: "kanban", division: agent.division })}>
             Open kanban
+          </button>
+        )}
+        {agent.profile === AUDITS_OWNER && (
+          <button type="button" className="zui-btn" onClick={() => openPanel({ kind: "audits" })}>
+            Audits
           </button>
         )}
         {vacant && (

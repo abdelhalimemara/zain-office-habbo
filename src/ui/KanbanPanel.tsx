@@ -108,9 +108,16 @@ export function KanbanPanel({ division }: { division: DivisionId }) {
           </div>
           {managerActivity && <ActivityBadge activity={managerActivity} />}
         </div>
-        <button type="button" className="zui-btn zui-btn--primary" onClick={() => openPanel({ kind: "mandate", division })}>
-          New mandate
-        </button>
+        <div className="zui-manager__actions">
+          {division === "growth" && (
+            <button type="button" className="zui-btn" onClick={() => openPanel({ kind: "audits" })}>
+              Prospect audits
+            </button>
+          )}
+          <button type="button" className="zui-btn zui-btn--primary" onClick={() => openPanel({ kind: "mandate", division })}>
+            New mandate
+          </button>
+        </div>
       </section>
       <ErrorNote error={board.error} />
       {board.isPending && <p className="zui-hint">Loading board…</p>}
