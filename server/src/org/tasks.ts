@@ -1,6 +1,6 @@
 import type { CreateMandateRequest, CreateMandateResponse, TaskDetailResponse } from "../../../shared/api";
 import { DIVISION_IDS, divisionForTenant, getDivision, type DivisionId } from "../../../shared/divisions";
-import { AWAITING_APPROVAL, isMandate } from "../../../shared/flow";
+import { AWAITING_APPROVAL, isClientReply, isMandate } from "../../../shared/flow";
 import type { KanbanTask } from "../../../shared/hermes";
 import { managerOf, type RosterAgent } from "../../../shared/roster";
 import { HermesError, type HermesClient } from "../hermes/client";
@@ -72,12 +72,37 @@ async function requireAwaitingApproval(id: string, hermes: HermesClient): Promis
  * as human approval. complete_task overwrites `result` and `kanban_request_review` only writes
  * the summary, so the roll-up is resent as the result to survive completion.
  */
-export async function approve(id: string, note: string | undefined, hermes: HermesClient): Promise<KanbanTask> {
-  const task = await requireAwaitingApproval(id, hermes);
-  const summary = note ? `Approved by HQ: ${note}` : "Approved by HQ";
+export async function approve(
+  id: string,
+  input: { note?: string; finalText?: string },
+  hermes: HermesClient,
+  hires: HireStore,
+): Promise<KanbanTask> {
+  const [task, roster] = await Promise.all([requireAwaitingApproval(id, hermes), fullRoster(hires)]);
+  if (isClientReply(task, roster)) return approveClientReply(id, task, input, hermes);
+  if (input.finalText !== undefined) throw new HttpError(409, `task ${id} is not a client reply; finalText applies only to client replies`);
+  const summary = input.note ? `Approved by HQ: ${input.note}` : "Approved by HQ";
   const result = task.result ?? task.latest_summary ?? undefined;
   await hermes.addComment(id, summary, UI_AUTHOR);
   return hermes.updateTask(id, { status: "done", summary, ...(result ? { result } : {}) });
+}
+
+/**
+ * The agent's draft is its review summary. HQ approves it as written or sends its own final text;
+ * either way the exact text to send becomes the result and the completion summary, which is what
+ * the agent's completed wake in the client conversation carries.
+ */
+async function approveClientReply(
+  id: string,
+  task: KanbanTask,
+  { note, finalText }: { note?: string; finalText?: string },
+  hermes: HermesClient,
+): Promise<KanbanTask> {
+  const text = finalText ?? task.latest_summary ?? task.result ?? undefined;
+  if (!text?.trim()) throw new HttpError(409, `client reply ${id} has no draft to approve; send finalText`);
+  const how = finalText !== undefined ? "Approved by HQ with edits" : "Approved by HQ";
+  await hermes.addComment(id, note ? `${how}: ${note}` : how, UI_AUTHOR);
+  return hermes.updateTask(id, { status: "done", result: text, summary: `Approved reply — send exactly:\n${text}` });
 }
 
 /**

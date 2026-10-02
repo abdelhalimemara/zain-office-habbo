@@ -2,9 +2,12 @@ import {
   agentActivity,
   boardConsultations,
   divisionStats,
+  hqDecisionCount,
   isBoardTask,
+  isClientReply,
   isMandate,
   pendingApprovals,
+  pendingClientReplies,
   splitMandateBody,
   waitingSubtaskReviews,
 } from "../../shared/flow";
@@ -109,5 +112,30 @@ describe("board consultations", () => {
     expect(isBoardTask(task("x", "review", "zain-hq-coo"))).toBe(false);
     expect(pendingApprovals(b3).map((t) => t.id)).toEqual(["m1"]);
     expect(boardConsultations(b3).map((t) => t.id)).toEqual(["b_new", "b_old"]);
+  });
+});
+
+describe("client replies", () => {
+  const cr = (id: string, status: TaskStatus, assignee: string | null, title = `Client reply: Acme — ${id}`) => ({ ...task(id, status, assignee, "zain-hq"), title });
+  const b4 = board([
+    cr("c1", "review", "zain-hq-accounts"),
+    cr("c2", "running", "zain-hq-accounts"),
+    cr("c3", "review", "zain-hq-finance"),
+    cr("c4", "review", "zain-hq-accounts", "Prepare Acme deck"),
+    task("m1", "review", "zain-hq-coo", "zain-hq"),
+  ]);
+
+  it("are tasks titled Client reply: for an agent with client channels", () => {
+    expect(isClientReply(cr("x", "review", "zain-hq-accounts"))).toBe(true);
+    expect(isClientReply(cr("x", "review", "zain-hq-finance"))).toBe(false);
+    expect(isClientReply(cr("x", "review", "zain-hq-accounts", "Client update"))).toBe(false);
+    expect(isClientReply(cr("x", "review", null))).toBe(false);
+  });
+
+  it("await HQ alongside mandates without becoming mandates", () => {
+    expect(pendingClientReplies(b4).map((t) => t.id)).toEqual(["c1"]);
+    expect(pendingApprovals(b4).map((t) => t.id)).toEqual(["m1"]);
+    expect(hqDecisionCount(b4)).toBe(2);
+    expect(waitingSubtaskReviews(b4).map((t) => t.id).sort()).toEqual(["c3", "c4"]);
   });
 });

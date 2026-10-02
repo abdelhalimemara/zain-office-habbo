@@ -51,9 +51,30 @@ export function pendingApprovals(board: KanbanBoard, roster?: readonly RosterAge
   return allTasks(board).filter((t) => t.status === AWAITING_APPROVAL && isMandate(t, roster));
 }
 
+export const CLIENT_REPLY_PREFIX = "Client reply:";
+
+/**
+ * A reply an agent with client channels wants to send that commits Zain (price, scope, dates,
+ * terms…): HQ approves the exact text before it goes to the client.
+ */
+export function isClientReply(task: KanbanTask, roster?: readonly RosterAgent[]): boolean {
+  if (!task.assignee || !task.title.startsWith(CLIENT_REPLY_PREFIX)) return false;
+  return (findAgent(task.assignee, roster)?.clientChannels?.length ?? 0) > 0;
+}
+
+/** Client replies awaiting HQ's decision. */
+export function pendingClientReplies(board: KanbanBoard, roster?: readonly RosterAgent[]): KanbanTask[] {
+  return allTasks(board).filter((t) => t.status === AWAITING_APPROVAL && isClientReply(t, roster));
+}
+
+/** Everything HQ must decide: mandates and client replies (the HUD badge). */
+export function hqDecisionCount(board: KanbanBoard, roster?: readonly RosterAgent[]): number {
+  return pendingApprovals(board, roster).length + pendingClientReplies(board, roster).length;
+}
+
 /** Specialists' tasks parked in `review`: no HQ approval is due, but a human must unstick them. */
 export function waitingSubtaskReviews(board: KanbanBoard, roster?: readonly RosterAgent[]): KanbanTask[] {
-  return allTasks(board).filter((t) => t.status === AWAITING_APPROVAL && !isMandate(t, roster));
+  return allTasks(board).filter((t) => t.status === AWAITING_APPROVAL && !isMandate(t, roster) && !isClientReply(t, roster));
 }
 
 export const NO_BRIEF = "(No further brief provided.)";

@@ -118,6 +118,11 @@ export type WakeReason = "no-home-channel" | "cli-failed" | "invalid-task-id" | 
 
 export interface ApproveRequest {
   note?: string;
+  /**
+   * Client replies only: the exact text to send (HQ's edit of the draft, 1..4000 chars). Without
+   * it the agent's draft (its review summary) is approved as written.
+   */
+  finalText?: string;
 }
 
 export interface RejectRequest {
