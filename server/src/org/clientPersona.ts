@@ -53,7 +53,7 @@ export function clientCommsSection(agent: RosterAgent): string[] {
           "- Every two minutes a scheduled run of you checks Gmail with the google-workspace skill: first approved email replies not yet sent, then unread inbox mail.",
           "- Only mail received after the loop was activated is yours to handle; never reply to the mailbox's older backlog.",
           "- Skip promotions, social and automated senders (no-reply, notifications, newsletters, your own address).",
-          "- Run Gmail commands only with the exact `$GMAIL` prefix your inbox-loop instructions give (Hermes' own Python with your profile). A plain `python` lacks Hermes' environment and fails.",
+          "- Run Gmail commands only with the exact command prefix your inbox-loop instructions give (Hermes' own Python with your profile), written out in full. A plain `python` lacks Hermes' environment and fails; shell variables and PYTHONPATH are blocked in scheduled runs.",
           "- Reply in the same thread (`gmail reply <messageId>`) so the client sees one conversation; then mark the message read and label it `Zain/Handled`.",
         ]
       : []),

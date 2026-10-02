@@ -158,13 +158,15 @@ describe("npm run ahmad:gmail", () => {
 describe("Gmail command for the agent", () => {
   it("bakes Ahmad's profile, Hermes on PYTHONPATH and Hermes' Python into one shell prefix", () => {
     expect(GMAIL).toBe(
-      "env HERMES_HOME=/h/profiles/zain-hq-accounts PYTHONPATH=/h/hermes-agent /h/installs/x/environments/e/venv/bin/python /h/profiles/zain-hq-accounts/skills/productivity/google-workspace/scripts/google_api.py",
+      "env HERMES_HOME=/h/profiles/zain-hq-accounts /h/installs/x/environments/e/venv/bin/python /h/profiles/zain-hq-accounts/skills/productivity/google-workspace/scripts/google_api.py",
     );
     expect(gmailCommand("/opt/my python/bin/python", "/h")).toContain("'/opt/my python/bin/python'");
     const prompt = inboxPrompt(LABEL, T, GMAIL);
-    expect(prompt).toContain(`GMAIL="${GMAIL}"`);
+    expect(prompt).toContain(`\n${GMAIL}\n`);
+    expect(GMAIL).not.toContain("PYTHONPATH");
     expect(prompt).toContain("never plain `python`");
-    expect(prompt).toContain("`$GMAIL gmail reply <id> --body …`");
+    expect(prompt).toContain("never through a shell variable or PYTHONPATH");
+    expect(prompt).not.toContain("$GMAIL");
   });
 
   it("resolves Hermes' Python from the install facts, or the override", async () => {

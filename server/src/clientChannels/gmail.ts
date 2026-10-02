@@ -39,16 +39,16 @@ export async function resolveHermesPython(env: NodeJS.ProcessEnv = process.env, 
 const shellQuote = (s: string) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`);
 
 /**
- * The exact shell prefix the agent must use for Gmail inside its terminal tool, baked into the
- * job at setup time: Ahmad's profile as HERMES_HOME (his token), Hermes on PYTHONPATH, Hermes' Python.
- * It starts with `env` so it still works when stored in a variable (`$GMAIL gmail …`): a shell does
- * not treat VAR=value words produced by expansion as assignments.
+ * The exact command prefix the agent must use for Gmail inside its terminal tool, baked into the job
+ * at setup time: Ahmad's profile as HERMES_HOME (his token) and Hermes' own Python. Cron runs vet
+ * every command (tools/approval.py `_unattended_deny` → tirith), which blocks PYTHONPATH assignments
+ * and commands assembled from shell variables, so the prefix carries neither and is written out in
+ * full each time.
  */
 export function gmailCommand(python: string, home = hermesHome()): string {
   return [
     "env",
     `HERMES_HOME=${shellQuote(join(home, "profiles", ACCOUNTS_PROFILE))}`,
-    `PYTHONPATH=${shellQuote(join(home, "hermes-agent"))}`,
     shellQuote(python),
     shellQuote(join(skillScripts(home), "google_api.py")),
   ].join(" ");
@@ -142,9 +142,9 @@ export function activationOf(job: CronJob | undefined): number | null {
 export function inboxPrompt(labelId: string, activatedAt: number, gmail: string): string {
   return [
     "You are running Ahmad Al Zain's Gmail inbox loop. Follow your client-communication charter (your SOUL) exactly.",
-    "Run every Gmail command in your terminal with exactly this prefix (never plain `python`, which lacks Hermes' environment):",
-    `GMAIL="${gmail.replace(/"/g, '\\"')}"`,
-    "then `$GMAIL gmail search …`, `$GMAIL gmail get <id>`, `$GMAIL gmail reply <id> --body …`, `$GMAIL gmail modify <id> …`. The google-workspace skill documents the subcommands.",
+    "Run every Gmail command in your terminal starting with exactly this prefix, written out in full each time (never plain `python`, which lacks Hermes' environment, and never through a shell variable or PYTHONPATH, which the cron guard blocks):",
+    gmail,
+    "followed by `gmail search …`, `gmail get <id>`, `gmail reply <id> --body …` or `gmail modify <id> …`. The google-workspace skill documents the subcommands.",
     "",
     "1. Pending approved replies first. List your kanban tasks titled \"" + CLIENT_REPLY_PREFIX + " …\" with channel email that are done (completed in the last 14 days).",
     `   For each one whose comments do not contain "${SENT_MARKER}": send the task's result EXACTLY as written as an in-thread reply to the message id in its body (gmail reply <messageId> --body …), then kanban_comment "${SENT_MARKER}" on the task. Never send one twice.`,
