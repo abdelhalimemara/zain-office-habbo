@@ -19,6 +19,8 @@ export interface RosterAgent {
   name?: string;
   /** External channels this agent talks to clients on. */
   clientChannels?: readonly ("email" | "whatsapp")[];
+  /** Zain Tech repo team id (see shared/techTeams.ts). */
+  team?: string;
 }
 
 export const CEO_PROFILE = "default";
