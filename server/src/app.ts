@@ -66,8 +66,10 @@ export function createApp(deps: AppDeps): Hono {
 
   app.post("/api/approvals/:id/approve", async (c) => {
     const id = taskIdParam(c);
-    const note = optionalString(await readJsonObject(c), "note", 2000);
-    return c.json({ task: await approve(id, note, hermes) });
+    const body = await readJsonObject(c);
+    const note = optionalString(body, "note", 2000);
+    const finalText = body.finalText === undefined ? undefined : requiredString(body, "finalText", 1, 4000);
+    return c.json({ task: await approve(id, { note, finalText }, hermes, hires) });
   });
 
   app.post("/api/approvals/:id/reject", async (c) => {

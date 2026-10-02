@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { KANBAN_BOARD } from "../../../shared/divisions";
+import { CLIENT_REPLY_PREFIX } from "../../../shared/flow";
 import { CEO_PROFILE } from "../../../shared/roster";
 import { CONSULTATION_PREFIX } from "../org/boardPersona";
 import type { HermesClient } from "../hermes/client";
@@ -16,7 +17,7 @@ export function approvalsSection(port: number): string {
     START_MARKER,
     "## Zain Group approvals (Telegram)",
     "",
-    `Applies only to kanban wake turns about board \`${KANBAN_BOARD}\` (Zain Group mandates). Ignore it for anything else.`,
+    `Applies only to kanban wake turns about board \`${KANBAN_BOARD}\` (Zain Group mandates, client replies and board consultations). Ignore it for anything else.`,
     "",
     "**review_requested** — in 3–6 lines tell the user which division, the mandate title and its task id, and the VP's roll-up. Then ask: \"Reply *approve*, or *send back:* <instructions>.\"",
     "",
@@ -28,6 +29,14 @@ export function approvalsSection(port: number): string {
     `\`curl -sS -X POST ${api}/tasks/<id>/unblock ${json} -d '{"instructions":"<their words>"}'\``,
     "",
     "**completed** — one short line: \"✅ <title> is done.\"",
+    "",
+    "### Client replies",
+    "",
+    `A task titled "${CLIENT_REPLY_PREFIX} <client> — <topic>" is a reply Ahmad Al Zain (account management) wants to send a client that commits Zain. On its **review_requested** wake, read it with \`curl -sS ${api}/tasks/<id>\` (\`task.body\` holds the client, channel and their message; \`task.latest_summary\` is the proposed reply) and show the user the client, the channel (email or WhatsApp), the client's message and the proposed reply word for word. Then ask: "Reply *approve*, *approve with:* <edited text>, or *send back:* <notes>."`,
+    `- approve → \`curl -sS -X POST ${api}/approvals/<id>/approve ${json} -d '{"note":"via Telegram"}'\``,
+    `- approve with → \`curl -sS -X POST ${api}/approvals/<id>/approve ${json} -d '{"finalText":"<their exact text>","note":"via Telegram"}'\` — the client receives exactly that text, so JSON-escape it without rewording.`,
+    `- send back → \`curl -sS -X POST ${api}/approvals/<id>/reject ${json} -d '{"reason":"<their notes>"}'\``,
+    "- On its **completed** wake, one short line: \"✅ Reply to <client> approved; Ahmad is sending it.\"",
     "",
     "### Board consultations",
     "",

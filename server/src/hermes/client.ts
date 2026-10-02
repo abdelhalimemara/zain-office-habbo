@@ -67,6 +67,16 @@ export interface HomeChannel {
   chat_type?: string | null;
 }
 
+/** hermes_cli/web_server_messaging.py `_whatsapp_onboarding_payload`. */
+export interface WhatsAppOnboarding {
+  pairing_id: string;
+  status: "starting" | "installing" | "waiting" | "connected" | "error" | "expired" | "cancelled";
+  qr_payload: string | null;
+  expires_at: string | null;
+  account_phone?: string | null;
+  error?: string | null;
+}
+
 export interface ProfileCreateInput {
   name: string;
   clone_from: string;
@@ -106,6 +116,36 @@ export class HermesClient {
 
   async config(): Promise<HermesConfig> {
     return this.request<HermesConfig>("GET", "/api/config");
+  }
+
+  /** A profile's config.yaml merged with Hermes defaults. */
+  async profileConfig(profile: string): Promise<Record<string, unknown>> {
+    return this.request("GET", `/api/config?profile=${encodeURIComponent(profile)}`);
+  }
+
+  /** Deep-merges `config` into the profile's config.yaml (lists are replaced, not merged). */
+  async mergeConfig(profile: string, config: Record<string, unknown>): Promise<void> {
+    await this.request("PUT", "/api/config", { config, profile });
+  }
+
+  async setEnv(profile: string, key: string, value: string): Promise<void> {
+    await this.request("PUT", "/api/env", { key, value, profile });
+  }
+
+  async whatsappOnboardingStart(body: { mode: "bot" | "self-chat"; allowed_users: string; profile: string | null }): Promise<WhatsAppOnboarding> {
+    return this.request("POST", "/api/messaging/whatsapp/onboarding/start", body);
+  }
+
+  async whatsappOnboardingStatus(pairingId: string): Promise<WhatsAppOnboarding> {
+    return this.request("GET", `/api/messaging/whatsapp/onboarding/${encodeURIComponent(pairingId)}`);
+  }
+
+  async whatsappOnboardingApply(pairingId: string, body: { mode: "bot" | "self-chat"; profile: string | null }): Promise<{ ok: boolean; needs_restart?: boolean }> {
+    return this.request("POST", `/api/messaging/whatsapp/onboarding/${encodeURIComponent(pairingId)}/apply`, body);
+  }
+
+  async whatsappOnboardingCancel(pairingId: string): Promise<void> {
+    await this.request("DELETE", `/api/messaging/whatsapp/onboarding/${encodeURIComponent(pairingId)}`);
   }
 
   async listProfiles(): Promise<HermesProfile[]> {

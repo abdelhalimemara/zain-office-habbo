@@ -3,6 +3,7 @@ import { CEO_PROFILE, agentsInDivision, findAgent, type RosterAgent } from "../.
 import { findBoardMember } from "../../../shared/board";
 import { humanize } from "../headcount/skillFile";
 import { boardDescription, boardSoul } from "./boardPersona";
+import { clientCommsSection } from "./clientPersona";
 import type { BriefReader } from "./privateBriefs";
 
 function bossLabel(agent: RosterAgent, roster: readonly RosterAgent[]): string {
@@ -21,7 +22,9 @@ export function profileDescription(agent: RosterAgent): string {
   const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
   if (member) return boardDescription(member);
   const division = getDivision(agent.division);
-  const text = `${division.name} · ${agent.title} (${agent.rank}). ${division.tagline}. Skills: ${skillNames(agent)}.`;
+  const who = agent.name ? `${agent.name}, ${agent.title}` : agent.title;
+  const channels = agent.clientChannels?.length ? ` Handles client communication on ${agent.clientChannels.join(" and ")}.` : "";
+  const text = `${division.name} · ${who} (${agent.rank}). ${division.tagline}.${channels} Skills: ${skillNames(agent)}.`;
   return text.length <= 400 ? text : `${text.slice(0, 399)}…`;
 }
 
@@ -61,7 +64,7 @@ export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): str
   const lines = [
     `# ${agent.title} — ${division.name}`,
     "",
-    `You are the ${agent.title} of ${division.name} (${division.tagline}), part of Zain Group, an agency headquartered in Riyadh.`,
+    `You are ${agent.name ? `${agent.name}, ` : ""}the ${agent.title} of ${division.name} (${division.tagline}), part of Zain Group, an agency headquartered in Riyadh.`,
     `You report to ${bossLabel(agent, roster)}. Your Hermes profile is \`${agent.profile}\`.`,
     "",
     "## How work flows at Zain Group",
@@ -79,10 +82,14 @@ export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): str
       "## Handling your tasks",
       "",
       "- Do the task you are assigned and finish it with `kanban_complete`, including a clear result summary your manager can roll up.",
-      "- Do not request review from HQ and do not create work for other divisions; HQ only reviews your manager's mandates.",
+      agent.clientChannels?.length
+        ? "- Request review from HQ only for client replies, as described below; do not create work for other divisions."
+        : "- Do not request review from HQ and do not create work for other divisions; HQ only reviews your manager's mandates.",
       "- If you are genuinely stuck, block with the exact reason so your manager can help.",
     );
   }
+  const clientComms = clientCommsSection(agent);
+  if (clientComms.length) lines.push("", ...clientComms);
   if (agent.reviewer) {
     lines.push(
       "",

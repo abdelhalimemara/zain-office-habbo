@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { WakeReason } from "../../../shared/api";
 import { KANBAN_BOARD } from "../../../shared/divisions";
-import { allTasks, isMandate } from "../../../shared/flow";
-import type { KanbanBoard } from "../../../shared/hermes";
+import { allTasks, isClientReply, isMandate } from "../../../shared/flow";
+import type { KanbanBoard, KanbanTask } from "../../../shared/hermes";
 import { CEO_PROFILE, type RosterAgent } from "../../../shared/roster";
 import type { HermesClient, HomeChannel } from "../hermes/client";
 import { TASK_ID } from "../http";
@@ -110,9 +110,14 @@ export class CeoWake {
     return { subscribed: true };
   }
 
-  /** Ensures every open mandate wakes the CEO; once per task per process, retried until it works. */
+  /**
+   * Ensures every open mandate and client reply wakes the CEO; once per task per process, retried
+   * until it works. Client replies are created by the account agent in a client chat, not through
+   * Zain HQ, so this is how they reach Telegram.
+   */
   async backfill(board: KanbanBoard, roster: readonly RosterAgent[]): Promise<number> {
-    const open = allTasks(board).filter((t) => isMandate(t, roster) && !FINISHED.has(t.status) && !this.done.has(t.id));
+    const wanted = (t: KanbanTask) => isMandate(t, roster) || isClientReply(t, roster);
+    const open = allTasks(board).filter((t) => wanted(t) && !FINISHED.has(t.status) && !this.done.has(t.id));
     if (open.length === 0) return 0;
     const home = await this.telegramHome();
     if (!home) return 0;
