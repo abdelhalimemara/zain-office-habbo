@@ -2,6 +2,7 @@ import {
   HANDLED_LABEL,
   JOB_NAME,
   SCHEDULE,
+  activationOf,
   inboxJobSpec,
   inboxPrompt,
   jobDrift,
@@ -14,6 +15,8 @@ import { setup, type Handler } from "./helpers";
 
 const HOME = "/h";
 const LABEL = "Label_42";
+const T = 1_790_000_000;
+const now = () => new Date(T * 1000);
 
 function python(opts: { token?: boolean; label?: string | null; created?: boolean } = {}) {
   const calls: string[][] = [];
@@ -38,10 +41,10 @@ function cronApi(jobs: unknown[], extra: Record<string, Handler> = {}) {
 
 describe("Gmail inbox loop job", () => {
   it("runs every 2 minutes in Ahmad's profile, delivering locally only, with the skill and the tools it needs", () => {
-    expect(inboxJobSpec(LABEL)).toEqual({
+    expect(inboxJobSpec(LABEL, T)).toEqual({
       name: "zain-ahmad-gmail-inbox",
       schedule: "every 2m",
-      prompt: inboxPrompt(LABEL),
+      prompt: inboxPrompt(LABEL, T),
       deliver: "local",
       skills: ["google-workspace"],
       enabled_toolsets: ["terminal", "skills", "kanban"],
@@ -49,7 +52,7 @@ describe("Gmail inbox loop job", () => {
   });
 
   it("tells Ahmad to send approved replies once, triage unread mail and label it handled", () => {
-    const prompt = inboxPrompt(LABEL);
+    const prompt = inboxPrompt(LABEL, T);
     const sent = prompt.indexOf("Pending approved replies first");
     const unread = prompt.indexOf("New mail");
     expect(sent).toBeGreaterThan(-1);
@@ -57,7 +60,8 @@ describe("Gmail inbox loop job", () => {
     expect(prompt).toContain('whose comments do not contain "Sent via email"');
     expect(prompt).toContain("send the task's result EXACTLY as written as an in-thread reply");
     expect(prompt).toContain('then kanban_comment "Sent via email" on the task. Never send one twice.');
-    expect(prompt).toContain("is:unread in:inbox -category:promotions -category:social");
+    expect(prompt).toContain(`is:unread in:inbox after:${T} -category:promotions -category:social`);
+    expect(prompt).toContain("Never handle, reply to or relabel mail received before this loop was activated");
     expect(prompt).toMatch(/no-reply\/noreply, mailer-daemon/);
     expect(prompt).toContain("gmail reply <id> so threadId, In-Reply-To and References are kept");
     expect(prompt).toContain("channel: email, client: <address>, threadId: <id>, messageId: <id>");
@@ -67,7 +71,7 @@ describe("Gmail inbox loop job", () => {
   });
 
   it("detects drift only in the fields the script owns", () => {
-    const spec = inboxJobSpec(LABEL);
+    const spec = inboxJobSpec(LABEL, T);
     const current = { id: "job1", name: JOB_NAME, prompt: spec.prompt, schedule_display: SCHEDULE, deliver: "local", skills: ["google-workspace"], enabled_toolsets: ["terminal", "skills", "kanban"] };
     expect(jobDrift(current, spec)).toEqual({});
     expect(jobDrift({ ...current, deliver: "telegram", schedule_display: "every 5m" }, spec)).toEqual({ deliver: "local", schedule: "every 2m" });
@@ -86,7 +90,7 @@ describe("npm run ahmad:gmail", () => {
     const lines: string[] = [];
     const py = python({ token: false });
     const { hermes, hermesFetch } = cronApi([]);
-    expect(await runGmailSetup({ apply: true, hermes, python: py.run, home: HOME, log: (l) => lines.push(l) })).toBe("needs-auth");
+    expect(await runGmailSetup({ apply: true, hermes, python: py.run, home: HOME, now, log: (l) => lines.push(l) })).toBe("needs-auth");
     expect(py.calls).toEqual([["/h/profiles/zain-hq-accounts/skills/productivity/google-workspace/scripts/setup.py", "--check"]]);
     expect(hermesFetch.calls).toEqual([]);
     expect(lines.join("\n")).toContain("--auth-code");
@@ -96,7 +100,7 @@ describe("npm run ahmad:gmail", () => {
     const lines: string[] = [];
     const py = python({ label: null });
     const { hermes, hermesFetch } = cronApi([]);
-    expect(await runGmailSetup({ apply: false, hermes, python: py.run, home: HOME, log: (l) => lines.push(l) })).toBe("dry-run");
+    expect(await runGmailSetup({ apply: false, hermes, python: py.run, home: HOME, now, log: (l) => lines.push(l) })).toBe("dry-run");
     expect(py.calls[1]![1]).not.toContain("labels().create");
     expect(hermesFetch.calls.filter((c) => c.method !== "GET")).toEqual([]);
     expect(hermesFetch.called("GET /api/cron/jobs")[0]!.query.get("profile")).toBe("zain-hq-accounts");
@@ -106,30 +110,40 @@ describe("npm run ahmad:gmail", () => {
   it("creates the job once, in Ahmad's profile, with the label id in its prompt", async () => {
     const py = python({ created: true });
     const { hermes, hermesFetch } = cronApi([{ id: "other", name: "daily-brief" }]);
-    expect(await runGmailSetup({ apply: true, hermes, python: py.run, home: HOME, log: () => undefined })).toBe("created");
+    expect(await runGmailSetup({ apply: true, hermes, python: py.run, home: HOME, now, log: () => undefined })).toBe("created");
     expect(py.calls[1]![1]).toContain("labels().create");
     const created = hermesFetch.called("POST /api/cron/jobs");
     expect(created).toHaveLength(1);
     expect(created[0]!.query.get("profile")).toBe("zain-hq-accounts");
-    expect(created[0]!.body).toEqual(inboxJobSpec(LABEL));
+    expect(created[0]!.body).toEqual(inboxJobSpec(LABEL, T));
   });
 
   it("updates only drifted fields of the existing job, and leaves an up-to-date job alone", async () => {
-    const spec = inboxJobSpec(LABEL);
+    const spec = inboxJobSpec(LABEL, T);
     const current = { id: "job1", name: JOB_NAME, prompt: "old prompt", schedule_display: SCHEDULE, deliver: "local", skills: ["google-workspace"], enabled_toolsets: ["terminal", "skills", "kanban"] };
     const drifted = cronApi([current]);
-    expect(await runGmailSetup({ apply: true, hermes: drifted.hermes, python: python().run, home: HOME, log: () => undefined })).toBe("updated");
+    expect(await runGmailSetup({ apply: true, hermes: drifted.hermes, python: python().run, home: HOME, now, log: () => undefined })).toBe("updated");
     expect(drifted.hermesFetch.called("PUT /api/cron/jobs/job1").map((c) => c.body)).toEqual([{ updates: { prompt: spec.prompt } }]);
     expect(drifted.hermesFetch.called("POST /api/cron/jobs")).toEqual([]);
 
     const fresh = cronApi([{ ...current, prompt: spec.prompt }]);
-    expect(await runGmailSetup({ apply: true, hermes: fresh.hermes, python: python().run, home: HOME, log: () => undefined })).toBe("unchanged");
+    expect(await runGmailSetup({ apply: true, hermes: fresh.hermes, python: python().run, home: HOME, now, log: () => undefined })).toBe("unchanged");
     expect(fresh.hermesFetch.calls.filter((c) => c.method !== "GET")).toEqual([]);
+  });
+
+  it("keeps the original activation time when updating, so the backlog stays untouched", async () => {
+    const earlier = T - 86_400;
+    const current = { id: "job1", name: JOB_NAME, prompt: inboxPrompt("old", earlier), schedule_display: SCHEDULE, deliver: "local", skills: ["google-workspace"], enabled_toolsets: ["terminal", "skills", "kanban"] };
+    expect(activationOf(current)).toBe(earlier);
+    const { hermes, hermesFetch } = cronApi([current]);
+    await runGmailSetup({ apply: true, hermes, python: python().run, home: HOME, now, log: () => undefined });
+    expect(hermesFetch.called("PUT /api/cron/jobs/job1")[0]!.body).toEqual({ updates: { prompt: inboxPrompt(LABEL, earlier) } });
+    expect(activationOf(undefined)).toBeNull();
   });
 
   it("fails clearly when Gmail labels cannot be read", async () => {
     const run: PythonRunner = async (args) => (args[0]!.endsWith("setup.py") ? { code: 0, stdout: "ok" } : { code: 2, stdout: "" });
     const { hermes } = cronApi([]);
-    await expect(runGmailSetup({ apply: true, hermes, python: run, home: HOME, log: () => undefined })).rejects.toThrow("could not read Gmail labels (exit 2)");
+    await expect(runGmailSetup({ apply: true, hermes, python: run, home: HOME, now, log: () => undefined })).rejects.toThrow("could not read Gmail labels (exit 2)");
   });
 });

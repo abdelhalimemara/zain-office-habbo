@@ -51,6 +51,7 @@ export function clientCommsSection(agent: RosterAgent): string[] {
           "### Your Gmail inbox loop",
           "",
           "- Every two minutes a scheduled run of you checks Gmail with the google-workspace skill: first approved email replies not yet sent, then unread inbox mail.",
+          "- Only mail received after the loop was activated is yours to handle; never reply to the mailbox's older backlog.",
           "- Skip promotions, social and automated senders (no-reply, notifications, newsletters, your own address).",
           "- Reply in the same thread (`gmail reply <messageId>`) so the client sees one conversation; then mark the message read and label it `Zain/Handled`.",
         ]

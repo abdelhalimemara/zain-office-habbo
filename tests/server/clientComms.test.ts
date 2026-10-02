@@ -36,6 +36,7 @@ describe("Ahmad's client-communication charter", () => {
     expect(soul).toContain("the completed task's result, read with `kanban_show`) exactly");
     expect(soul).toContain('leaves the comment "Sent via email" on the task. A task with that comment has been sent: never send it again.');
     expect(soul).toContain("### Your Gmail inbox loop");
+    expect(soul).toContain("never reply to the mailbox's older backlog");
     expect(soul).toContain("`gmail reply <messageId>`");
     expect(soul).toContain("`Zain/Handled`");
     expect(soul).toMatch(/If HQ sends it back.*revise the reply and request review again/);

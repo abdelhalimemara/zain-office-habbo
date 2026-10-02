@@ -81,15 +81,27 @@ export async function handledLabel(python: PythonRunner, create: boolean, home =
   return { id: parsed.id, created: parsed.created };
 }
 
-/** What each run of the inbox loop must do; the SOUL carries the routine/commitment rules. */
-export function inboxPrompt(labelId: string): string {
+const ACTIVATION = /after:(\d{9,11})\b/;
+
+/** The activation time (unix seconds) baked into an existing job's prompt, if any. */
+export function activationOf(job: CronJob | undefined): number | null {
+  const match = job?.prompt ? ACTIVATION.exec(job.prompt) : null;
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * What each run of the inbox loop must do; the SOUL carries the routine/commitment rules.
+ * `activatedAt` (unix seconds) keeps the loop off the mailbox's existing backlog: Gmail's
+ * `after:` accepts epoch seconds.
+ */
+export function inboxPrompt(labelId: string, activatedAt: number): string {
   return [
     "You are running Ahmad Al Zain's Gmail inbox loop. Follow your client-communication charter (your SOUL) exactly.",
     "Use the google-workspace skill (google_api.py gmail …) for all Gmail work.",
     "",
     "1. Pending approved replies first. List your kanban tasks titled \"" + CLIENT_REPLY_PREFIX + " …\" with channel email that are done (completed in the last 14 days).",
     `   For each one whose comments do not contain "${SENT_MARKER}": send the task's result EXACTLY as written as an in-thread reply to the message id in its body (gmail reply <messageId> --body …), then kanban_comment "${SENT_MARKER}" on the task. Never send one twice.`,
-    "2. New mail. Search `is:unread in:inbox -category:promotions -category:social -category:updates -category:forums` (max 20).",
+    `2. New mail only. Search \`is:unread in:inbox after:${activatedAt} -category:promotions -category:social -category:updates -category:forums\` (max 20). Never handle, reply to or relabel mail received before this loop was activated, even if it is unread.`,
     "   Skip and just mark read: no-reply/noreply, mailer-daemon, notifications and other automated senders, newsletters, and anything from your own address.",
     "3. For each remaining message (gmail get <id>):",
     "   - Routine (status, scheduling, acknowledgements, FAQs, already-approved deliverables): reply in-thread with gmail reply <id> so threadId, In-Reply-To and References are kept.",
@@ -101,11 +113,11 @@ export function inboxPrompt(labelId: string): string {
   ].join("\n");
 }
 
-export function inboxJobSpec(labelId: string): CronJobSpec {
+export function inboxJobSpec(labelId: string, activatedAt: number): CronJobSpec {
   return {
     name: JOB_NAME,
     schedule: SCHEDULE,
-    prompt: inboxPrompt(labelId),
+    prompt: inboxPrompt(labelId, activatedAt),
     deliver: "local",
     skills: ["google-workspace"],
     enabled_toolsets: ["terminal", "skills", "kanban"],
@@ -129,12 +141,13 @@ export interface GmailSetupOptions {
   hermes: HermesClient;
   python: PythonRunner;
   home?: string;
+  now?: () => Date;
   log?: (line: string) => void;
 }
 
 export type GmailSetupOutcome = "needs-auth" | "dry-run" | "created" | "updated" | "unchanged";
 
-export async function runGmailSetup({ apply, hermes, python, home = hermesHome(), log = console.log }: GmailSetupOptions): Promise<GmailSetupOutcome> {
+export async function runGmailSetup({ apply, hermes, python, home = hermesHome(), now = () => new Date(), log = console.log }: GmailSetupOptions): Promise<GmailSetupOutcome> {
   const token = await checkGmailToken(python, home);
   log(`Gmail token for ${ACCOUNTS_PROFILE}: ${token.ok ? "valid" : "missing or invalid"}${token.detail ? ` (${token.detail})` : ""}`);
   if (!token.ok) {
@@ -145,7 +158,9 @@ export async function runGmailSetup({ apply, hermes, python, home = hermesHome()
   log(`Label ${HANDLED_LABEL}: ${label.id ? `${label.created ? "created" : "found"} (${label.id})` : "missing; --apply creates it"}`);
 
   const existing = (await hermes.cronJobs(ACCOUNTS_PROFILE)).find((j) => j.name === JOB_NAME);
-  const spec = inboxJobSpec(label.id ?? "<label id>");
+  const activatedAt = activationOf(existing) ?? Math.floor(now().getTime() / 1000);
+  log(`Mail handled from ${new Date(activatedAt * 1000).toISOString()} on${activationOf(existing) ? " (kept from the existing job)" : ""}; the existing backlog is never touched.`);
+  const spec = inboxJobSpec(label.id ?? "<label id>", activatedAt);
   const drift = existing ? jobDrift(existing, spec) : null;
   if (!apply) {
     if (!existing) log(`Would create cron job ${JOB_NAME} (${SCHEDULE}, delivery local only, skills google-workspace, toolsets terminal+skills+kanban).`);
