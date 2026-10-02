@@ -14,7 +14,8 @@ import { dynamicDepth, toScreen, type Ranked, type Rect } from "../iso";
 import { PAGE_BACKGROUND, PAL } from "../palette";
 import { PersonBrain, restingSpot } from "../people";
 import { floorPlan, type FloorPlan } from "../plan";
-import { assignSeats, rosterOrder } from "../seating";
+import { teamZone } from "../plan/pods";
+import { assignSeats, podsForTeams, rosterOrder } from "../seating";
 import type { Hit, WorldAgent, WorldStats } from "../types";
 import { drawFloorDebug } from "./floorDebug";
 import type { Scene, SceneOptions, SceneViewport } from "./Scene";
@@ -310,7 +311,52 @@ export class FloorScene implements Scene {
         best = { profile: p.agent.profile, z: p.body.zIndex };
       }
     }
-    return best ? { kind: "agent", profile: best.profile } : null;
+    if (best) return { kind: "agent", profile: best.profile };
+    const team = this.plateTeamAt(x, y);
+    return team ? { kind: "team", team } : null;
+  }
+
+  private teamIds(): string[] {
+    return [...this.persons.values()].flatMap((p) => (p.agent.team ? [p.agent.team] : []));
+  }
+
+  /** Team whose pod name plate covers scene point (x, y). */
+  private plateTeamAt(x: number, y: number): string | null {
+    const v = this.viewport;
+    if (!v || this.floor.pods.length === 0) return null;
+    const cssX = (v.x + x * v.scale) / v.dpr;
+    const cssY = (v.y + y * v.scale) / v.dpr;
+    const owners = new Map([...podsForTeams(this.floor, this.teamIds())].map(([team, pod]) => [pod.index, team]));
+    for (let i = 0; i < this.floor.plates.length; i++) {
+      const plate = this.floor.plates[i]!;
+      const c = this.plates.children[i];
+      if (plate.pod === undefined || !c?.visible) continue;
+      const b = c.getLocalBounds();
+      if (cssX >= c.x + b.x && cssX <= c.x + b.x + b.width && cssY >= c.y + b.y && cssY <= c.y + b.y + b.height) {
+        return owners.get(plate.pod) ?? null;
+      }
+    }
+    return null;
+  }
+
+  /** Visible pod name plates, as fixed boxes that people's pills stack above rather than cover. */
+  private plateObstacles(): { x: number; bottom: number; w: number; h: number }[] {
+    const out: { x: number; bottom: number; w: number; h: number }[] = [];
+    this.floor.plates.forEach((plate, i) => {
+      const c = this.plates.children[i];
+      if (plate.pod === undefined || !c?.visible) return;
+      const b = c.getLocalBounds();
+      out.push({ x: c.x, bottom: c.y + b.y + b.height, w: b.width, h: b.height });
+    });
+    return out;
+  }
+
+  /** Css-pixel rectangle (relative to the canvas) around a team's pod, for focusing it from the UI. */
+  teamZone(teamId: string): Rect | null {
+    const v = this.viewport;
+    const r = teamZone(this.floor, teamId, this.teamIds());
+    if (!v || !r) return null;
+    return { x: (v.x + r.x * v.scale) / v.dpr, y: (v.y + r.y * v.scale) / v.dpr, w: (r.w * v.scale) / v.dpr, h: (r.h * v.scale) / v.dpr };
   }
 
   setHover(hit: Hit | null): void {
@@ -393,7 +439,7 @@ export class FloorScene implements Scene {
         return { p, x, bottom, w: Math.max(p.statusW, p.nameW), h };
       })
       .sort((a, b) => b.bottom - a.bottom || a.x - b.x);
-    const placed: { x: number; bottom: number; w: number; h: number }[] = [];
+    const placed: { x: number; bottom: number; w: number; h: number }[] = this.plateObstacles();
     for (const b of blocks) {
       for (let guard = 0; guard < 12; guard++) {
         const hit = placed.find((o) => Math.abs(o.x - b.x) < (o.w + b.w) / 2 + 2 && b.bottom > o.bottom - o.h - 2 && b.bottom - b.h < o.bottom + 2);

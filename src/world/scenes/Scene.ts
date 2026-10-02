@@ -48,6 +48,7 @@ export function sameHit(a: Hit | null, b: Hit | null): boolean {
   if (!a || !b) return a === b;
   if (a.kind === "building" && b.kind === "building") return a.division === b.division;
   if (a.kind === "agent" && b.kind === "agent") return a.profile === b.profile;
+  if (a.kind === "team" && b.kind === "team") return a.team === b.team;
   return false;
 }
 

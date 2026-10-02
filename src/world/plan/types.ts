@@ -93,14 +93,29 @@ export interface PlanSeat {
   y: number;
   facing: "+x" | "+y";
   role?: SeatRole;
-  /** HQ department (see HQ_TEAMS). */
+  /** HQ department (see HQ_TEAMS), or "platform" for the Tech VP's shared specialists. */
   team?: string;
+  /** Index into `FloorPlan.pods` for team-pod seats. */
+  pod?: number;
+  /** One of the two lead seats at the head of a pod (Head Engineer, then Project Manager). */
+  lead?: boolean;
   /** The desk or table in front of the seat (1 tile ahead, or 2 when a chair stands between). */
   desk: string;
   /** Tiles from the seat to the desk along `facing`. */
   reach: 1 | 2;
   /** The chair this person sits on when seated. */
   sit: SitPoint;
+}
+
+/** A bounded team zone on a floor, in tiles. */
+export interface Pod {
+  index: number;
+  team: string | null;
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  d: number;
 }
 
 /** A cushion on a sofa or armchair where an idle person can sit. */
@@ -118,6 +133,8 @@ export interface RoomPlate {
   text: string;
   x: number;
   y: number;
+  /** Set on a team pod's name plate. */
+  pod?: number;
 }
 
 export interface FloorPlan {
@@ -132,6 +149,8 @@ export interface FloorPlan {
   idle: readonly Spot[];
   plates: readonly RoomPlate[];
   sofaSeats: readonly SofaSeat[];
+  /** Team pods (Zain Tech); a pod with `team: null` is a spare slot for teams added at runtime. */
+  pods: readonly Pod[];
 }
 
 export const DIR_VEC: Record<Dir, { dx: number; dy: number }> = {

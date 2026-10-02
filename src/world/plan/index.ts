@@ -1,5 +1,6 @@
 import type { DivisionId } from "../../../shared/divisions";
-import { buildGrowth, buildLabs, buildStudio, buildTech } from "./divisions";
+import { buildGrowth, buildLabs, buildStudio } from "./divisions";
+import { buildTech } from "./tech";
 import { buildHq } from "./hq";
 import type { FloorPlan } from "./types";
 

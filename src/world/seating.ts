@@ -1,9 +1,13 @@
 import { ROSTER, type Rank } from "../../shared/roster";
-import { HQ_TEAMS, type FloorPlan, type PlanSeat, type SeatRole } from "./plan";
+import { HQ_TEAMS, type FloorPlan, type PlanSeat, type Pod, type SeatRole } from "./plan";
 
 export interface SeatCandidate {
   profile: string;
   rank: Rank;
+  /** Zain Tech repo team id. */
+  team?: string;
+  /** Used to order a pod's two leads (Head Engineer before Project Manager). */
+  title?: string;
 }
 
 export interface SeatAssignment {
@@ -50,6 +54,10 @@ export function assignSeats(floor: FloorPlan, agents: readonly SeatCandidate[]):
     }
     rest.push(a);
   }
+  if (floor.pods.length > 0) {
+    seatPods(floor, rest, take, free, overflow);
+    return { seats, overflow };
+  }
   const unplaced: SeatCandidate[] = [];
   for (const a of rest) {
     const team = HQ_TEAMS[a.profile];
@@ -59,4 +67,50 @@ export function assignSeats(floor: FloorPlan, agents: readonly SeatCandidate[]):
     if (!take(free((s) => !s.role), a.profile)) overflow.push(a.profile);
   }
   return { seats, overflow };
+}
+
+/**
+ * Which pod each team works in: named teams have their own pod; teams added at runtime take the spare pods in
+ * alphabetical order of id. Teams beyond the spare pods get none (their people overflow).
+ */
+export function podsForTeams(floor: Pick<FloorPlan, "pods">, teamIds: Iterable<string>): Map<string, Pod> {
+  const out = new Map<string, Pod>();
+  for (const p of floor.pods) if (p.team) out.set(p.team, p);
+  const spare = floor.pods.filter((p) => p.team === null);
+  const runtime = [...new Set(teamIds)].filter((t) => !out.has(t)).sort();
+  runtime.forEach((t, i) => {
+    const p = spare[i];
+    if (p) out.set(t, p);
+  });
+  return out;
+}
+
+const leadOrder = (a: SeatCandidate) => (/head/i.test(a.title ?? "") ? 0 : 1);
+
+function seatPods(
+  floor: FloorPlan,
+  agents: readonly SeatCandidate[],
+  take: (seat: PlanSeat | undefined, profile: string) => boolean,
+  free: (pred: (s: PlanSeat) => boolean) => PlanSeat | undefined,
+  overflow: string[],
+): void {
+  const pods = podsForTeams(floor, agents.flatMap((a) => (a.team ? [a.team] : [])));
+  const used = new Set([...pods.values()].map((p) => p.index));
+  const leads = agents.filter((a) => a.team && a.rank === "lead").sort((a, b) => leadOrder(a) - leadOrder(b));
+  const unplaced: SeatCandidate[] = [];
+  for (const a of [...leads, ...agents.filter((x) => !(x.team && x.rank === "lead"))]) {
+    if (a.team) {
+      const pod = pods.get(a.team);
+      const inPod = (s: PlanSeat) => !s.role && pod !== undefined && s.pod === pod.index;
+      const placed = pod && (a.rank === "lead" ? take(free((s) => inPod(s) && !!s.lead), a.profile) : false);
+      if (placed || (pod && take(free((s) => inPod(s) && !s.lead), a.profile))) continue;
+      if (pod && a.rank === "lead" && take(free(inPod), a.profile)) continue;
+    } else if (take(free((s) => !s.role && s.team === "platform"), a.profile)) {
+      continue;
+    }
+    unplaced.push(a);
+  }
+  for (const a of unplaced) {
+    if (!take(free((s) => !s.role && s.pod !== undefined && !used.has(s.pod)), a.profile)) overflow.push(a.profile);
+  }
 }

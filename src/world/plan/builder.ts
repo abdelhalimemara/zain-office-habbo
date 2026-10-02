@@ -7,6 +7,7 @@ import {
   type ItemKind,
   type Material,
   type PlanSeat,
+  type Pod,
   type RoomPlate,
   type SeatRole,
   type SitPoint,
@@ -29,6 +30,8 @@ export interface ItemOptions {
 export interface SeatOptions {
   role?: SeatRole;
   team?: string;
+  pod?: number;
+  lead?: boolean;
   /** Desk kind; "none" when the seat faces an existing table. */
   desk?: "desk" | "none";
   /** Chair pulled out behind the person. */
@@ -51,6 +54,7 @@ export class PlanBuilder {
   private readonly seats: Omit<PlanSeat, "sit">[] = [];
   private readonly idle: Spot[] = [];
   private readonly plates: RoomPlate[] = [];
+  private readonly pods: Pod[] = [];
   private seq = 0;
 
   constructor(
@@ -108,6 +112,8 @@ export class PlanBuilder {
       reach: opts.reach ?? 1,
       ...(opts.role ? { role: opts.role } : {}),
       ...(opts.team ? { team: opts.team } : {}),
+      ...(opts.pod !== undefined ? { pod: opts.pod } : {}),
+      ...(opts.lead ? { lead: true } : {}),
     };
     this.seats.push(s);
     return s;
@@ -145,13 +151,19 @@ export class PlanBuilder {
     return this;
   }
 
+  pod(team: string | null, label: string, x: number, y: number, w: number, d: number): Pod {
+    const p: Pod = { index: this.pods.length, team, label, x, y, w, d };
+    this.pods.push(p);
+    return p;
+  }
+
   rest(x: number, y: number): this {
     this.idle.push({ id: `idle-${this.idle.length}`, x, y });
     return this;
   }
 
-  plate(text: string, x: number, y: number): this {
-    this.plates.push({ text, x, y });
+  plate(text: string, x: number, y: number, pod?: number): this {
+    this.plates.push({ text, x, y, ...(pod !== undefined ? { pod } : {}) });
     return this;
   }
 
@@ -167,6 +179,7 @@ export class PlanBuilder {
       idle: this.idle,
       plates: this.plates,
       sofaSeats: this.sofaSeats(),
+      pods: this.pods,
     };
   }
 
