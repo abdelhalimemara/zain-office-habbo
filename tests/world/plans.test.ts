@@ -38,9 +38,30 @@ describe.each(DIVISION_IDS.map((d) => [d]))("floor plan %s", (division) => {
       const desk = plan.items.find((i) => i.id === s.desk);
       expect(desk, s.id).toBeDefined();
       const v = DIR_VEC[s.facing];
-      const tx = s.x + v.dx;
-      const ty = s.y + v.dy;
+      const tx = s.x + v.dx * s.reach;
+      const ty = s.y + v.dy * s.reach;
       expect(tx >= desk!.x && tx < desk!.x + desk!.w && ty >= desk!.y && ty < desk!.y + desk!.d, `${s.id} faces ${desk!.id}`).toBe(true);
+    }
+  });
+
+  it("gives every seat a chair to sit on, facing its desk", () => {
+    for (const s of plan.seats) {
+      const chair = plan.items.find((i) => i.id === s.sit.item);
+      expect(chair, `${s.id} chair`).toBeDefined();
+      expect(["officeChair", "execChair", "chair"]).toContain(chair!.kind);
+      expect(s.sit.facing).toBe(s.facing);
+      expect(s.sit.x >= chair!.x && s.sit.x <= chair!.x + 1 && s.sit.y >= chair!.y && s.sit.y <= chair!.y + 1).toBe(true);
+      expect(s.sit.height).toBeGreaterThan(0.2);
+    }
+  });
+
+  it("lists a cushion on every sofa and armchair tile", () => {
+    const sofas = plan.items.filter((i) => i.kind === "sofa" || i.kind === "armchair");
+    expect(plan.sofaSeats.length).toBe(sofas.reduce((n, i) => n + i.w * i.d, 0));
+    for (const c of plan.sofaSeats) {
+      const it = sofas.find((i) => i.id === c.item)!;
+      expect(c.x > it.x && c.x < it.x + it.w && c.y > it.y && c.y < it.y + it.d).toBe(true);
+      expect(c.facing).toBe(it.facing);
     }
   });
 
@@ -71,7 +92,13 @@ describe("HQ plan", () => {
   it("has five board seats at the board table and one CEO seat", () => {
     const board = hq.seats.filter((s) => s.role === "board");
     expect(board).toHaveLength(5);
-    for (const s of board) expect(hq.items.find((i) => i.id === s.desk)?.kind).toBe("boardTable");
+    const table = hq.items.find((i) => i.kind === "boardTable")!;
+    expect(Math.min(table.w, table.d)).toBe(2);
+    expect(Math.max(table.w, table.d)).toBeGreaterThanOrEqual(6);
+    for (const s of board) {
+      expect(s.desk).toBe(table.id);
+      expect(hq.items.find((i) => i.id === s.sit.item)?.kind, "board stands behind a head chair").toBe("chair");
+    }
     expect(hq.seats.filter((s) => s.role === "ceo")).toHaveLength(1);
   });
 });

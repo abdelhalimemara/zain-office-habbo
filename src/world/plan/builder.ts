@@ -9,6 +9,8 @@ import {
   type PlanSeat,
   type RoomPlate,
   type SeatRole,
+  type SitPoint,
+  type SofaSeat,
   type Spot,
   type Wall,
   type WallKind,
@@ -33,13 +35,20 @@ export interface SeatOptions {
   chair?: "officeChair" | "execChair" | "none";
   /** Existing table id when desk is "none". */
   table?: string;
+  /** Tiles to the table; 2 when its chairs stand between the person and the table (board room). */
+  reach?: 1 | 2;
 }
+
+/** Seat-top height of chairs and cushions, in tiles. */
+export const CHAIR_SEAT_H = 0.33;
+export const SOFA_SEAT_H = 0.25;
+const CHAIR_KINDS: ReadonlySet<ItemKind> = new Set(["officeChair", "execChair", "chair"]);
 
 export class PlanBuilder {
   private readonly zones: Zone[] = [];
   private readonly walls: Wall[] = [];
   private readonly items: Item[] = [];
-  private readonly seats: PlanSeat[] = [];
+  private readonly seats: Omit<PlanSeat, "sit">[] = [];
   private readonly idle: Spot[] = [];
   private readonly plates: RoomPlate[] = [];
   private seq = 0;
@@ -84,18 +93,19 @@ export class PlanBuilder {
   }
 
   /** A person's place at (x, y) facing a 1×1 desk on the next tile, with their chair pulled out behind them. */
-  seat(x: number, y: number, facing: "+x" | "+y", opts: SeatOptions = {}): PlanSeat {
+  seat(x: number, y: number, facing: "+x" | "+y", opts: SeatOptions = {}): Omit<PlanSeat, "sit"> {
     const v = DIR_VEC[facing];
     let desk = opts.table;
     if ((opts.desk ?? "desk") === "desk" && !desk) desk = this.item("desk", x + v.dx, y + v.dy, 1, 1, { facing: facing === "+y" ? "-y" : "-x" }).id;
     const chair = opts.chair ?? "officeChair";
     if (chair !== "none") this.item(chair, x, y, 1, 1, { facing, solid: false });
-    const s: PlanSeat = {
+    const s: Omit<PlanSeat, "sit"> = {
       id: `seat-${this.seats.length}`,
       x,
       y,
       facing,
       desk: desk ?? "",
+      reach: opts.reach ?? 1,
       ...(opts.role ? { role: opts.role } : {}),
       ...(opts.team ? { team: opts.team } : {}),
     };
@@ -104,8 +114,8 @@ export class PlanBuilder {
   }
 
   /** A row of `n` workstations starting at (x, y), stepping along the axis perpendicular to `facing`. */
-  deskRow(x: number, y: number, n: number, facing: "+x" | "+y", opts: SeatOptions = {}, gapEvery = 0): PlanSeat[] {
-    const out: PlanSeat[] = [];
+  deskRow(x: number, y: number, n: number, facing: "+x" | "+y", opts: SeatOptions = {}, gapEvery = 0): Omit<PlanSeat, "sit">[] {
+    const out: Omit<PlanSeat, "sit">[] = [];
     let offset = 0;
     for (let i = 0; i < n; i++) {
       if (gapEvery > 0 && i > 0 && i % gapEvery === 0) offset++;
@@ -153,10 +163,47 @@ export class PlanBuilder {
       zones: this.zones,
       walls: this.walls,
       items: this.items,
-      seats: this.seats,
+      seats: this.seats.map((s) => ({ ...s, sit: this.sitFor(s) })),
       idle: this.idle,
       plates: this.plates,
+      sofaSeats: this.sofaSeats(),
     };
+  }
+
+  /** The chair a seat's person sits on: on their own tile, or the one between them and the table. */
+  private sitFor(s: Omit<PlanSeat, "sit">): SitPoint {
+    const v = DIR_VEC[s.facing];
+    const tiles = s.reach === 2 ? [{ x: s.x + v.dx, y: s.y + v.dy }] : [{ x: s.x, y: s.y }];
+    const chair = this.items.find((i) => CHAIR_KINDS.has(i.kind) && tiles.some((t) => t.x === i.x && t.y === i.y));
+    const t = tiles[0]!;
+    const back = 0.42;
+    return {
+      x: t.x + (v.dx !== 0 ? back : 0.5),
+      y: t.y + (v.dy !== 0 ? back : 0.5),
+      facing: s.facing,
+      height: CHAIR_SEAT_H,
+      item: chair?.id ?? "",
+    };
+  }
+
+  /** One cushion per tile along every sofa and armchair, pushed towards its back, facing out. */
+  private sofaSeats(): SofaSeat[] {
+    const out: SofaSeat[] = [];
+    for (const it of this.items.filter((i) => i.kind === "sofa" || i.kind === "armchair")) {
+      const v = DIR_VEC[it.facing];
+      for (const key of tilesOf(it)) {
+        const [tx, ty] = key.split(",").map(Number) as [number, number];
+        out.push({
+          id: `cushion-${out.length}`,
+          x: tx + 0.5 - v.dx * 0.12,
+          y: ty + 0.5 - v.dy * 0.12,
+          facing: it.facing,
+          height: SOFA_SEAT_H,
+          item: it.id,
+        });
+      }
+    }
+    return out;
   }
 }
 

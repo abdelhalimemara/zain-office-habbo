@@ -27,6 +27,11 @@ function floorTile(g: Graphics, x: number, y: number, m: Material): void {
     for (let p = 0; p < 3; p++) {
       const v = noise(x, y * 3 + p, 1) * 0.08 - 0.04;
       top(g, x, y + p / 3, x + 1, y + (p + 1) / 3, 0, shade(base, v));
+      for (let k = 0; k < 2; k++) {
+        const gy = y + p / 3 + 0.08 + k * 0.13 + noise(x, y * 3 + p, 6 + k) * 0.05;
+        const gx = x + noise(x, y * 3 + p, 8 + k) * 0.5;
+        top(g, gx, gy - 0.006, gx + 0.35 + noise(x, y, 9 + k) * 0.3, gy + 0.006, 0, line, 0.22);
+      }
       top(g, x, y + (p + 1) / 3 - 0.012, x + 1, y + (p + 1) / 3 + 0.012, 0, line, 0.55);
       const seam = noise(x, y * 3 + p, 2);
       if (seam > 0.45) top(g, x + seam - 0.01, y + p / 3, x + seam + 0.01, y + (p + 1) / 3, 0, line, 0.5);
@@ -44,8 +49,9 @@ function floorTile(g: Graphics, x: number, y: number, m: Material): void {
     }
     return;
   }
-  top(g, x, y, x + 1, y + 1, 0, base);
-  for (let i = 0; i < 6; i++) {
+  top(g, x, y, x + 1, y + 1, 0, shade(base, noise(x, y, 30) * 0.06 - 0.03));
+  for (const t of [0.25, 0.5, 0.75]) top(g, x, y + t - 0.01, x + 1, y + t + 0.01, 0, line, 0.18);
+  for (let i = 0; i < 10; i++) {
     const px = x + noise(x, y, 10 + i);
     const py = y + noise(x, y, 20 + i);
     top(g, px, py, Math.min(x + 1, px + 0.06), Math.min(y + 1, py + 0.06), 0, line, 0.7);

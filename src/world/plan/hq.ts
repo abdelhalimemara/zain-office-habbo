@@ -10,7 +10,7 @@ export function buildHq(): FloorPlan {
   const b = new PlanBuilder("hq", 30, 17);
 
   b.zone(0, 0, 9, 8, "walnut")
-    .zone(1, 1, 7, 7, "carpetDark")
+    .zone(1, 1, 8, 6, "carpet")
     .zone(0, 8, 9, 9, "carpetDark")
     .zone(9, 0, 12, 8, "carpet")
     .zone(9, 8, 9, 9, "marble")
@@ -27,12 +27,12 @@ export function buildHq(): FloorPlan {
   b.wall("x", 4, 22, 30).wall("x", 8, 22, 30).wall("x", 12, 22, 30);
   b.wall("x", 17, 0, 30, "parapet", [[14, 17]]).wall("y", 30, 0, 17, "parapet");
 
-  const board = b.item("boardTable", 2, 1, 5, 6);
-  for (let x = 2; x <= 6; x++) b.seat(x, 0, "+y", { role: "board", desk: "none", table: board.id, chair: "execChair" });
-  b.chairsAround(board, { back: false });
-  b.item("credenza", 0, 2, 1, 4, { facing: "+x" });
+  const board = b.item("boardTable", 2, 3, 6, 2);
+  b.chairsAround(board);
+  for (let x = 2; x <= 6; x++) b.seat(x, 1, "+y", { role: "board", desk: "none", table: board.id, chair: "none", reach: 2 });
   b.item("plant", 0, 0);
   b.item("plant", 0, 7);
+  b.item("credenza", 3, 0, 4, 1);
 
   for (const x of [1, 2, 5, 6]) b.seat(x, 9, "+y", { team: "ops" });
   for (const x of [1, 2, 5, 6]) b.item("chair", x, 11, 1, 1, { facing: "-y" });
