@@ -102,7 +102,12 @@ export function LeadershipRoom({ meeting, agents }: { meeting: BoardMeeting; age
         </>
       );
     case "drafting":
-      return <Drafting meeting={meeting} agents={agents} />;
+      return (
+        <>
+          <Drafting meeting={meeting} agents={agents} />
+          <CancelLeadership id={meeting.id} />
+        </>
+      );
     case "review":
       return (
         <>
@@ -111,6 +116,7 @@ export function LeadershipRoom({ meeting, agents }: { meeting: BoardMeeting; age
             <summary>Transcript</summary>
             <Transcript meeting={meeting} agents={agents} />
           </details>
+          <CancelLeadership id={meeting.id} />
         </>
       );
     case "assigned":
