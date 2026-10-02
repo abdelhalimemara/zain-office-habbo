@@ -10,6 +10,7 @@ export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const BIN = join(ROOT, "node_modules", ".bin");
 const NETWORK_STUB = pathToFileURL(fileURLToPath(new URL("./networkStub.mjs", import.meta.url))).href;
 /** The server's HERMES_BIN: records argv instead of touching the user's real ~/.hermes. */
+const VITE_CONFIG = fileURLToPath(new URL("./vite.e2e.config.ts", import.meta.url));
 export const HERMES_CLI_STUB = fileURLToPath(new URL("./hermesCliStub.mjs", import.meta.url));
 
 export const SHOT_DIR =
@@ -46,6 +47,8 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
   const procs: Managed[] = [];
   const hermes = options.hermes ?? new FakeHermes();
   const serverCwd = mkdtempSync(join(tmpdir(), "zain-e2e-server-"));
+  // Private pre-bundle cache: node_modules/.vite is shared with every worktree and the live dev server.
+  const viteCache = mkdtempSync(join(tmpdir(), "zain-e2e-vite-"));
   let browser: Browser | undefined;
 
   const stop = async () => {
@@ -53,6 +56,7 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
     await Promise.all(procs.map((p) => p.stop()));
     await hermes.stop();
     rmSync(serverCwd, { recursive: true, force: true });
+    rmSync(viteCache, { recursive: true, force: true });
   };
 
   try {
@@ -80,9 +84,9 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
     procs.push(server);
     const serverUrl = `http://127.0.0.1:${serverPort}`;
 
-    const web = launch("vite", join(BIN, "vite"), ["--port", String(webPort), "--strictPort", "--clearScreen", "false"], {
+    const web = launch("vite", join(BIN, "vite"), ["--config", VITE_CONFIG, "--port", String(webPort), "--strictPort", "--clearScreen", "false"], {
       cwd: ROOT,
-      env: childEnv({ ZAIN_SERVER_PORT: String(serverPort) }),
+      env: childEnv({ ZAIN_SERVER_PORT: String(serverPort), E2E_VITE_CACHE_DIR: viteCache }),
     });
     procs.push(web);
 
@@ -136,7 +140,13 @@ export async function openApp(stack: Stack, viewport: { w: number; h: number; mo
   const { page } = stack;
   await page.viewport(viewport.w, viewport.h, viewport.mobile);
   await page.goto(stack.webUrl);
-  await page.waitFor("!!document.querySelector('.zui-hud') && !!document.querySelector('.app-world canvas')", "HUD and world canvas", 30_000);
+  try {
+    await page.waitFor("!!document.querySelector('.zui-hud') && !!document.querySelector('.app-world canvas')", "HUD and world canvas", 30_000);
+  } catch (err) {
+    // Say why: an exception or a failed module load is what usually keeps the canvas away.
+    const recent = page.console.slice(-10).map((e) => `  [${e.kind}] ${e.text.slice(0, 300)}`).join("\n");
+    throw new Error(`${err instanceof Error ? err.message : String(err)}\nRecent page console:\n${recent || "  (none)"}`);
+  }
 }
 
 export const hudStatus = (page: Page, label: "Hermes" | "Telegram") =>
