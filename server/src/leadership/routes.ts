@@ -31,6 +31,6 @@ export function leadershipRoutes(app: Hono, leadership: LeadershipService): void
 
   app.post(`${LEADERSHIP_API.start}/:id/actions/assign`, async (c) => {
     const id = meetingIdParam(c.req.param("id"));
-    return c.json({ meeting: await leadership.assign(id, parseAssign(await readJsonObject(c))) });
+    return c.json(await leadership.assign(id, parseAssign(await readJsonObject(c))));
   });
 }
