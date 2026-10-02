@@ -69,7 +69,9 @@ export const api = {
   voices: () => request<VoicesResponse>(VOICE_API.voices),
   setVoice: (profile: string, input: SetVoiceRequest) => put<unknown>(VOICE_API.voice(profile), input),
   liveSession: (id: string) => post<LiveSessionResponse>(LIVE_API.session(id), {}),
-  endLive: (id: string, input: EndLiveRequest) => post<MeetingResponse>(LIVE_API.end(id), input),
+  /** `keepalive` lets the request finish while the page unloads; it keeps the JSON headers the origin guard needs. */
+  endLive: (id: string, input: EndLiveRequest, keepalive = false) =>
+    request<MeetingResponse>(LIVE_API.end(id), { method: "POST", body: JSON.stringify(input), ...(keepalive ? { keepalive } : {}) }),
   health: () => request<HealthResponse>(API.health),
   connections: () => request<ConnectionsResponse>(API.connections),
   board: () => request<BoardResponse>(API.board),
