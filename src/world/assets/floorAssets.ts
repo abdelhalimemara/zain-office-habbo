@@ -1,10 +1,4 @@
-import type { DivisionId } from "../../../shared/divisions";
 import type { SpriteKey } from "../characters";
-import hqFloor from "./floors/hq.webp";
-import studioFloor from "./floors/studio.webp";
-import growthFloor from "./floors/growth.webp";
-import labsFloor from "./floors/labs.webp";
-import techFloor from "./floors/tech.webp";
 import female1 from "./people/female-1.webp";
 import female2 from "./people/female-2.webp";
 import female3 from "./people/female-3.webp";
@@ -24,14 +18,6 @@ import alwaleed from "./board/alwaleed.webp";
 import bezos from "./board/bezos.webp";
 import buffett from "./board/buffett.webp";
 import jobs from "./board/jobs.webp";
-
-export const FLOOR_URLS: Readonly<Record<DivisionId, string>> = {
-  hq: hqFloor,
-  studio: studioFloor,
-  growth: growthFloor,
-  labs: labsFloor,
-  tech: techFloor,
-};
 
 export const SPRITE_URLS: Readonly<Record<SpriteKey, string>> = {
   "people/female-1": female1,

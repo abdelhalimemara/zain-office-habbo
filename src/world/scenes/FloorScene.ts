@@ -1,14 +1,16 @@
 import { Assets, ColorMatrixFilter, Container, Graphics, Sprite, type Texture } from "pixi.js";
 import type { DivisionId } from "../../../shared/divisions";
-import { FLOOR_URLS, SPRITE_URLS } from "../assets/floorAssets";
+import { SPRITE_URLS } from "../assets/floorAssets";
 import { spriteFor, type SpriteKey } from "../characters";
 import type { AgentDiff } from "../diff";
+import { drawItem, drawRug } from "../draw/furniture";
 import { STATUS_COLORS, buildPill, clearChildren, fontsReady, type PillItem } from "../draw/pills";
-import type { Rect } from "../iso";
-import { floorBounds, floorImage, type FloorImage } from "../layouts/floorImages";
+import { drawBackWalls, drawFloorBase, drawWall } from "../draw/surfaces";
+import { PERSON_H, fitBounds, personBox, planBounds, rankStatics } from "../plan/boxes";
+import { Z_UNIT, dynamicDepth, toScreen, type Ranked, type Rect } from "../iso";
 import { PAGE_BACKGROUND, PAL } from "../palette";
-import { PersonBrain } from "../people";
-import { restingSpot } from "../routes";
+import { PersonBrain, restingSpot } from "../people";
+import { floorPlan, type FloorPlan } from "../plan";
 import { assignSeats, rosterOrder } from "../seating";
 import type { Hit, WorldAgent, WorldStats } from "../types";
 import { drawFloorDebug } from "./floorDebug";
@@ -24,7 +26,19 @@ const ACTIVITY: Record<WorldAgent["activity"], { label: string; color: number }>
 
 const VACANT_ALPHA = 0.5;
 const PILL_GAP = 4;
-const NARROW_FLOOR = 640;
+function loadTexture(url: string, mipmaps: boolean): Promise<Texture> {
+  return Assets.load<Texture>({
+    src: url,
+    data: { alphaMode: "premultiply-alpha-on-upload", scaleMode: "linear", autoGenerateMipmaps: mipmaps },
+  }).then((t) => {
+    t.source.scaleMode = "linear";
+    if (mipmaps) {
+      t.source.autoGenerateMipmaps = true;
+      t.source.updateMipmaps();
+    }
+    return t;
+  });
+}
 
 interface Person {
   agent: WorldAgent;
@@ -43,27 +57,17 @@ interface Person {
   widthImg: number;
 }
 
-function loadTexture(url: string, mipmaps: boolean): Promise<Texture> {
-  return Assets.load<Texture>({
-    src: url,
-    data: { alphaMode: "premultiply-alpha-on-upload", scaleMode: "linear", autoGenerateMipmaps: mipmaps },
-  }).then((t) => {
-    t.source.scaleMode = "linear";
-    if (mipmaps) {
-      t.source.autoGenerateMipmaps = true;
-      t.source.updateMipmaps();
-    }
-    return t;
-  });
-}
+const CACHE_RES = 2;
 
 export class FloorScene implements Scene {
   readonly root = new Container();
   readonly screen = new Container();
   readonly style = "smooth" as const;
   readonly background = PAGE_BACKGROUND;
-  readonly floor: FloorImage;
-  private readonly people = new Container();
+  readonly floor: FloorPlan;
+  private readonly objects = new Container();
+  private readonly plates = new Container();
+  private statics: Ranked[] = [];
   private readonly persons = new Map<string, Person>();
   private readonly vacantFilter = new ColorMatrixFilter();
   private viewport: SceneViewport | null = null;
@@ -78,36 +82,89 @@ export class FloorScene implements Scene {
     opts: SceneOptions,
   ) {
     this.reducedMotion = opts.reducedMotion;
-    this.floor = floorImage(division);
+    this.floor = floorPlan(division);
     this.vacantFilter.desaturate();
-    this.people.sortableChildren = true;
+    this.objects.sortableChildren = true;
     this.screen.sortableChildren = true;
-    this.root.addChild(this.people);
+    this.root.addChild(this.buildBase(), this.objects);
+    this.buildStatics();
+    this.screen.addChild(this.plates);
     if (opts.debugHotspots) this.root.addChild(drawFloorDebug(this.floor));
-    void this.loadFloor();
+    this.buildPlates();
     void fontsReady().then(() => {
-      if (!this.destroyed) for (const p of this.persons.values()) this.refreshPills(p);
+      if (this.destroyed) return;
+      this.buildPlates();
+      for (const p of this.persons.values()) this.refreshPills(p);
     });
   }
 
-  private async loadFloor(): Promise<void> {
-    const texture = await loadTexture(FLOOR_URLS[this.division], false);
-    if (this.destroyed) return;
-    this.root.addChildAt(new Sprite(texture), 0);
+  private buildBase(): Container {
+    const g = new Graphics();
+    drawFloorBase(g, this.floor);
+    for (const it of this.floor.items) if (it.kind === "rug") drawRug(g, it);
+    drawBackWalls(g, this.floor);
+    g.cacheAsTexture({ resolution: CACHE_RES, antialias: true });
+    return g;
   }
 
-  /** Phones fit the middle half of the floor (readable people and pills) and pan to the sides. */
+  /** Furniture and interior walls: each cached once, depth-ranked together so people can stand between them. */
+  private buildStatics(): void {
+    for (const st of rankStatics(this.floor)) {
+      let c: Container;
+      if (st.kind === "item") c = drawItem(st.item);
+      else {
+        const g = new Graphics();
+        drawWall(g, st.wall);
+        c = g;
+      }
+      c.zIndex = st.depth;
+      c.cacheAsTexture({ resolution: CACHE_RES, antialias: true });
+      this.objects.addChild(c);
+      this.statics.push({ box: st.box, depth: st.depth });
+    }
+  }
+
+  private buildPlates(): void {
+    clearChildren(this.plates);
+    const res = Math.max(2, Math.ceil(this.viewport?.dpr ?? 1) * 2);
+    for (const p of this.floor.plates) {
+      const c = new Container();
+      buildPill(c, [{ text: p.text, weight: "600" }], res, 10);
+      c.label = `${p.x},${p.y}`;
+      this.plates.addChild(c);
+    }
+    this.placePlates();
+  }
+
+  private placePlates(): void {
+    const v = this.viewport;
+    if (!v) return;
+    this.floor.plates.forEach((p, i) => {
+      const c = this.plates.children[i];
+      if (!c) return;
+      const s = toScreen(p.x, p.y);
+      const x = (v.x + s.x * v.scale) / v.dpr;
+      const y = (v.y + s.y * v.scale) / v.dpr;
+      const half = c.width / 2;
+      c.visible = x - half >= v.area.x && x + half <= v.area.x + v.area.w && y >= v.area.y && y <= v.area.y + v.area.h;
+      c.position.set(Math.round(x), Math.round(y));
+    });
+  }
+
+  /** The whole floor, or a readable crop of it when the visible area is small (the user pans to the rest). */
   bounds(area?: Rect): Rect {
-    const full = floorBounds(this.floor);
-    if (!area || area.w >= NARROW_FLOOR) return full;
-    return { x: full.w / 4, y: 0, w: full.w / 2, h: full.h };
+    return fitBounds(planBounds(this.floor), area);
   }
 
   setViewport(viewport: SceneViewport): void {
     const rebuild = viewport.dpr !== this.viewport?.dpr;
     this.viewport = viewport;
     this.screen.scale.set(viewport.dpr);
-    if (rebuild) for (const p of this.persons.values()) this.refreshPills(p);
+    if (rebuild) {
+      for (const p of this.persons.values()) this.refreshPills(p);
+      this.buildPlates();
+    }
+    this.placePlates();
     this.placeOverlays();
   }
 
@@ -134,7 +191,7 @@ export class FloorScene implements Scene {
     const status = new Container();
     const name = new Container();
     this.screen.addChild(status, name);
-    this.people.addChild(body);
+    this.objects.addChild(body);
     const person: Person = {
       agent,
       brain: new PersonBrain(this.floor, agent, this.reducedMotion),
@@ -149,7 +206,7 @@ export class FloorScene implements Scene {
       nameH: 0,
       nameW: 0,
       head: { x: 0, y: 0 },
-      widthImg: this.floor.personHeight * 0.36,
+      widthImg: PERSON_H * 0.36,
     };
     this.persons.set(agent.profile, person);
     this.applySprite(person);
@@ -173,7 +230,7 @@ export class FloorScene implements Scene {
         person.sprite?.destroy();
         const sprite = new Sprite(texture);
         sprite.anchor.set(0.5, 1);
-        const k = this.floor.personHeight / texture.height;
+        const k = PERSON_H / texture.height;
         sprite.scale.set(k);
         person.widthImg = texture.width * k;
         person.sprite = sprite;
@@ -195,11 +252,12 @@ export class FloorScene implements Scene {
   private drawRing(person: Person): void {
     const g = person.ring;
     g.clear();
+    g.ellipse(0, 0, PERSON_H * 0.17, PERSON_H * 0.075).fill({ color: 0x1a140e, alpha: 0.18 });
     if (this.selected !== person.agent.profile) return;
-    const rx = this.floor.personHeight * 0.3;
-    const ry = rx * 0.42;
+    const rx = PERSON_H * 0.3;
+    const ry = rx * 0.5;
     g.ellipse(0, 0, rx, ry).fill({ color: PAL.gold, alpha: 0.18 });
-    g.ellipse(0, 0, rx, ry).stroke({ color: PAL.goldSoft, width: Math.max(1.5, this.floor.personHeight * 0.03), alpha: 0.9 });
+    g.ellipse(0, 0, rx, ry).stroke({ color: PAL.goldSoft, width: 2, alpha: 0.9 });
   }
 
   private refreshPills(person: Person): void {
@@ -242,7 +300,7 @@ export class FloorScene implements Scene {
 
   hitTest(x: number, y: number): Hit | null {
     let best: { profile: string; y: number } | null = null;
-    const h = this.floor.personHeight;
+    const h = PERSON_H;
     for (const p of this.persons.values()) {
       const pose = p.brain.pose(this.now);
       const half = Math.max(p.widthImg / 2, h * 0.16);
@@ -289,12 +347,13 @@ export class FloorScene implements Scene {
       p.brain.tick(dtMs);
       const pose = p.brain.pose(nowMs);
       p.body.position.set(pose.x, pose.y);
-      p.body.zIndex = pose.y;
+      p.body.zIndex = dynamicDepth(this.statics, personBox(pose.tx, pose.ty));
+      const bob = -pose.bob * Z_UNIT;
       if (p.sprite) {
-        p.sprite.y = pose.bob;
+        p.sprite.y = bob;
         p.sprite.scale.x = Math.abs(p.sprite.scale.x) * (pose.mirror ? -1 : 1);
       }
-      p.head = { x: pose.x, y: pose.y + pose.bob - this.floor.personHeight };
+      p.head = { x: pose.x, y: pose.y + bob - PERSON_H };
     }
     this.placeOverlays();
   }

@@ -1,43 +1,60 @@
 import { prefersMirror } from "./characters";
 import { hashString, seededRandom } from "./hash";
-import type { Pt } from "./iso";
-import type { FloorImage, FloorSeat, FloorSpot } from "./layouts/floorImages";
-import { crowdOffset, nextIdleSpot, route } from "./routes";
+import { toScreen, type Pt } from "./iso";
+import { findPath, standPoint, tileCenter } from "./plan/grid";
+import type { FloorPlan, PlanSeat, Spot } from "./plan";
 import type { WorldAgent } from "./types";
 
 export type PersonMode = "seated" | "standing" | "walking";
 
 export interface PersonPose {
+  /** Feet position in tile space. */
+  tx: number;
+  ty: number;
+  /** Feet position in scene pixels. */
   x: number;
   y: number;
   /** Mirror the sprite (faces down-right instead of down-left). */
   mirror: boolean;
-  /** Vertical offset in image pixels (typing bob or step bounce); always 0 with reduced motion. */
+  /** Vertical offset in tiles of height (typing bob or step bounce); always 0 with reduced motion. */
   bob: number;
   mode: PersonMode;
 }
 
-const WALK_HEIGHTS_PER_SECOND = 1.7;
+const TILES_PER_SECOND = 1.8;
 const REST_MS: [number, number] = [4000, 9000];
 
 /** Desk agents stay at their seat unless idle; the board never leaves the board room; vacant seats stay put. */
-export function wantsSeat(agent: WorldAgent, seat: FloorSeat | null): boolean {
+export function wantsSeat(agent: WorldAgent, seat: PlanSeat | null): boolean {
   if (!seat) return false;
   return !agent.hired || agent.activity !== "idle" || agent.rank === "board";
 }
 
+/** Deterministic idle spot for the n-th person, spread across the floor's idle spots. */
+export function restingSpot(plan: FloorPlan, n: number): Spot | null {
+  if (plan.idle.length === 0) return null;
+  return plan.idle[(n * 3) % plan.idle.length]!;
+}
+
+function nextIdleSpot(plan: FloorPlan, rand: () => number, current?: string): Spot | null {
+  const options = plan.idle.filter((s) => s.id !== current);
+  if (options.length === 0) return plan.idle[0] ?? null;
+  return options[Math.floor(rand() * options.length) % options.length]!;
+}
+
 /**
- * Movement and pose for one person on a floor image. Pure (no rendering): the scene reads `pose` every frame.
+ * Movement and pose for one person on a floor plan. Pure (no rendering): the scene reads `pose` every frame.
+ * Walks follow A* tile paths, so nobody crosses furniture or walls.
  */
 export class PersonBrain {
   private pos: Pt = { x: 0, y: 0 };
-  private via = "";
   private path: Pt[] = [];
   private mode: PersonMode = "standing";
   private placed = false;
-  private seat: FloorSeat | null = null;
-  private rest: FloorSpot | null = null;
-  private spot: FloorSpot | null = null;
+  private seat: PlanSeat | null = null;
+  private rest: Spot | null = null;
+  private spotId: string | undefined;
+  private atSeat = false;
   private waitMs = 0;
   private stride = 0;
   private walkMirror = false;
@@ -45,7 +62,7 @@ export class PersonBrain {
   private readonly seed: number;
 
   constructor(
-    private readonly floor: FloorImage,
+    private readonly plan: FloorPlan,
     private agent: WorldAgent,
     private reducedMotion: boolean,
   ) {
@@ -63,7 +80,7 @@ export class PersonBrain {
     if (moved) this.retarget();
   }
 
-  assign(seat: FloorSeat | null, rest: FloorSpot | null): void {
+  assign(seat: PlanSeat | null, rest: Spot | null): void {
     const changed = seat?.id !== this.seat?.id || rest?.id !== this.rest?.id;
     this.seat = seat;
     this.rest = rest;
@@ -72,47 +89,42 @@ export class PersonBrain {
 
   setReducedMotion(reduced: boolean): void {
     this.reducedMotion = reduced;
-    if (reduced && this.mode === "walking") this.arriveAt(this.path[this.path.length - 1] ?? this.pos);
-  }
-
-  private destination(): FloorSpot | null {
-    return wantsSeat(this.agent, this.seat) ? this.seat : this.rest;
-  }
-
-  private standPoint(spot: FloorSpot): Pt {
-    if (spot === this.seat) return { x: spot.x, y: spot.y };
-    const o = crowdOffset(this.seed, this.floor.personHeight);
-    return { x: spot.x + o.x, y: spot.y + o.y };
+    if (reduced && this.mode === "walking") this.arrive(this.path[this.path.length - 1] ?? this.pos);
   }
 
   private retarget(): void {
-    const dest = this.destination();
-    if (!dest) return;
-    this.walkTo(dest);
+    if (wantsSeat(this.agent, this.seat) && this.seat) this.walkTo(this.seat, standPoint(this.seat), true);
+    else if (this.rest) this.walkTo(this.rest, this.restPoint(this.rest), false);
   }
 
-  private walkTo(dest: FloorSpot): void {
-    const end = this.standPoint(dest);
-    this.spot = dest;
+  /** Idle spot centre nudged per person so a small group doesn't stand on one point. */
+  private restPoint(spot: Pt): Pt {
+    const dx = ((this.seed % 5) - 2) * 0.1;
+    const dy = (((this.seed >>> 3) % 5) - 2) * 0.1;
+    return { x: spot.x + 0.5 + dx, y: spot.y + 0.5 + dy };
+  }
+
+  private walkTo(tile: Pt & { id: string }, end: Pt, seat: boolean): void {
+    this.spotId = tile.id;
+    this.atSeat = seat;
     if (!this.placed || this.reducedMotion) {
       this.placed = true;
-      this.pos = end;
-      this.via = dest.via;
-      this.arriveAt(end);
+      this.arrive(end);
       return;
     }
-    const pts = route(this.floor, this.pos, this.via, dest);
-    pts[pts.length - 1] = end;
+    const from = { x: Math.floor(this.pos.x), y: Math.floor(this.pos.y) };
+    const tiles = findPath(this.plan, from, { x: tile.x, y: tile.y });
+    const pts = (tiles ?? [from, tile]).slice(1).map(tileCenter);
+    if (pts.length === 0) pts.push(end);
+    else pts[pts.length - 1] = end;
     this.path = pts;
     this.mode = "walking";
   }
 
-  private arriveAt(p: Pt): void {
+  private arrive(p: Pt): void {
     this.pos = { x: p.x, y: p.y };
     this.path = [];
-    this.via = this.spot?.via ?? this.via;
-    const seated = !!this.seat && this.spot === this.seat;
-    this.mode = seated ? "seated" : "standing";
+    this.mode = this.atSeat ? "seated" : "standing";
     this.waitMs = REST_MS[0] + this.rand() * (REST_MS[1] - REST_MS[0]);
   }
 
@@ -125,19 +137,20 @@ export class PersonBrain {
     if (this.agent.activity !== "idle" || wantsSeat(this.agent, this.seat)) return;
     this.waitMs -= dtMs;
     if (this.waitMs > 0) return;
-    const next = nextIdleSpot(this.floor, this.rand, this.spot?.id);
-    if (next) this.walkTo(next);
+    const next = nextIdleSpot(this.plan, this.rand, this.spotId);
+    if (next) this.walkTo(next, this.restPoint(next), false);
   }
 
   private walk(dtMs: number): void {
-    let budget = (WALK_HEIGHTS_PER_SECOND * this.floor.personHeight * dtMs) / 1000;
+    let budget = (TILES_PER_SECOND * dtMs) / 1000;
     this.stride += budget;
     while (budget > 0 && this.path.length > 0) {
       const next = this.path[0]!;
       const dx = next.x - this.pos.x;
       const dy = next.y - this.pos.y;
       const d = Math.hypot(dx, dy);
-      if (Math.abs(dx) > 0.5) this.walkMirror = dx > 0;
+      const screenDx = dx - dy;
+      if (Math.abs(screenDx) > 0.05) this.walkMirror = screenDx > 0;
       if (d <= budget) {
         this.pos = { x: next.x, y: next.y };
         this.path.shift();
@@ -147,24 +160,28 @@ export class PersonBrain {
         budget = 0;
       }
     }
-    if (this.path.length === 0) this.arriveAt(this.pos);
+    if (this.path.length === 0) this.arrive(this.pos);
+  }
+
+  /** Remaining walk, for tests. */
+  get route(): readonly Pt[] {
+    return this.path;
   }
 
   pose(nowMs: number): PersonPose {
-    const h = this.floor.personHeight;
     let mirror: boolean;
     let bob = 0;
     if (this.mode === "walking") {
       mirror = this.walkMirror;
-      bob = -Math.abs(Math.sin((this.stride / h) * Math.PI * 2.2)) * h * 0.035;
+      bob = Math.abs(Math.sin(this.stride * Math.PI * 2)) * 0.05;
     } else if (this.mode === "seated") {
-      mirror = !!this.seat?.flip;
-      const working = this.agent.hired && this.agent.activity === "working";
-      if (working) bob = -Math.abs(Math.sin(nowMs / 260 + (this.seed % 7))) * h * 0.02;
+      mirror = this.seat?.facing === "+x";
+      if (this.agent.hired && this.agent.activity === "working") bob = Math.abs(Math.sin(nowMs / 260 + (this.seed % 7))) * 0.03;
     } else {
       mirror = prefersMirror(this.agent.profile);
     }
     if (this.reducedMotion) bob = 0;
-    return { x: this.pos.x, y: this.pos.y, mirror, bob, mode: this.mode };
+    const s = toScreen(this.pos.x, this.pos.y);
+    return { tx: this.pos.x, ty: this.pos.y, x: s.x, y: s.y, mirror, bob, mode: this.mode };
   }
 }
