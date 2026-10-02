@@ -57,6 +57,9 @@ export function saveMuted(muted: boolean): void {
 export function audioFailure(status: number): string {
   if (status === 503) return "Voice unavailable";
   if (status === 404) return "No audio for this turn";
+  if (status === 429) return "Voices are busy, replay later";
+  if (status === 504) return "Voice timed out, replay to retry";
+  if (status === 502) return "Voice service error";
   if (status === 0) return "Couldn't play";
   return `Audio failed (${status})`;
 }
