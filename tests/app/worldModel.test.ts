@@ -80,3 +80,11 @@ describe("tech teams in the world", () => {
     expect(agents.find((a) => a.profile === "zain-tech-vp")?.team).toBeUndefined();
   });
 });
+
+describe("board panels", () => {
+  it("insets the world beside the board panel and the wider meeting room", () => {
+    const desktop = { width: 1400, height: 900 };
+    expect(worldInsets("board", desktop, 56).right).toBe(448);
+    expect(worldInsets("meeting", desktop, 56).right).toBe(764);
+  });
+});

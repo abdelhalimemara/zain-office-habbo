@@ -41,13 +41,18 @@ export function toWorldStats(board: KanbanBoard | undefined): Record<DivisionId,
   >;
 }
 
-const SIDE_PANELS = new Set(["kanban", "approvals", "agent", "task"]);
+const SIDE_PANELS = new Set(["kanban", "approvals", "agent", "task", "board", "meeting"]);
 const PHONE_MAX_WIDTH = 700;
 const PHONE_SHEET_HEIGHT = 0.75;
 const PANEL_GAP = 8;
 
 function panelWidth(panelKind: string, viewportWidth: number): number {
-  const width = panelKind === "kanban" ? Math.min(720, viewportWidth * 0.52) : Math.min(440, viewportWidth - 16);
+  const width =
+    panelKind === "kanban"
+      ? Math.min(720, viewportWidth * 0.52)
+      : panelKind === "meeting"
+        ? Math.min(760, viewportWidth * 0.54)
+        : Math.min(440, viewportWidth - 16);
   return Math.round(width + PANEL_GAP);
 }
 
