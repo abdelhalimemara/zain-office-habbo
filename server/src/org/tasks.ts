@@ -6,7 +6,8 @@ import { managerOf, type RosterAgent } from "../../../shared/roster";
 import { HermesError, type HermesClient } from "../hermes/client";
 import { HttpError, badRequest, optionalString, requiredString } from "../http";
 import type { CeoWake } from "../telegram/ceoWake";
-import { mandateSubtasks } from "./board";
+import { detailContext } from "./board";
+import { toHistory } from "./history";
 import { fullRoster, type HireStore } from "./hireStore";
 import { mandateBody } from "./persona";
 
@@ -47,13 +48,14 @@ export async function createMandate(
 
 export async function taskDetail(id: string, hermes: HermesClient, hires: HireStore): Promise<TaskDetailResponse> {
   const [detail, roster] = await Promise.all([hermes.task(id), fullRoster(hires)]);
+  const { subtasks, titles } = await detailContext(detail, roster, hermes);
   return {
     task: detail.task,
     comments: detail.comments ?? [],
     parents: detail.links?.parents ?? [],
     children: detail.links?.children ?? [],
-    subtasks: await mandateSubtasks(detail, roster, hermes),
-    history: [],
+    subtasks,
+    history: toHistory(detail, id, titles),
   };
 }
 
