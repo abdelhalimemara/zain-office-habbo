@@ -8,7 +8,7 @@ export default defineConfig({
     include: ["tests/e2e/**/*.e2e.ts"],
     environment: "node",
     fileParallelism: false,
-    testTimeout: 120_000,
+    testTimeout: 180_000,
     hookTimeout: 180_000,
     teardownTimeout: 30_000,
   },

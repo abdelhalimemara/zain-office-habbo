@@ -7,6 +7,7 @@ import {
   SCHEDULE,
   activationOf,
   gmailCommand,
+  hermesPython,
   resolveHermesPython,
   inboxJobSpec,
   inboxPrompt,
@@ -181,5 +182,21 @@ describe("Gmail command for the agent", () => {
     expect(await resolveHermesPython({}, home)).toBe(join(env, "bin", "python"));
     expect(await resolveHermesPython({ ZAIN_HERMES_PYTHON: "/custom/python" }, home)).toBe("/custom/python");
     await rm(home, { recursive: true, force: true });
+  });
+
+  it("creating a Python runner without a Hermes install neither throws nor leaves a rejection; running it fails softly", async () => {
+    const home = await mkdtemp(join(tmpdir(), "zain-hermes-"));
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const run = hermesPython({}, home);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+      expect(await run(["--version"])).toEqual({ code: 1, stdout: "" });
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      await rm(home, { recursive: true, force: true });
+    }
   });
 });

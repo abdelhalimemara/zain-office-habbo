@@ -144,6 +144,17 @@ describe("Connections in the HUD", () => {
     expect(screen.queryByRole("group", { name: "Connections" })).not.toBeInTheDocument();
   });
 
+  it("reserves the row's space while the first check is still running, so the HUD does not grow later", async () => {
+    let answer: (r: Response) => void = () => undefined;
+    open({ [API.connections]: () => new Promise<Response>((resolve) => (answer = resolve)) });
+    const placeholder = await screen.findByTestId("connections-placeholder");
+    expect(placeholder).toHaveClass("zui-conn-row");
+    expect(placeholder).toHaveAttribute("aria-hidden", "true");
+    await act(async () => answer(new Response(JSON.stringify({ connections }), { status: 200 })));
+    expect(await screen.findByRole("group", { name: "Connections" })).toBeInTheDocument();
+    expect(screen.queryByTestId("connections-placeholder")).not.toBeInTheDocument();
+  });
+
   it("does not poll in tests", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetch = open();

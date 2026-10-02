@@ -66,6 +66,8 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
     while (webPort === serverPort) webPort = await freePort();
     const webUrl = `http://127.0.0.1:${webPort}`;
     const cliLog = join(serverCwd, "hermes-cli-calls.jsonl");
+    const fakeHome = join(serverCwd, "home");
+    mkdirSync(join(fakeHome, ".hermes"), { recursive: true });
     const envLog = join(serverCwd, "server-env.jsonl");
     const server = launch("server", join(BIN, "tsx"), [join(ROOT, "server", "src", "index.ts")], {
       cwd: serverCwd,
@@ -76,6 +78,9 @@ export async function startStack(options: { hermes?: FakeHermes } = {}): Promise
         // The guard only trusts :5173 and its own port; the random Vite port must be listed.
         ZAIN_ALLOWED_ORIGINS: webUrl,
         HERMES_BIN: HERMES_CLI_STUB,
+        // Connection checks read ~/.hermes (.env, tokens, WhatsApp bridge) and ~/.mcp-auth: point both at empties.
+        HOME: fakeHome,
+        HERMES_HOME: join(fakeHome, ".hermes"),
         E2E_HERMES_STUB: HERMES_CLI_STUB,
         E2E_HERMES_CALLS: cliLog,
         E2E_SERVER_ENV_FILE: envLog,
@@ -132,10 +137,10 @@ function readLines(file: string): string[] {
 
 /** Every server process (tsx and its node child) must see HERMES_BIN = the stub, or nothing runs. */
 function assertIsolated(envLog: string): void {
-  const seen = readLines(envLog).map((line) => JSON.parse(line) as { pid: number; HERMES_BIN: string | null });
+  const seen = readLines(envLog).map((line) => JSON.parse(line) as { pid: number; HERMES_BIN: string | null; HOME: string | null; HERMES_HOME: string | null });
   if (seen.length === 0) throw new Error("e2e isolation: the server never loaded the network stub preload");
-  const leaks = seen.filter((p) => p.HERMES_BIN !== HERMES_CLI_STUB);
-  if (leaks.length) throw new Error(`e2e isolation: server HERMES_BIN is not the stub: ${JSON.stringify(leaks)}`);
+  const leaks = seen.filter((p) => p.HERMES_BIN !== HERMES_CLI_STUB || !p.HOME?.startsWith(tmpdir()) || !p.HERMES_HOME?.startsWith(p.HOME));
+  if (leaks.length) throw new Error(`e2e isolation: server HERMES_BIN/HOME/HERMES_HOME escape the sandbox: ${JSON.stringify(leaks)}`);
 }
 
 /** Load the app and wait until the HUD and the world canvas are up. */
