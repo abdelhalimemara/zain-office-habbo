@@ -1,4 +1,4 @@
-import { shade } from "./color";
+import { lighten, shade } from "./color";
 import { GRID_XY, OFF_XY, OFF_Z, type VoxelGrid } from "./raster";
 
 /** Screen rise per voxel of height relative to one voxel step along x (matches the floors' Z_UNIT / half tile width). */
@@ -84,7 +84,7 @@ export function meshOf(grid: VoxelGrid): Mesh {
       const col = grid.data[(z * GRID_XY + y) * GRID_XY + x]! - 1;
       if (open & 2) put(shade(col, LIGHT.left), [x, y + 1, z, x + 1, y + 1, z, x + 1, y + 1, z + 1, x, y + 1, z + 1], s);
       if (open & 4) put(shade(col, LIGHT.right), [x + 1, y, z, x + 1, y + 1, z, x + 1, y + 1, z + 1, x + 1, y, z + 1], s);
-      if (open & 1) put(shade(col, LIGHT.top), [x, y, z + 1, x + 1, y, z + 1, x + 1, y + 1, z + 1, x, y + 1, z + 1], s);
+      if (open & 1) put(lighten(col, LIGHT.top), [x, y, z + 1, x + 1, y, z + 1, x + 1, y + 1, z + 1, x, y + 1, z + 1], s);
     }
   }
   return { count, pts, colors, depth, minX, minY, maxX, maxY };

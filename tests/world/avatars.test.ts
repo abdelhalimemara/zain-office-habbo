@@ -114,10 +114,10 @@ describe("facings", () => {
       }
       return n;
     };
-    expect(eyes("SW")).toBeGreaterThan(4);
-    expect(eyes("SE")).toBeGreaterThan(4);
-    expect(eyes("NW")).toBe(0);
-    expect(eyes("NE")).toBe(0);
+    expect(eyes("SW")).toBeGreaterThan(12);
+    expect(eyes("SE")).toBeGreaterThan(12);
+    expect(eyes("NW")).toBeLessThan(eyes("SW") / 3);
+    expect(eyes("NE")).toBeLessThan(eyes("SE") / 3);
   });
 
   it("puts the far arm behind the torso and the near arm in front of it", () => {

@@ -26,7 +26,7 @@ export function headPaint(spec: AvatarSpec, d: Dims): Paint {
   const earY0 = Math.floor(D / 2) - 2;
   const shift = Math.round((H - 15) / 2);
   const eyeH = spec.eyeH ?? 3;
-  const earsShow = !["bob", "wavyLong", "lowBun", "ghutra"].includes(spec.hair.style);
+  const earsShow = !["bob", "wavyLong", "lowBun", "bun", "ghutra"].includes(spec.hair.style);
   const lift = (spec.browGap ?? 1) + (acc.has("glassesSquare") || acc.has("glassesRound") ? 1 : 0);
   return (a, b, c) => {
     const x = a - HEAD_MARGIN.x;
@@ -46,6 +46,7 @@ export function headPaint(spec: AvatarSpec, d: Dims): Paint {
       if (ear) return shade(spec.skin, y === earY0 ? -0.08 : 0);
       if (acc.has("earrings") && (x === -1 || x === W) && y === earY0 + 1 && zf === 3) return GOLD;
       if (acc.has("nose") && y === D && dx < 1 && zf >= 3 && zf < 6) return shade(spec.skin, zf === 3 ? -0.06 : 0.03);
+      if (y === D && browAt(dx, zf - lift)) return shade(brow, 0.06);
       if (acc.has("beard") && z === -1 && y >= D - 4 && y < D && dx < 4.5) return beardTone(facial, x, y);
       return -1;
     }
@@ -60,15 +61,17 @@ export function headPaint(spec: AvatarSpec, d: Dims): Paint {
     }
     if (y === D - 1) {
       if (zf >= 7 - eyeH && zf < 7 && dx >= 3 && dx < 5) return EYE;
-      const bz = zf - lift;
-      if ((bz === 7 || bz === 8) && dx >= 2.5 && dx < 4) return brow;
-      if ((bz === 8 || bz === 9) && dx >= 4 && dx < 6.6) return brow;
+      if (browAt(dx, zf - lift)) return brow;
       if (acc.has("moustache") && zf >= 1 && zf <= 2 && dx < 2.6) return facial;
       if (acc.has("stubble") && (zf < 3 || (zf === 3 && (dx < 2.6 || dx > 5))) && hash3(x, z, 7) < 0.85) return mix(spec.skin, facial, 0.5 + hash3(z, x, 9) * 0.3);
     }
     if (acc.has("stubble") && (x === 0 || x === W - 1) && zf < 5 && y >= D - 6 && hash3(y, z, 3) < 0.8) return mix(spec.skin, facial, 0.65);
     return spec.skin;
   };
+}
+
+function browAt(dx: number, bz: number): boolean {
+  return ((bz === 7 || bz === 8) && dx >= 2.5 && dx < 4) || ((bz === 8 || bz === 9) && dx >= 4 && dx < 6.6);
 }
 
 function beardTone(color: number, p: number, q: number): number {
@@ -105,7 +108,7 @@ function hairColor(spec: AvatarSpec, s: HairShape, x: number, y: number, z: numb
   if (hit === 3) return shade(h.color, ((x + y + z) & 1) * 0.08);
   if (hit === 4) return h.accent ?? 0x2b2b2e;
   if (hit === 5) return 0xf2f2f2;
-  const streak = (hash3(x, y * 3 + Math.floor(z / 2), 5) - 0.5) * 0.07;
+  const streak = (hash3(x, y * 3 + Math.floor(z / 2), 5) - 0.5) * 0.04;
   const lift = z >= H ? 0.04 : y < 0 || x < 0 || x >= W || y >= D ? -0.03 : 0;
   return shade(h.color, streak + lift);
 }

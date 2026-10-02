@@ -17,3 +17,14 @@ export function hash3(a: number, b: number, c: number, seed = 0): number {
 export function noisy(color: number, a: number, b: number, c: number, seed: number, amount = 0.045): number {
   return shade(color, (hash3(a, b, c, seed) - 0.5) * 2 * amount);
 }
+
+/** Brighten by scaling the channels (keeps the hue, unlike mixing with white); bright colours fall back to a white mix. */
+export function lighten(color: number, f: number): number {
+  const k = 1 + f;
+  const r = ((color >> 16) & 0xff) * k;
+  const g = ((color >> 8) & 0xff) * k;
+  const b = (color & 0xff) * k;
+  const over = Math.max(r, g, b) - 255;
+  const base = (Math.min(255, Math.round(r)) << 16) | (Math.min(255, Math.round(g)) << 8) | Math.min(255, Math.round(b));
+  return over > 0 ? mix(base, 0xffffff, Math.min(1, over / 255) * 0.5) : base;
+}

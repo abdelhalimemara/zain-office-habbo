@@ -11,7 +11,7 @@ export function portraitTexture(spec: AvatarSpec, size = 96, renderer: Renderer 
   const mesh = buildMesh(spec, REST_RIG, "SW", (p) => BUST.has(p.name));
   const w = mesh.maxX - mesh.minX;
   const h = mesh.maxY - mesh.minY;
-  const unit = (size * 0.92) / Math.max(w, h);
+  const unit = (size * 0.92) / Math.max(w, h * 0.55);
   const g = new Graphics();
   drawMesh(g, mesh, unit);
   const cx = ((mesh.minX + mesh.maxX) / 2) * unit;

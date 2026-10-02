@@ -12,6 +12,8 @@ export interface HairShape {
 interface Shell {
   top: number;
   side: number;
+  /** Shell thickness on the character's right (screen left when facing SW); defaults to `side`. */
+  sideR?: number;
   back: number;
   sideLow: number;
   sideFront: number;
@@ -20,6 +22,8 @@ interface Shell {
   overhang: boolean;
   frame: number;
   wavy: boolean;
+  /** Extra block for swept bangs, merged into `add`. */
+  sweep?: Box;
   add: readonly Box[];
   cut: readonly Box[];
 }
@@ -42,44 +46,48 @@ function shellFor(style: HairStyle, W: number, D: number, H: number): Shell | nu
     add: [],
     cut: [],
   };
+  const female: Shell = {
+    ...base,
+    top: 3,
+    side: 2,
+    back: 2,
+    backLow: 1,
+    sideFront: 0,
+    sideR: 1,
+    fringe: [H - 2, H - 4],
+    wavy: true,
+    sweep: [Math.floor(W / 2) - 1, W + 1, D - 4, D + 1, H - 3, H + 3],
+  };
   switch (style) {
     case "bald":
       return null;
     case "sidePart":
+    case "quiff": {
+      const tall = style === "quiff" ? 1 : 0;
       return {
         ...base,
-        top: 3,
+        top: 2,
         add: [
-          [4, W + 1, 2, D + 1, H + 3, H + 4],
-          [W, W + 2, 1, D - 2, 9 + T, H + 2],
-          [-2, -1, 0, D - 4, 10 + T, H + 1],
+          [0, W + 1, D - 5, D + 1, H + 1, H + 3 + tall],
+          [W, W + 2, D - 8, D - 1, H - 6, H + 2],
         ],
-        cut: [[3, 4, 3, D + 1, H + 2, H + 4]],
+        cut: [[-1, W + 2, D - 6, D - 5, H + 1, H + 2]],
       };
-    case "quiff":
-      return {
-        ...base,
-        top: 3,
-        add: [
-          [2, W, 3, D + 1, H + 3, H + 5],
-          [W, W + 2, 1, D - 2, 9 + T, H + 2],
-        ],
-        cut: [[1, 2, 4, D + 1, H + 2, H + 3]],
-      };
+    }
     case "short":
       return { ...base, top: 2, sideLow: 7 + T, sideFront: 4, backLow: 3, fringe: [H - 1, H - 1], overhang: false, side: 1, add: [[2, W - 1, 3, D - 2, H + 2, H + 3]] };
     case "wavyWhite":
       return { ...base, top: 2, side: 3, back: 2, sideLow: 6 + T, sideFront: 4, backLow: 3, fringe: [H - 1, H - 1], overhang: false, wavy: true };
     case "bun":
-      return { ...base, sideLow: 7 + T, backLow: 2, fringe: [10 + T, 12 + T], add: [[7, W + 1, -1, 6, H + 2, H + 6], [W, W + 2, 0, D - 3, 6 + T, H + 1]] };
+      return { ...female, sideLow: 2, add: [[W - 8, W - 2, 1, 7, H + 3, H + 7], [W - 7, W - 3, 2, 6, H + 7, H + 8]] };
     case "topKnot":
-      return { ...base, sideLow: 7 + T, backLow: 2, fringe: [12 + T, 10 + T], add: [[W - 7, W, -2, 4, H + 2, H + 6], [W, W + 2, 0, D - 3, 7 + T, H + 1]] };
+      return { ...female, sideLow: 9 + T, sideFront: 3, frame: NONE, add: [[W - 7, W - 1, -2, 4, H + 2, H + 6], [W - 6, W - 2, -1, 3, H + 6, H + 7]] };
     case "lowBun":
-      return { ...base, side: 2, sideLow: 3, backLow: 1, fringe: [10 + T, 12 + T], frame: 6 + T, add: [[W - 1, W + 4, -3, 6, 2, 12 + T]] };
+      return { ...female, sideLow: 2, add: [[W + 1, W + 4, -2, 5, 2, 10], [W + 4, W + 5, -1, 4, 3, 9]] };
     case "bob":
-      return { ...base, side: 2, back: 2, sideLow: -1, backLow: -2, fringe: [10 + T, 12 + T], frame: 3, add: [[W + 1, W + 3, -2, 6, 4, 14 + T]] };
+      return { ...female, sideLow: -1, backLow: -2, add: [[W + 1, W + 3, 0, D - 2, -1, 5]] };
     case "wavyLong":
-      return { ...base, side: 2, back: 2, sideLow: -3, backLow: -4, fringe: [11 + T, 12 + T], frame: 2, wavy: true, add: [[-3, -2, 0, D - 2, -2, 12 + T], [W + 2, W + 3, 0, D - 2, -2, 12 + T]] };
+      return { ...female, side: 3, sideLow: -4, backLow: -5 };
     case "cap":
       return {
         ...base,
@@ -136,14 +144,14 @@ export function hairShape(style: HairStyle, W: number, D: number, H: number): Ha
       }
       if (style === "cap" && y === D && Math.abs(x - (W - 1) / 2) < 3 && logo(x - (W - 1) / 2, H + 2 - z)) return 5;
       for (const b of s.add) if (inBox(b, x, y, z)) return b[6] ?? 1;
+      if (s.sweep && inBox(s.sweep, x, y, z) && !(z === s.sweep[5] - 1 && (y === s.sweep[3] - 1 || x === s.sweep[1] - 1))) return 1;
       const inX = x >= 0 && x < W;
       const inY = y >= 0 && y < D;
-      const sideX = (x < 0 && x >= -s.side) || (x >= W && x < W + s.side);
-      const wave = s.wavy ? Math.floor(hash3(Math.floor(x / 3), Math.floor(y / 3), 1) * 2.2) : 0;
-      if (z >= H && z < H + s.top + (z === H + s.top ? wave : 0) + (s.wavy ? 1 : 0)) {
-        if (x < -s.side || x >= W + s.side || y < -s.back || y >= D) return 0;
-        const outer = (x < 0 || x >= W ? 1 : 0) + (y < 0 ? 1 : 0);
-        if (z >= H + s.top - 1 && outer >= 1 && z > H) return s.wavy && hash3(Math.floor(x / 3), z, Math.floor(y / 3)) > 0.5 ? 1 : 0;
+      const sideX = (x < 0 && x >= -(s.sideR ?? s.side)) || (x >= W && x < W + s.side);
+      const extra = s.wavy ? Math.floor(hash3(Math.floor(x / 3), Math.floor(y / 3), 1) * 2.2) : 0;
+      if (z >= H && z < H + s.top + extra) {
+        const inset = s.top >= 2 ? Math.max(0, z - H - s.top + 2) : 0;
+        if (x < -s.side + inset || x >= W + s.side - inset || y < -s.back + inset || y >= D - inset) return 0;
         return 1;
       }
       if (z >= H) return 0;
@@ -154,7 +162,7 @@ export function hairShape(style: HairStyle, W: number, D: number, H: number): Ha
       if (!inX || !inY || z < 0) return 0;
       if (y === D - 1 && z >= fringeAt(x)) return 1;
       if (y === D - 1 && (x === 0 || x === W - 1) && z >= s.frame) return 1;
-      if ((x === 0 || x === W - 1) && y < D - s.sideFront && z >= s.sideLow) return 1;
+      if ((x === 0 || x === W - 1) && y < D - Math.max(1, s.sideFront) && z >= s.sideLow) return 1;
       if (y === 0 && z >= s.backLow) return 1;
       if (z === H - 1 && s.top > 0) return 1;
       return 0;
