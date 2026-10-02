@@ -4,7 +4,7 @@ import type { HairStyle } from "./types";
 /** Half-open box [x0, x1) × [y0, y1) × [z0, z1) in head-core coordinates, with the material it paints. */
 type Box = readonly [number, number, number, number, number, number, number?];
 
-/** 0 empty, 1 hair, 2 ghutra cloth, 3 agal, 4 cap fabric, 5 logo. */
+/** 0 empty, 1 hair, 2 ghutra cloth, 3 agal, 4 cap fabric, 5 logo, 6 cap strap. */
 export interface HairShape {
   at(x: number, y: number, z: number): number;
 }
@@ -101,7 +101,7 @@ function shellFor(style: HairStyle, W: number, D: number, H: number): Shell | nu
         overhang: false,
         wavy: true,
         add: [
-          [-1, W + 1, -1, D + 1, H - 3, H + 4, 4],
+          [-1, W + 1, -3, D + 1, H - 3, H + 4, 4],
           [-1, W + 1, D + 1, D + 5, H - 3, H - 2, 4],
           [W, W + 3, 0, 4, 2, 10 + T],
         ],
@@ -143,6 +143,7 @@ export function hairShape(style: HairStyle, W: number, D: number, H: number): Ha
         if (inRing && (x < 0 || x >= W || y < 0 || y >= D)) return 3;
       }
       if (style === "cap" && y === D && Math.abs(x - (W - 1) / 2) < 3 && logo(x - (W - 1) / 2, H + 2 - z)) return 5;
+      if (style === "cap" && y === -3 && Math.abs(x - (W - 1) / 2) < 3 && z >= H - 3 && z < H) return z === H - 3 ? 6 : 1;
       for (const b of s.add) if (inBox(b, x, y, z)) return b[6] ?? 1;
       if (s.sweep && inBox(s.sweep, x, y, z) && !(z === s.sweep[5] - 1 && (y === s.sweep[3] - 1 || x === s.sweep[1] - 1))) return 1;
       const inX = x >= 0 && x < W;

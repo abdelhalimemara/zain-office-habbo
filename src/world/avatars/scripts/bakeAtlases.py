@@ -13,6 +13,8 @@ from scipy import ndimage
 RIG, SRC, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
 R = int(sys.argv[4]) if len(sys.argv) > 4 else 520
 FIT_SCALE = 8
+RIM = 3
+NEUTRAL = {"front": 1.0, "side": 0.88 / 0.7, "top": 0.88 / 1.08}
 ORIGINALS = {
     **{f"people/male-{i}": f"people/Male {i}.png" for i in range(1, 10)},
     **{f"people/female-{i}": f"people/Female {i}.png" for i in range(1, 6)},
@@ -105,6 +107,7 @@ def bake(rig):
             u0, u1 = min(0.0, uv[0].min()), max(1.0, uv[0].max())
             v0, v1 = min(0.0, uv[1].min()), max(1.0, uv[1].max())
         lu, lv = np.hypot(*E[:, 0]), np.hypot(*E[:, 1])
+        u0, u1, v0, v1 = u0 - RIM / lu, u1 + RIM / lu, v0 - RIM / lv, v1 + RIM / lv
         tw, th = max(2, int(np.ceil((u1 - u0) * lu)) + 1), max(2, int(np.ceil((v1 - v0) * lv)) + 1)
         tu = u0 + (np.arange(tw) + 0.5) / tw * (u1 - u0)
         tv = v0 + (np.arange(th) + 0.5) / th * (v1 - v0)
@@ -133,10 +136,74 @@ def bake(rig):
                 rgb = np.stack([(col >> 16) & 255, (col >> 8) & 255, col & 255, np.full_like(col, 255)], -1).astype(np.float32)
                 tex[hidden] = rgb[hidden]
         opaque = tex[..., 3] > 0
-        rim = ndimage.binary_dilation(opaque, iterations=2) & ~opaque & valid & inside[yi, xi]
+        rim = ndimage.binary_dilation(opaque, iterations=RIM) & ~opaque & valid & inside[yi, xi]
         tex[rim] = img[yi, xi][rim]
         textures.append((f["part"], f["face"], tex, (u0, u1, v0, v1)))
+    textures += synthesise(rig, textures, ax)
     return iou, fitp, (W, H), textures
+
+
+def rgb_of(col):
+    col = np.asarray(col, np.int64)
+    return np.stack([(col >> 16) & 255, (col >> 8) & 255, col & 255], -1).astype(np.float32)
+
+
+def synthesise(rig, captured, tpu_f):
+    """Back and right-side textures for faces the reference never shows: the voxel surface colours,
+    re-toned per material to the reference's own colours, with soft per-voxel bevels."""
+    pairs = {}
+    for f, (part, face, tex, (u0, u1, v0, v1)) in zip(rig["faces"], captured):
+        s = f["surface"]
+        if not s["cols"] or not s["rows"]:
+            continue
+        cols, rows = s["cols"], s["rows"]
+        surf = np.array(s["data"]).reshape(rows, cols)
+        th, tw = tex.shape[:2]
+        for r in range(rows):
+            for q in range(cols):
+                if surf[r, q] < 0:
+                    continue
+                tx = int(((q + 0.5) / cols - u0) / (u1 - u0) * tw)
+                ty = int(((r + 0.5) / rows - v0) / (v1 - v0) * th)
+                if 0 <= tx < tw and 0 <= ty < th and tex[ty, tx, 3] > 200:
+                    pairs.setdefault(part, []).append((rgb_of(surf[r, q]), tex[ty, tx, :3] * NEUTRAL[face]))
+    every = [p for v in pairs.values() for p in v]
+    tpu = max(3, int(round(tpu_f * 0.6)))
+    out = []
+    for p in rig["parts"]:
+        pool = pairs.get(p["part"], [])
+        pool = pool if len(pool) >= 12 else every
+        if not pool:
+            continue
+        bins = {}
+        for a, b in pool:
+            bins.setdefault(tuple((a // 48).astype(int)), []).append((a, b))
+        lum = lambda c: c @ np.array([0.3, 0.55, 0.15])
+        gains = {k: lum(np.median(np.stack([b for _, b in v]), 0)) / max(1, lum(np.median(np.stack([a for a, _ in v]), 0))) for k, v in bins.items()}
+        keys = np.array(list(gains.keys()))
+        for face in ("back", "rside"):
+            s = p[face]
+            cols, rows = s["cols"], s["rows"]
+            if not cols or not rows:
+                continue
+            surf = np.array(s["data"]).reshape(rows, cols)
+            tex = np.zeros((rows * tpu, cols * tpu, 4), np.float32)
+            fu = (np.arange(tpu) + 0.5) / tpu
+            bevel = 1 + 0.04 * (fu[:, None] < 0.2) + 0.02 * (fu[None, :] < 0.2) - 0.05 * (fu[:, None] > 0.8) - 0.03 * (fu[None, :] > 0.8)
+            for r in range(rows):
+                for q in range(cols):
+                    if surf[r, q] < 0:
+                        continue
+                    v = rgb_of(surf[r, q])
+                    k = tuple((v // 48).astype(int))
+                    if k not in gains:
+                        k = tuple(keys[np.abs(keys - np.array(k)).sum(1).argmin()])
+                    c = np.clip(v * np.clip(gains[k], 0.8, 1.25), 0, 255)
+                    cell = c[None, None, :] * bevel[..., None] 
+                    tex[r * tpu : (r + 1) * tpu, q * tpu : (q + 1) * tpu, :3] = np.clip(cell, 0, 255)
+                    tex[r * tpu : (r + 1) * tpu, q * tpu : (q + 1) * tpu, 3] = 255
+            out.append((p["part"], face, tex, (0.0, 1.0, 0.0, 1.0)))
+    return out
 
 
 def pack(textures, width=512):
@@ -164,7 +231,7 @@ def main():
         iou, (ax, ay, bx, by), (W, H), textures = bake(rig)
         atlas, places = pack(textures)
         name = key.replace("/", "-")
-        Image.fromarray(np.clip(atlas, 0, 255).astype(np.uint8), "RGBA").save(os.path.join(OUT, name + ".webp"), "WEBP", quality=84, method=6, exact=False)
+        Image.fromarray(np.clip(atlas, 0, 255).astype(np.uint8), "RGBA").save(os.path.join(OUT, name + ".webp"), "WEBP", quality=80, method=6, exact=False)
         faces = {}
         for (part, face, tex, (u0, u1, v0, v1)), (px, py) in zip(textures, places):
             solid = tex[..., 3] > 128

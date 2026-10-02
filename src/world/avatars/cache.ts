@@ -16,7 +16,7 @@ export interface FrameArt {
   y: number;
   /** How far the body is lowered in this frame (sitting, stride), in voxels. */
   drop: number;
-  /** Draw mirrored (SE and NE reuse the SW and NW art). */
+  /** Draw mirrored (SE and NE reuse the SW and NW geometry, relit for their side). */
   mirror: boolean;
 }
 
@@ -94,7 +94,7 @@ const MIRROR: Readonly<Record<Facing, Extract<Facing, "SW" | "NW">>> = { SW: "SW
 
 function bakeTextured(spec: AvatarSpec, rig: Rig, facing: Facing, scale: AvatarScale, resolution: number): FrameArt | null {
   if (!renderer) return null;
-  const fig = texturedFigure(spec, rig, MIRROR[facing], scale.sx, scale.sy);
+  const fig = texturedFigure(spec, rig, MIRROR[facing], scale.sx, scale.sy, facing !== MIRROR[facing]);
   if (!fig) return null;
   const b = fig.getLocalBounds();
   const x = Math.floor(b.minX) - 1;
@@ -114,7 +114,7 @@ export function frameArt(
   scale: AvatarScale,
   resolution: number,
 ): FrameArt {
-  const look = scale.textured ? MIRROR[facing] + "x" : facing;
+  const look = scale.textured ? facing + "x" : facing;
   const key = `${spec.key}|${scale.sx.toFixed(3)}x${scale.sy.toFixed(3)}|${resolution}|${look}|${pose}${poseFrame}|${emote}${emoteFrame}|${renderer ? "t" : "g"}`;
   let art = frames.get(key);
   if (!art) {
@@ -122,7 +122,7 @@ export function frameArt(
     art = (scale.textured && bakeTextured(spec, rig, facing, scale, resolution)) || { ...bake(buildMesh(spec, rig, facing), scale.sx, resolution), drop: rig.drop };
     frames.set(key, art);
   }
-  return scale.textured && art.mirror !== (facing !== MIRROR[facing]) ? { ...art, mirror: !art.mirror } : art;
+  return art;
 }
 
 export function avatarCacheSize(): number {

@@ -55,6 +55,11 @@ export function torsoPaint(spec: AvatarSpec, d: Dims): Paint {
     const r = H - 1 - c;
     const front = b === D - 1;
     const topFace = c === H - 1;
+    if (b === 0 && t.kind !== "dress") {
+      if (r === 0 && dx < 2.6 && (t.kind === "suit" || t.kind === "shirt" || t.kind === "blazer")) return t.kind === "shirt" ? shade(t.color, 0.15) : shirt;
+      if (r < 2 && dx < 3.6) return shade(t.color, t.kind === "shirt" ? 0.08 : -0.1);
+      if (dx < 0.6 && t.kind !== "turtleneck") return shade(t.color, -0.07);
+    }
     switch (t.kind) {
       case "suit":
       case "blazer": {
