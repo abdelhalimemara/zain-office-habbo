@@ -166,7 +166,7 @@ export function LiveRoom({ meeting, agents }: { meeting: BoardMeeting; agents: r
       {room.error && (
         <div className="zui-live__error" role="alert">
           <p>{room.error.message}</p>
-          {room.error.kind !== "not-live" && !busy && (
+          {room.error.kind !== "not-live" && !busy && !room.saving && (
             <button type="button" className="zui-btn" onClick={retry}>
               {room.error.kind === "end" ? "Try again" : room.phase === "dropped" ? "Rejoin" : "Retry"}
             </button>
@@ -176,9 +176,9 @@ export function LiveRoom({ meeting, agents }: { meeting: BoardMeeting; agents: r
 
       {(room.phase === "idle" || room.phase === "joining") && !room.error && (
         <div className="zui-live__join">
-          <button type="button" className="zui-btn zui-btn--gold zui-live__join-btn" onClick={room.join} disabled={room.phase === "joining"}>
+          <button type="button" className="zui-btn zui-btn--gold zui-live__join-btn" onClick={room.join} disabled={room.phase === "joining" || room.saving}>
             <MicIcon />
-            {room.phase === "joining" ? "Joining…" : "Join the room"}
+            {room.phase === "joining" ? "Joining…" : room.saving ? "Saving the last session…" : "Join the room"}
           </button>
           <p className="zui-hint">Your mic stays on the whole time. Talk whenever you like; anyone can jump in.</p>
         </div>

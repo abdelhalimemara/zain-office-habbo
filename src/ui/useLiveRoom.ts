@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BoardMeeting } from "@shared/meetings";
 import type { LiveSpeaker } from "@shared/voice";
-import { api } from "../api/client";
+import { api, ApiRequestError } from "../api/client";
 import { meetingKeys } from "../api/meetingHooks";
 import { addMessage, currentSpeaker, joinError, latestAgentParts, nextUserTalking, type Caption, type LiveError } from "./liveModel";
 
@@ -34,6 +34,8 @@ export interface LiveRoom {
   error: LiveError | null;
   /** True once there is a session to hand to the board, so "End meeting & vote" can work. */
   canEnd: boolean;
+  /** Posting an ended session's transcript to the server; joining waits for it. */
+  saving: boolean;
   join: () => void;
   leave: () => void;
   toggleMute: () => void;
@@ -64,6 +66,13 @@ function saveUnsaved(meetingId: string, ids: readonly string[]): void {
   }
 }
 
+/** The server answers 409 while ElevenLabs still has the call open; one more try after it hangs up. */
+export const END_RETRY_MS = 1500;
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function checkMic(): Promise<void> {
   if (!navigator.mediaDevices?.getUserMedia) throw new DOMException("No microphone API", "NotFoundError");
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -88,6 +97,11 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
   /** Sessions held but not yet posted to /live/end; each must reach the server or its turns are lost. */
   const [unsaved, setUnsavedState] = useState<string[]>(() => loadUnsaved(meeting.id));
   const unsavedRef = useRef(unsaved);
+  const [saving, setSaving] = useState(false);
+  /** The session connected right now; it is saved once it ends, never while it runs. */
+  const activeRef = useRef<string | null>(null);
+  const flushRef = useRef<Promise<void>>(Promise.resolve());
+  const mountedRef = useRef(true);
 
   const convRef = useRef<Session | null>(null);
   /** Bumped on every join, leave and end, so callbacks from an older session are ignored. */
@@ -107,17 +121,52 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
   );
   const remember = useCallback((id: string) => !unsavedRef.current.includes(id) && setUnsaved([...unsavedRef.current, id]), [setUnsaved]);
 
-  /** Saves earlier sessions' transcripts while the meeting stays live, so the next session picks up from them. */
-  const checkpoint = useCallback(
-    async (ids: readonly string[]) => {
-      for (const id of ids) {
-        const res = await api.endLive(meeting.id, { conversationId: id, final: false });
-        qc.setQueryData(meetingKeys.one(meeting.id), res);
-        setUnsaved(unsavedRef.current.filter((x) => x !== id));
+  const postEnd = useCallback(
+    async (conversationId: string, final: boolean, keepalive = false) => {
+      try {
+        return await api.endLive(meeting.id, { conversationId, final }, keepalive);
+      } catch (err) {
+        if (!(err instanceof ApiRequestError && err.status === 409)) throw err;
+        await new Promise((r) => setTimeout(r, END_RETRY_MS));
+        return api.endLive(meeting.id, { conversationId, final }, keepalive);
       }
     },
-    [meeting.id, qc, setUnsaved],
+    [meeting.id],
   );
+
+  /**
+   * Posts every ended, unsaved session with final:false: its turns join the meeting, which stays live, and the next
+   * session's prompt includes them. Runs one at a time; `except` is left for the caller (the final hand-over).
+   */
+  const flush = useCallback(
+    (except?: string): Promise<void> => {
+      const run = flushRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          const ids = unsavedRef.current.filter((id) => id !== activeRef.current && id !== except);
+          if (!ids.length) return;
+          if (mountedRef.current) setSaving(true);
+          try {
+            for (const id of ids) {
+              const res = await postEnd(id, false);
+              setUnsaved(unsavedRef.current.filter((x) => x !== id));
+              if (mountedRef.current) qc.setQueryData(meetingKeys.one(meeting.id), res);
+            }
+          } finally {
+            if (mountedRef.current) setSaving(false);
+          }
+        });
+      flushRef.current = run;
+      return run;
+    },
+    [meeting.id, qc, postEnd, setUnsaved],
+  );
+
+  const saveEnded = useCallback(() => {
+    flush().catch((err: unknown) => {
+      if (mountedRef.current) setError({ kind: "save", message: `Couldn't save the last session for the board: ${errorText(err)}` });
+    });
+  }, [flush]);
 
   const resetCall = useCallback(() => {
     setStatus("disconnected");
@@ -129,6 +178,7 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
 
   const hangUp = useCallback(() => {
     genRef.current++;
+    activeRef.current = null;
     const conv = convRef.current;
     convRef.current = null;
     return conv ? conv.endSession().catch(() => undefined) : Promise.resolve();
@@ -145,7 +195,15 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
     void (async () => {
       try {
         await checkMic();
-        await checkpoint(unsavedRef.current);
+        try {
+          await flush();
+        } catch (err) {
+          if (stale()) return;
+          resetCall();
+          setPhase("idle");
+          setError({ kind: "save", message: `Couldn't save the last session, so the board can't pick up from it: ${errorText(err)}` });
+          return;
+        }
         if (stale()) return;
         const session = await api.liveSession(meeting.id);
         if (stale()) return;
@@ -157,6 +215,7 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
           overrides: session.overrides as PartialOptions["overrides"],
           onConnect: ({ conversationId: id }) => {
             if (stale()) return;
+            activeRef.current = id;
             remember(id);
             setConnectedAt(Date.now());
             setPhase("connected");
@@ -164,7 +223,9 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
           onDisconnect: (details) => {
             if (stale()) return;
             convRef.current = null;
+            activeRef.current = null;
             resetCall();
+            saveEnded();
             if (details.reason === "user") return setPhase("idle");
             setPhase("dropped");
             setError({
@@ -201,7 +262,10 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
         }
         convRef.current = conv;
         conv.setMicMuted(mutedRef.current);
-        if (conv.getId()) remember(conv.getId());
+        if (conv.getId()) {
+          activeRef.current = conv.getId();
+          remember(conv.getId());
+        }
         setConnectedAt((at) => at ?? Date.now());
         setPhase("connected");
       } catch (err) {
@@ -211,13 +275,13 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
         setError(joinError(err));
       }
     })();
-  }, [meeting.id, hangUp, resetCall, checkpoint, remember]);
+  }, [meeting.id, hangUp, resetCall, flush, remember, saveEnded]);
 
   const leave = useCallback(() => {
-    void hangUp();
+    void hangUp().then(saveEnded);
     resetCall();
     setPhase("idle");
-  }, [hangUp, resetCall]);
+  }, [hangUp, resetCall, saveEnded]);
 
   const toggleMute = useCallback(() => {
     mutedRef.current = !mutedRef.current;
@@ -237,28 +301,47 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
       await hangUp();
       resetCall();
       try {
-        await checkpoint(unsavedRef.current.filter((id) => id !== last));
-        const res = await api.endLive(meeting.id, { conversationId: last, final: true });
+        await flush(last);
+        const res = await postEnd(last, true);
         setUnsaved([]);
         qc.setQueryData(meetingKeys.one(meeting.id), res);
         void qc.invalidateQueries({ queryKey: meetingKeys.list });
         setPhase("ended");
       } catch (err) {
         setPhase("idle");
-        setError({ kind: "end", message: `Couldn't hand the meeting to the board: ${err instanceof Error ? err.message : String(err)}` });
+        setError({ kind: "end", message: `Couldn't hand the meeting to the board: ${errorText(err)}` });
       }
     })();
-  }, [handoverId, meeting.id, hangUp, resetCall, qc, checkpoint, setUnsaved]);
+  }, [handoverId, meeting.id, hangUp, resetCall, qc, flush, postEnd, setUnsaved]);
 
-  // Leaving the panel or the page ends the call; rejoining opens a new session.
+  // A session left unsaved by an earlier visit (reload, crash) is saved before the founder can rejoin.
   useEffect(() => {
-    const onHide = () => void hangUp();
+    mountedRef.current = true;
+    if (unsavedRef.current.length) saveEnded();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [saveEnded]);
+
+  // Closing the panel or the page ends the call and saves it; keepalive lets the save outlive the page.
+  useEffect(() => {
+    const saveOnExit = () => {
+      for (const id of unsavedRef.current)
+        void api.endLive(meeting.id, { conversationId: id, final: false }, true).then(
+          () => setUnsaved(unsavedRef.current.filter((x) => x !== id)),
+          () => undefined,
+        );
+    };
+    const onHide = () => {
+      void hangUp();
+      saveOnExit();
+    };
     window.addEventListener("pagehide", onHide);
     return () => {
       window.removeEventListener("pagehide", onHide);
-      void hangUp();
+      void hangUp().then(saveOnExit);
     };
-  }, [hangUp]);
+  }, [hangUp, meeting.id, setUnsaved]);
 
   useEffect(() => {
     if (phase !== "connected") return;
@@ -285,6 +368,7 @@ export function useLiveRoom(meeting: Pick<BoardMeeting, "id" | "liveConversation
     now,
     error,
     canEnd: handoverId !== null,
+    saving,
     join,
     leave,
     toggleMute,

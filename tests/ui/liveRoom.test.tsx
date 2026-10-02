@@ -256,13 +256,14 @@ describe("Live board room", () => {
     expect(alert).toHaveTextContent("The connection dropped: socket closed");
     expect(within(room()).getByText("Disconnected")).toBeInTheDocument();
     expect(within(room()).getByText("Before the drop.")).toBeInTheDocument();
-    expect(JSON.parse(sessionStorage.getItem(`${UNSAVED_KEY_PREFIX}m-live`)!)).toEqual(["conv-1"]);
+    // The dropped session is saved right away (meeting stays live), so the next session's prompt includes it.
+    await waitFor(() => expect(fetch.calls("POST", LIVE_API.end("m-live"))).toEqual([{ body: { conversationId: "conv-1", final: false } }]));
+    await waitFor(() => expect(sessionStorage.getItem(`${UNSAVED_KEY_PREFIX}m-live`)).toBeNull());
     await userEvent.click(within(alert).getByRole("button", { name: "Rejoin" }));
     await within(room()).findByText(/^Live · /);
     expect(sdk.startSession).toHaveBeenCalledTimes(2);
     expect(fetch.calls("POST", LIVE_API.session("m-live"))).toHaveLength(2);
-    // The dropped session is saved (meeting stays live) before the new one opens, so the board picks up from it.
-    expect(fetch.calls("POST", LIVE_API.end("m-live"))).toEqual([{ body: { conversationId: "conv-1", final: false } }]);
+    expect(fetch.calls("POST", LIVE_API.end("m-live"))).toHaveLength(1);
     expect(JSON.parse(sessionStorage.getItem(`${UNSAVED_KEY_PREFIX}m-live`)!)).toEqual(["conv-2"]);
     // The old session's late callbacks are ignored.
     act(() => (session(0).options.onMessage as (m: unknown) => void)({ role: "agent", event_id: 9, message: "<Hormozi>Ghost</Hormozi>" }));
@@ -278,18 +279,39 @@ describe("Live board room", () => {
     await waitFor(() => expect(sessionStorage.getItem(`${UNSAVED_KEY_PREFIX}m-live`)).toBeNull());
   });
 
-  it("leaving, or closing the panel, ends the session cleanly", async () => {
-    routes();
+  it("leaving, or closing the panel, hangs up first and then saves the session with final:false", async () => {
+    const fetch = routes();
     const { unmount } = renderUi(<MeetingRoom id="m-live" />);
     await join();
     await userEvent.click(within(room()).getByRole("button", { name: "Leave" }));
     expect(session().endSession).toHaveBeenCalledTimes(1);
     expect(within(room()).getByText("Not in the room")).toBeInTheDocument();
+    await waitFor(() => expect(fetch.calls("POST", LIVE_API.end("m-live"))).toEqual([{ body: { conversationId: "conv-1", final: false } }]));
+    expect(session().endSession.mock.invocationCallOrder[0]!).toBeLessThan(fetch.fn.mock.invocationCallOrder.at(-1)!);
     await userEvent.click(screen.getByRole("button", { name: "Join the room" }));
     await within(room()).findByText(/^Live · /);
     unmount();
     expect(session().endSession).toHaveBeenCalledTimes(1);
     expect(session(0).endSession).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(fetch.calls("POST", LIVE_API.end("m-live"))).toHaveLength(2));
+    const last = fetch.fn.mock.calls.at(-1)!;
+    expect(JSON.parse(String((last[1] as RequestInit).body))).toEqual({ conversationId: "conv-2", final: false });
+    expect((last[1] as RequestInit).keepalive).toBe(true);
+    expect((last[1] as RequestInit).headers).toMatchObject({ "Content-Type": "application/json" });
+  });
+
+  it("retries a save once when the server says the call is still connected (409)", async () => {
+    let tries = 0;
+    const fetch = routes({
+      [`POST ${LIVE_API.end("m-live")}`]: () =>
+        ++tries === 1 ? new Response(JSON.stringify({ error: "the live session is still connected; end it first" }), { status: 409 }) : { meeting: liveMeeting },
+    });
+    renderUi(<MeetingRoom id="m-live" />);
+    await join();
+    fire("onDisconnect", { reason: "error", message: "socket closed", context: { type: "close" } });
+    await waitFor(() => expect(fetch.calls("POST", LIVE_API.end("m-live"))).toHaveLength(2), { timeout: 4000 });
+    await waitFor(() => expect(sessionStorage.getItem(`${UNSAVED_KEY_PREFIX}m-live`)).toBeNull());
+    expect(within(room()).getByRole("alert")).toHaveTextContent("The connection dropped");
   });
 
   it("can hand over a past session after a reload without rejoining, and retries a failed hand-over", async () => {
@@ -313,12 +335,24 @@ describe("Live board room", () => {
     expect(sdk.startSession).not.toHaveBeenCalled();
   });
 
-  it("after a reload, saves a session that never reached the server before rejoining, and hands over the unsaved ones at the end", async () => {
+  it("after a reload, posts the stored session with final:false before Join is allowed, then hands over the new one", async () => {
     sessionStorage.setItem(`${UNSAVED_KEY_PREFIX}m-live`, JSON.stringify(["conv-lost"]));
-    const fetch = routes();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const fetch = routes({
+      [`POST ${LIVE_API.end("m-live")}`]: async (init: RequestInit | undefined) => {
+        const body = JSON.parse(String(init?.body)) as EndLiveRequest;
+        if (body.final === false) await gate;
+        return { meeting: body.final === false ? liveMeeting : voting };
+      },
+    });
     renderUi(<MeetingRoom id="m-live" />);
-    await join();
+    expect(await screen.findByRole("button", { name: "Saving the last session…" })).toBeDisabled();
     expect(fetch.calls("POST", LIVE_API.end("m-live"))).toEqual([{ body: { conversationId: "conv-lost", final: false } }]);
+    release();
+    await join();
+    expect(sdk.startSession).toHaveBeenCalledTimes(1);
+    expect(fetch.calls("POST", LIVE_API.end("m-live"))).toHaveLength(1);
     await userEvent.click(within(room()).getByRole("button", { name: "End meeting & vote" }));
     await userEvent.click(within(room()).getByRole("button", { name: "End & vote" }));
     await waitFor(() => expect(fetch.calls("POST", LIVE_API.end("m-live"))).toHaveLength(2));
@@ -329,8 +363,11 @@ describe("Live board room", () => {
     sessionStorage.setItem(`${UNSAVED_KEY_PREFIX}m-live`, JSON.stringify(["conv-lost"]));
     routes({ [`POST ${LIVE_API.end("m-live")}`]: () => new Response(JSON.stringify({ error: "ElevenLabs upstream error" }), { status: 502 }) });
     renderUi(<MeetingRoom id="m-live" />);
-    await userEvent.click(await screen.findByRole("button", { name: "Join the room" }));
-    expect(await within(room()).findByRole("alert")).toHaveTextContent("Couldn't open the room: ElevenLabs upstream error");
+    const alert = await within(await screen.findByRole("region", { name: "Live room" })).findByRole("alert");
+    expect(alert).toHaveTextContent("Couldn't save the last session for the board: ElevenLabs upstream error");
+    await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    expect(await within(room()).findByText(/so the board can't pick up from it: ElevenLabs upstream error/)).toBeInTheDocument();
     expect(sdk.startSession).not.toHaveBeenCalled();
+    expect(JSON.parse(sessionStorage.getItem(`${UNSAVED_KEY_PREFIX}m-live`)!)).toEqual(["conv-lost"]);
   });
 });

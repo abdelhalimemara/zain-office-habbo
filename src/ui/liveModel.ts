@@ -79,7 +79,7 @@ export function nextUserTalking(talking: boolean, vadScore: number): boolean {
   return talking ? vadScore >= VAD_OFF : vadScore >= VAD_ON;
 }
 
-export type LiveErrorKind = "mic" | "no-mic" | "not-configured" | "not-live" | "session" | "end";
+export type LiveErrorKind = "mic" | "no-mic" | "not-configured" | "not-live" | "session" | "save" | "end";
 
 export interface LiveError {
   kind: LiveErrorKind;
@@ -96,6 +96,7 @@ export function joinError(err: unknown): LiveError {
     if (err.status === 503) return { kind: "not-configured", message: "ElevenLabs isn't connected. Add ELEVENLABS_API_KEY to the Hermes .env, then try again." };
     if (err.status === 409) return { kind: "not-live", message: "This meeting isn't live any more." };
     if (err.status === 429) return { kind: "session", message: "ElevenLabs is busy or out of quota. Wait a moment, then try again." };
+    if (err.status === 502) return { kind: "session", message: `ElevenLabs had a problem: ${err.message}. Try again.` };
     if (err.status === 504) return { kind: "session", message: "ElevenLabs took too long to answer. Try again." };
     return { kind: "session", message: `Couldn't open the room: ${err.message}` };
   }
