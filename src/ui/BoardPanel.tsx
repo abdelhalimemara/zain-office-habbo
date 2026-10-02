@@ -9,6 +9,7 @@ import { ActivityBadge, AgentChip, ErrorNote, Text, useRosterAgents } from "./co
 import { MeetingsTab } from "./MeetingsTab";
 import { Portrait } from "./Portrait";
 import { Panel } from "./Panel";
+import { VoiceSettings } from "./VoiceSettings";
 
 export const QUESTION_MAX = 8000;
 const BOARD_COLOR = "#C9A227";
@@ -175,6 +176,8 @@ export function BoardPanel({ members: preselect, tab: initialTab }: { members?: 
                 <Consultation key={t.id} task={t} agents={agents} />
               ))}
             </ul>
+            <h3 className="zui-subheading">Voices</h3>
+            <VoiceSettings advisors={advisors} agents={agents} />
           </>
         )}
       </div>

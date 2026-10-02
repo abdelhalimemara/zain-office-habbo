@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { API } from "@shared/api";
-import { MEETING_BRIEF_MAX, MEETINGS_API, type BoardMeeting, type MeetingTurn } from "@shared/meetings";
+import { MEETINGS_API, type BoardMeeting, type MeetingTurn } from "@shared/meetings";
 import { MEETING_POLL_ACTIVE_MS, MEETING_POLL_IDLE_MS, meetingsPollInterval } from "../../src/api/meetingHooks";
 import { useUiStore } from "../../src/state/store";
 import { BoardPanel } from "../../src/ui/BoardPanel";
@@ -158,34 +158,19 @@ describe("Meetings tab", () => {
     expect(useUiStore.getState().panel).toEqual({ kind: "meeting", id: "m-live" });
   });
 
-  it("validates and convenes the board with the chosen members, mode and rounds", async () => {
-    const fetch = routes([], { [`POST ${MEETINGS_API.list}`]: { meeting: meeting({ id: "m-new" }) } });
+  it("opens the call-a-meeting modal from the Meetings tab", async () => {
+    routes([]);
     renderUi(<BoardPanel />);
-    await userEvent.click(await screen.findByRole("button", { name: "Convene the board" }));
-    const form = screen.getByRole("form", { name: "Convene the board" });
-    await userEvent.click(within(form).getByRole("button", { name: "Convene" }));
-    expect(within(form).getByText("Give the meeting a topic.")).toBeInTheDocument();
-    await userEvent.type(within(form).getByLabelText(/Topic/), "x".repeat(161));
-    await userEvent.click(within(form).getByRole("button", { name: "Convene" }));
-    expect(within(form).getByText("Keep the topic to 160 characters.")).toBeInTheDocument();
-    await userEvent.clear(within(form).getByLabelText(/Topic/));
-    await userEvent.type(within(form).getByLabelText(/Topic/), "Hire a CFO?");
-    const brief = within(form).getByLabelText(/Brief/);
-    await userEvent.click(brief);
-    await userEvent.paste("y".repeat(MEETING_BRIEF_MAX + 1));
-    await userEvent.click(within(form).getByRole("button", { name: "Convene" }));
-    expect(within(form).getByText("Keep the brief to 8000 characters.")).toBeInTheDocument();
-    await userEvent.clear(brief);
-    await userEvent.type(brief, "Runway 18 months.");
-    await userEvent.click(within(form).getByRole("checkbox", { name: /Steve Jobs/ }));
-    await userEvent.click(within(form).getByRole("checkbox", { name: /Board discusses on its own/ }));
-    await userEvent.selectOptions(within(form).getByLabelText("Discussion rounds"), "2");
-    await userEvent.click(within(form).getByRole("button", { name: "Convene" }));
-    expect(fetch.calls("POST", MEETINGS_API.list)).toEqual([
-      { body: { topic: "Hire a CFO?", brief: "Runway 18 months.", members: [HORMOZI, ALWALEED, BEZOS, BUFFETT], boardOnly: true, discussionRounds: 2 } },
-    ]);
-    await screen.findByRole("button", { name: "Convene the board" });
-    expect(useUiStore.getState().panel).toEqual({ kind: "meeting", id: "m-new" });
+    await userEvent.click(await screen.findByRole("button", { name: "Call a meeting" }));
+    expect(useUiStore.getState().callMeetingOpen).toBe(true);
+  });
+
+  it("badges voice meetings in the list", async () => {
+    routes([{ ...live, mode: "voice" }, concluded]);
+    renderUi(<BoardPanel />);
+    const items = await within(await screen.findByRole("list", { name: "Board meetings" })).findAllByRole("listitem");
+    expect(within(items[0]!).getByTitle("Voice meeting")).toHaveTextContent("Voice");
+    expect(within(items[1]!).queryByTitle("Voice meeting")).not.toBeInTheDocument();
   });
 });
 

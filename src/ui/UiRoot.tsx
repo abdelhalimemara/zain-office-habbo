@@ -4,6 +4,8 @@ import { useUiStore, type Panel } from "../state/store";
 import { AgentCard } from "./AgentCard";
 import { ApprovalsInbox } from "./ApprovalsInbox";
 import { BoardPanel } from "./BoardPanel";
+import { CallMeetingCta } from "./CallMeetingCta";
+import { CallMeetingDialog } from "./CallMeetingDialog";
 import { MeetingRoom } from "./MeetingRoom";
 import { HireDialog } from "./HireDialog";
 import { Hud } from "./Hud";
@@ -59,21 +61,27 @@ export function UiRoot() {
   const panel = useUiStore((s) => s.panel);
   const closePanel = useUiStore((s) => s.closePanel);
   const view = useUiStore((s) => s.view);
+  const callMeetingOpen = useUiStore((s) => s.callMeetingOpen);
+  const setCallMeetingOpen = useUiStore((s) => s.setCallMeetingOpen);
 
   useEffect(() => {
-    if (!panel) return;
+    if (!panel && !callMeetingOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePanel();
+      if (e.key !== "Escape") return;
+      if (callMeetingOpen) setCallMeetingOpen(false);
+      else closePanel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panel, closePanel]);
+  }, [panel, closePanel, callMeetingOpen, setCallMeetingOpen]);
 
   return (
     <div className="zui-root">
       <Hud />
       {railVisible(view, panel?.kind ?? null) && <MandatesRail />}
+      {view.kind === "floor" && view.division === "hq" && <CallMeetingCta />}
       {panel && <OpenPanel key={panelKey(panel)} panel={panel} />}
+      {callMeetingOpen && <CallMeetingDialog />}
     </div>
   );
 }

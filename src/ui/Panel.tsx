@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 
 interface ShellProps {
   title: ReactNode;
@@ -33,18 +33,24 @@ export function Panel({ title, accent, onClose, children, wide, className }: She
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Dialog({ title, accent, onClose, children }: ShellProps) {
+export function Dialog({ title, accent, onClose, children, initialFocus }: ShellProps & { initialFocus?: string }) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
+  // Read during the first render, before any autoFocus inside the dialog moves focus.
+  const [previous] = useState(() => document.activeElement as HTMLElement | null);
 
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const field = ref.current?.querySelector<HTMLElement>(".zui-panel__body input, .zui-panel__body select, .zui-panel__body textarea");
+    const field = ref.current?.querySelector<HTMLElement>(initialFocus ?? ".zui-panel__body input, .zui-panel__body select, .zui-panel__body textarea");
     (field ?? ref.current?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
     return () => previous?.focus?.();
   }, []);
 
   const trapTab = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
     if (e.key !== "Tab" || !ref.current) return;
     const items = Array.from(ref.current.querySelectorAll<HTMLElement>(FOCUSABLE));
     const first = items[0];
