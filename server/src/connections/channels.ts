@@ -110,7 +110,12 @@ export function gmailEntry(token: { ok: boolean; detail: string }, job: CronJob 
   if (lastRun === null) return { ...base, status: "ok", detail: "Token valid; inbox loop waiting for its first run" };
   const age = nowSeconds - lastRun;
   const when = `Last inbox check ${ago(age)}`;
-  if (job.last_status && !["ok", "success", "completed", "silent"].includes(job.last_status.toLowerCase())) {
+  const lastStatus = job.last_status?.toLowerCase();
+  if (lastStatus === "error") {
+    const why = job.last_error ? redact(job.last_error).slice(0, 100) : "no error recorded";
+    return { ...base, status: "error", detail: `${when} failed: ${why}` };
+  }
+  if (lastStatus && !["ok", "success", "completed", "silent"].includes(lastStatus)) {
     return { ...base, status: "warn", detail: `${when} — ${job.last_status}` };
   }
   if (age > 3 * intervalSeconds(job.schedule_display ?? SCHEDULE)) return { ...base, status: "warn", detail: `${when} — overdue` };

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { access, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { CLIENT_REPLY_PREFIX } from "../../../shared/flow";
@@ -9,10 +10,49 @@ import { ACCOUNTS_PROFILE, hermesHome } from "./hermesPaths";
 export const JOB_NAME = "zain-ahmad-gmail-inbox";
 export const HANDLED_LABEL = "Zain/Handled";
 export const SCHEDULE = "every 15m";
-const DEFAULT_PYTHON = join(
-  hermesHome(),
-  "installs/b2d8ea97e879ccae/environments/27281a14ceb54dd188fddb90080be0ea/venv/bin/python",
-);
+/**
+ * The interpreter Hermes itself runs on: each install's facts.json names its current venv
+ * (packages.venv.environment, the venv directory itself). Only that Python has Hermes' package manager (`pm`), which the
+ * google-workspace scripts require; a plain `python` fails with "Run this script in the Hermes
+ * environment". ZAIN_HERMES_PYTHON overrides it.
+ */
+export async function resolveHermesPython(env: NodeJS.ProcessEnv = process.env, home = hermesHome(env)): Promise<string> {
+  if (env.ZAIN_HERMES_PYTHON) return env.ZAIN_HERMES_PYTHON;
+  const installs = join(home, "installs");
+  for (const install of await readdir(installs).catch(() => [] as string[])) {
+    try {
+      const facts = JSON.parse(await readFile(join(installs, install, "facts.json"), "utf8")) as {
+        packages?: { venv?: { environment?: string } };
+      };
+      const environment = facts.packages?.venv?.environment;
+      if (!environment) continue;
+      const python = join(environment, "bin", "python");
+      await access(python);
+      return python;
+    } catch {
+      continue;
+    }
+  }
+  throw new Error(`could not find Hermes' Python under ${installs}; set ZAIN_HERMES_PYTHON`);
+}
+
+const shellQuote = (s: string) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`);
+
+/**
+ * The exact shell prefix the agent must use for Gmail inside its terminal tool, baked into the
+ * job at setup time: Ahmad's profile as HERMES_HOME (his token), Hermes on PYTHONPATH, Hermes' Python.
+ * It starts with `env` so it still works when stored in a variable (`$GMAIL gmail …`): a shell does
+ * not treat VAR=value words produced by expansion as assignments.
+ */
+export function gmailCommand(python: string, home = hermesHome()): string {
+  return [
+    "env",
+    `HERMES_HOME=${shellQuote(join(home, "profiles", ACCOUNTS_PROFILE))}`,
+    `PYTHONPATH=${shellQuote(join(home, "hermes-agent"))}`,
+    shellQuote(python),
+    shellQuote(join(skillScripts(home), "google_api.py")),
+  ].join(" ");
+}
 
 /** The google-workspace skill's scripts as cloned into Ahmad's profile. */
 export function skillScripts(home = hermesHome()): string {
@@ -34,7 +74,7 @@ export function hermesPython(
   profileHome = join(home, "profiles", ACCOUNTS_PROFILE),
 ): PythonRunner {
   const run = promisify(execFile);
-  const python = env.ZAIN_HERMES_PYTHON || DEFAULT_PYTHON;
+  const python = resolveHermesPython(env, home);
   const childEnv = {
     ...env,
     HERMES_HOME: profileHome,
@@ -42,7 +82,7 @@ export function hermesPython(
   };
   return async (args) => {
     try {
-      const { stdout } = await run(python, args, { env: childEnv, timeout: 60_000 });
+      const { stdout } = await run(await python, args, { env: childEnv, timeout: 60_000 });
       return { code: 0, stdout };
     } catch (err) {
       const e = err as { code?: unknown; stdout?: string };
@@ -99,10 +139,12 @@ export function activationOf(job: CronJob | undefined): number | null {
  * `activatedAt` (unix seconds) keeps the loop off the mailbox's existing backlog: Gmail's
  * `after:` accepts epoch seconds.
  */
-export function inboxPrompt(labelId: string, activatedAt: number): string {
+export function inboxPrompt(labelId: string, activatedAt: number, gmail: string): string {
   return [
     "You are running Ahmad Al Zain's Gmail inbox loop. Follow your client-communication charter (your SOUL) exactly.",
-    "Use the google-workspace skill (google_api.py gmail …) for all Gmail work.",
+    "Run every Gmail command in your terminal with exactly this prefix (never plain `python`, which lacks Hermes' environment):",
+    `GMAIL="${gmail.replace(/"/g, '\\"')}"`,
+    "then `$GMAIL gmail search …`, `$GMAIL gmail get <id>`, `$GMAIL gmail reply <id> --body …`, `$GMAIL gmail modify <id> …`. The google-workspace skill documents the subcommands.",
     "",
     "1. Pending approved replies first. List your kanban tasks titled \"" + CLIENT_REPLY_PREFIX + " …\" with channel email that are done (completed in the last 14 days).",
     `   For each one whose comments do not contain "${SENT_MARKER}": send the task's result EXACTLY as written as an in-thread reply to the message id in its body (gmail reply <messageId> --body …), then kanban_comment "${SENT_MARKER}" on the task. Never send one twice.`,
@@ -118,11 +160,11 @@ export function inboxPrompt(labelId: string, activatedAt: number): string {
   ].join("\n");
 }
 
-export function inboxJobSpec(labelId: string, activatedAt: number): CronJobSpec {
+export function inboxJobSpec(labelId: string, activatedAt: number, gmail: string): CronJobSpec {
   return {
     name: JOB_NAME,
     schedule: SCHEDULE,
-    prompt: inboxPrompt(labelId, activatedAt),
+    prompt: inboxPrompt(labelId, activatedAt, gmail),
     deliver: "local",
     skills: ["google-workspace"],
     enabled_toolsets: ["terminal", "skills", "kanban"],
@@ -146,13 +188,15 @@ export interface GmailSetupOptions {
   hermes: HermesClient;
   python: PythonRunner;
   home?: string;
+  /** Path of Hermes' Python; resolved from the install's facts.json by default. */
+  pythonPath?: string;
   now?: () => Date;
   log?: (line: string) => void;
 }
 
 export type GmailSetupOutcome = "needs-auth" | "dry-run" | "created" | "updated" | "unchanged";
 
-export async function runGmailSetup({ apply, hermes, python, home = hermesHome(), now = () => new Date(), log = console.log }: GmailSetupOptions): Promise<GmailSetupOutcome> {
+export async function runGmailSetup({ apply, hermes, python, home = hermesHome(), pythonPath, now = () => new Date(), log = console.log }: GmailSetupOptions): Promise<GmailSetupOutcome> {
   const token = await checkGmailToken(python, home);
   log(`Gmail token for ${ACCOUNTS_PROFILE}: ${token.ok ? "valid" : "missing or invalid"}${token.detail ? ` (${token.detail})` : ""}`);
   if (!token.ok) {
@@ -165,7 +209,9 @@ export async function runGmailSetup({ apply, hermes, python, home = hermesHome()
   const existing = (await hermes.cronJobs(ACCOUNTS_PROFILE)).find((j) => j.name === JOB_NAME);
   const activatedAt = activationOf(existing) ?? Math.floor(now().getTime() / 1000);
   log(`Mail handled from ${new Date(activatedAt * 1000).toISOString()} on${activationOf(existing) ? " (kept from the existing job)" : ""}; the existing backlog is never touched.`);
-  const spec = inboxJobSpec(label.id ?? "<label id>", activatedAt);
+  const gmail = gmailCommand(pythonPath ?? (await resolveHermesPython(process.env, home)), home);
+  log(`Gmail command baked into the job: ${gmail}`);
+  const spec = inboxJobSpec(label.id ?? "<label id>", activatedAt, gmail);
   const drift = existing ? jobDrift(existing, spec) : null;
   if (!apply) {
     if (!existing) log(`Would create cron job ${JOB_NAME} (${SCHEDULE}, delivery local only, skills google-workspace, toolsets terminal+skills+kanban).`);
