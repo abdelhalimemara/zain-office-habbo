@@ -156,7 +156,7 @@ describe("CEO approvals section: board consultations", () => {
   it("relays completed consultations briefly and consults the board through Zain HQ", () => {
     expect(text).toContain("### Board consultations");
     expect(text).toContain('"Board consultation: …"');
-    expect(text).toMatch(/≤8 lines — the advisor's name, the bottom line, the vote if any and the top 3 actions/);
+    expect(text).toMatch(/who advised, their bottom line, the vote if any/);
     expect(text).toContain(
       `curl -sS -X POST http://127.0.0.1:8787/api/board/consult -H 'Content-Type: application/json' -d '{"question":"<their question>","members":["zain-board-hormozi"]}'`,
     );

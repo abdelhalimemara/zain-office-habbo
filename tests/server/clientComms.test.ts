@@ -69,8 +69,8 @@ describe("CEO approvals section: client replies", () => {
     expect(text).toContain("### Client replies");
     expect(text).toContain('"Client reply: <client> — <topic>"');
     expect(text).toContain("curl -sS http://127.0.0.1:8787/api/tasks/<id>");
-    expect(text).toMatch(/the client, the channel \(email or WhatsApp\), the client's message and the proposed reply word for word/);
-    expect(text).toContain('Reply *approve*, *approve with:* <edited text>, or *send back:* <notes>.');
+    expect(text).toMatch(/who the client is, on which channel \(email or WhatsApp\), what they asked, and then quote Ahmad's proposed reply word for word/);
+    expect(text).toContain('Ask whether to send it as is, send it with their edits, or send it back to Ahmad with notes.');
     expect(text).toContain(`-d '{"finalText":"<their exact text>","note":"via Telegram"}'`);
     expect(text).toContain(`/approvals/<id>/reject -H 'Content-Type: application/json' -d '{"reason":"<their notes>"}'`);
   });

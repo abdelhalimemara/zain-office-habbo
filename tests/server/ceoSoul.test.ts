@@ -39,11 +39,12 @@ describe("approvalsSection", () => {
   });
 
   it("tells the CEO exactly how to apply each decision through Zain HQ", () => {
-    expect(text).toContain("Reply *approve*, or *send back:* <instructions>.");
+    expect(text).toContain("ask if they want to approve it or send it back with notes");
+    expect(text).toContain("Never show task ids, curl commands, JSON, file paths or tool names");
     expect(text).toContain(`curl -sS -X POST http://127.0.0.1:8787/api/approvals/<id>/approve -H 'Content-Type: application/json' -d '{"note":"via Telegram"}'`);
     expect(text).toContain(`http://127.0.0.1:8787/api/approvals/<id>/reject -H 'Content-Type: application/json' -d '{"reason":"<their words>"}'`);
     expect(text).toContain(`http://127.0.0.1:8787/api/tasks/<id>/unblock -H 'Content-Type: application/json' -d '{"instructions":"<their words>"}'`);
-    expect(text).toContain("✅ <title> is done.");
+    expect(text).toContain("one short, natural line that it's done");
     expect(text).toMatch(/409 means it was already decided/);
     expect(text).toMatch(/Connection refused means Zain HQ is not running/);
     expect(text).toMatch(/Never approve or send back without an explicit reply/);

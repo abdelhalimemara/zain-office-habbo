@@ -125,7 +125,7 @@ describe("meeting conduct in SOULs", () => {
     expect(text).toContain("### Board meetings");
     expect(text).toContain(`curl -sS -X POST http://127.0.0.1:8787/api/board/meetings -H 'Content-Type: application/json' -d '{"topic":"<short topic>"`);
     expect(text).toContain('"requestedBy":"ceo"');
-    expect(text).toMatch(/relay the conclusion in ≤8 lines/);
+    expect(text).toMatch(/tell the user how it ended: the decision and how the vote went/);
     expect(text).toContain("/board/meetings/<meeting id>/remarks");
     expect(text).toContain('"tell the board: …"');
   });
