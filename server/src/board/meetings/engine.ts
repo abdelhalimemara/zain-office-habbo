@@ -7,6 +7,8 @@ import { HttpError } from "../../http";
 import { hiredBoardMembers } from "../../org/consult";
 import type { HireStore } from "../../org/hireStore";
 import type { CeoWake } from "../../telegram/ceoWake";
+import { boardLedger, memorySection } from "../memory/ledger";
+import { splitMemory, type MemoryStore } from "../memory/notes";
 import type { RecordStore } from "../recordStore";
 import {
   FOUNDER,
@@ -53,6 +55,8 @@ export interface MeetingEngineDeps {
   ceoWake: CeoWake;
   store: RecordStore<StoredMeeting>;
   sink?: MeetingSink;
+  /** Board memory: members' notes go into their prompts, and their votes' MEMORY blocks are kept. */
+  memory?: MemoryStore;
   now?: () => number;
   log?: (line: string) => void;
   newId?: () => string;
@@ -229,6 +233,8 @@ export class MeetingEngine {
     const m = stored.meeting;
     const state = stored.rounds.at(-1)!;
     const tag = marker(m.id, state.round);
+    if (m.members.every((member) => state.tasks[member])) return;
+    const ledger = boardLedger((await this.deps.store.list()).map((s) => s.meeting).filter((x) => x.id !== m.id));
     for (const member of m.members) {
       if (state.tasks[member]) continue;
       const existing = board.find((t) => t.assignee === member && (t.body ?? "").includes(tag));
@@ -236,13 +242,32 @@ export class MeetingEngine {
         existing ??
         (await this.deps.hermes.createTask({
           title: taskTitle(m, roundLabel(state.round, m.discussionRounds)),
-          body: roundTaskBody(m, state.round),
+          body: roundTaskBody(m, state.round, memorySection(ledger, await this.notes(member))),
           assignee: member,
           tenant: HQ_TENANT,
           triage: false,
         }));
       state.tasks[member] = task.id;
       await this.deps.store.put(stored);
+    }
+  }
+
+  private async notes(member: string) {
+    try {
+      return (await this.deps.memory?.notes(member)) ?? [];
+    } catch (err) {
+      this.log(`meetings: memory for ${member} unavailable (${err instanceof Error ? err.message : "error"})`);
+      return [];
+    }
+  }
+
+  /** Keeps a vote's MEMORY insights; the vote itself never fails over memory. */
+  private async remember(m: BoardMeeting, member: string, insights: readonly string[]): Promise<void> {
+    if (!this.deps.memory || insights.length === 0) return;
+    try {
+      await this.deps.memory.add(member, { insights, at: this.now(), meetingId: m.id, meetingTopic: m.topic });
+    } catch (err) {
+      this.log(`meetings: could not keep ${member}'s memory (${err instanceof Error ? err.message : "error"})`);
     }
   }
 
@@ -262,17 +287,21 @@ export class MeetingEngine {
     const stuck = this.now() - state.startedAt > STUCK_AFTER_SECONDS;
     const turns: MeetingTurn[] = [];
     const votes: MeetingVote[] = [];
+    const insights: [string, string[]][] = [];
     const kind = roundKind(state.round, m.discussionRounds);
     for (const member of m.members) {
       const taskId = state.tasks[member]!;
       const a = await this.answer(taskId, board);
       if (!a.done && !stuck) return;
-      const text = a.done ? a.text : `${speakerName(member)} did not respond.`;
+      const answer = a.done && kind === "vote" ? splitMemory(a.text) : { body: a.text, insights: [] };
+      const text = a.done ? answer.body || a.text : `${speakerName(member)} did not respond.`;
       turns.push({ round: state.round, kind, speaker: member, text, at: this.now(), taskId });
       votes.push(a.done ? parseVote(member, a.text) : { member, vote: "abstain", rationale: text });
+      insights.push([member, answer.insights]);
     }
     this.recordTurns(m, turns);
     if (kind === "vote") {
+      for (const [member, notes] of insights) await this.remember(m, member, notes);
       m.votes = votes;
       m.decision = decide(votes);
       return this.startMinutes(stored);

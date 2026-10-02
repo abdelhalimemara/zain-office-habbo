@@ -24,16 +24,24 @@ const agent = (event_id: number, message: string) => ({ role: "agent" as const, 
 const user = (event_id: number, message: string) => ({ role: "user" as const, message, event_id });
 
 describe("live captions", () => {
-  it("splits agent text into one caption per speaker; untagged text is the chair's", () => {
-    const caps = messageCaptions(agent(3, "Order. <Hormozi>Raise it.</Hormozi> <Buffett>Careful.</Buffett>"), SPEAKERS);
+  it("splits agent text into one caption per speaker; untagged text goes to the member before it, never a chair", () => {
+    const caps = messageCaptions(agent(3, "Order. <Hormozi>Raise it.</Hormozi> Now. <Buffett>Careful.</Buffett>"), SPEAKERS);
     expect(caps.map((c) => [c.speaker, c.text])).toEqual([
-      ["default", "Order."],
-      ["zain-board-hormozi", "Raise it."],
+      ["zain-board-hormozi", "Raise it. Now."],
       ["zain-board-buffett", "Careful."],
     ]);
-    expect(new Set(caps.map((c) => c.key)).size).toBe(3);
-    expect(profileForTag("Nobody", SPEAKERS)).toBe("default");
-    expect(profileForTag(null, SPEAKERS)).toBe("default");
+    expect(new Set(caps.map((c) => c.key)).size).toBe(2);
+    expect(profileForTag("Nobody", SPEAKERS)).toBeNull();
+    expect(profileForTag(null, SPEAKERS)).toBeNull();
+    expect(profileForTag(null, SPEAKERS, "zain-board-buffett")).toBe("zain-board-buffett");
+  });
+
+  it("gives a message's untagged opening to the member who spoke last", () => {
+    let caps = addMessage([], agent(1, "<Buffett>Careful.</Buffett>"), SPEAKERS);
+    caps = addMessage(caps, user(2, "Go on"), SPEAKERS);
+    caps = addMessage(caps, agent(3, "As I said, margins first."), SPEAKERS);
+    expect(caps.map((c) => [c.speaker, c.text]).at(-1)).toEqual(["zain-board-buffett", "As I said, margins first."]);
+    expect(addMessage([], agent(1, "Welcome to the board room."), SPEAKERS)).toEqual([]);
   });
 
   it("gives the founder's transcript to You and drops empty ones", () => {

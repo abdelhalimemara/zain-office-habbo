@@ -19,19 +19,23 @@ const MAX_DURATION_SECONDS = 3600;
 
 /** The base prompt; every session replaces it with the meeting's own prompt (platform_settings.overrides). */
 const BASE_PROMPT =
-  "You run Zain Group's live board meetings. Each session supplies the meeting's prompt; without one, the chair greets the founder and says the meeting has not been set up.";
+  "You voice the members of Zain Group's board of advisors in live board meetings. Each session supplies the meeting's prompt; without one, say only that the meeting has not been set up.";
 
-/** Multi-voice label for a speaker: letters only, e.g. zain-board-hormozi → Hormozi, the chair → Chair. */
+/** Multi-voice label for a board member: letters only, e.g. zain-board-hormozi → Hormozi. The CEO's office has none. */
 export function speakerTag(profile: string): string {
-  if (profile === CHAIR_PROFILE) return "Chair";
+  if (profile === CHAIR_PROFILE) return "";
   const last = profile.split("-").filter(Boolean).at(-1) ?? "";
   const letters = last.replace(/[^A-Za-z]/g, "");
   return letters ? letters[0]!.toUpperCase() + letters.slice(1).toLowerCase() : "";
 }
 
-/** The Board Room agent's full configuration, built from the current voice assignments. */
+/**
+ * The Board Room agent's full configuration, built from the current voice assignments. Only board members get a
+ * voice label (the CEO only takes the minutes); the first member's voice is the default for any stray untagged text.
+ * The first message is empty, so the agent waits for the founder to open.
+ */
 export function agentConfig(voices: readonly VoiceAssignment[]): Record<string, unknown> {
-  const chair = voices.find((v) => v.profile === CHAIR_PROFILE);
+  const fallback = voices.find((v) => speakerTag(v.profile));
   const seen = new Set<string>();
   const supported = voices
     .map((v) => ({ tag: speakerTag(v.profile), v }))
@@ -43,7 +47,7 @@ export function agentConfig(voices: readonly VoiceAssignment[]): Record<string, 
     tags: ["zain-hq"],
     conversation_config: {
       agent: {
-        first_message: "Welcome to the board room.",
+        first_message: "",
         language: "en",
         prompt: {
           prompt: BASE_PROMPT,
@@ -54,8 +58,8 @@ export function agentConfig(voices: readonly VoiceAssignment[]): Record<string, 
           },
         },
       },
-      language_presets: { ar: { overrides: { agent: { first_message: "أهلاً بكم في مجلس الإدارة. الكلمة مفتوحة." } } } },
-      tts: { model_id: LIVE_TTS_MODEL, ...(chair ? { voice_id: chair.voiceId } : {}), supported_voices: supported },
+      language_presets: { ar: { overrides: { agent: { first_message: "" } } } },
+      tts: { model_id: LIVE_TTS_MODEL, ...(fallback ? { voice_id: fallback.voiceId } : {}), supported_voices: supported },
       turn: { turn_timeout: TURN_TIMEOUT_SECONDS, turn_eagerness: "normal", silence_end_call_timeout: -1 },
       conversation: {
         max_duration_seconds: MAX_DURATION_SECONDS,

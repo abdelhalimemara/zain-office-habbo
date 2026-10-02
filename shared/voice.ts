@@ -3,7 +3,7 @@
  * (ELEVENLABS_API_KEY) and never leaves the server; the browser only ever gets audio bytes and text.
  */
 
-/** Speaker → ElevenLabs voice id. Speakers are board member profiles plus the chair ("default"). */
+/** Speaker → ElevenLabs voice id. Speakers are board member profiles plus the CEO's office ("default"), which reads the minutes. */
 export interface VoiceAssignment {
   profile: string;
   /** The voice the member speaks with: their own if set, else a stock fallback. */
@@ -40,14 +40,17 @@ export const VOICE_API = {
 /** ElevenLabs voice ids are short alphanumeric strings. */
 export const VOICE_ID_PATTERN = /^[A-Za-z0-9]{10,40}$/;
 export const TRANSCRIBE_MAX_BYTES = 10 * 1024 * 1024;
-/** Speaker id used for the chair's minutes turns. */
+/**
+ * The CEO's Hermes profile, which only takes the minutes. It is not a board member and has no seat or voice in the
+ * live room: the founder is the CEO there and leads the meeting. (The name is kept for compatibility.)
+ */
 export const CHAIR_PROFILE = "default";
 
 /** One member in the live room: the agent switches to their voice inside <tag>…</tag>. */
 export interface LiveSpeaker {
   /** Multi-voice label, e.g. "Hormozi". Letters only. */
   tag: string;
-  /** Hermes profile, or CHAIR_PROFILE for the chair. */
+  /** Board member's Hermes profile. */
   profile: string;
   name: string;
 }
@@ -77,21 +80,29 @@ export const LIVE_API = {
   end: (meetingId: string) => `/api/board/meetings/${encodeURIComponent(meetingId)}/live/end`,
 } as const;
 
-/** Splits an agent message into per-speaker parts by its multi-voice tags; untagged text belongs to the chair. */
+/**
+ * Splits an agent message into per-speaker parts by its multi-voice tags. There is no chair: untagged text goes to
+ * the member who spoke just before it in the message; untagged text that opens the message comes back with tag null,
+ * for the caller to give to the previous speaker or drop.
+ */
 export function splitBySpeaker(text: string, speakers: readonly LiveSpeaker[]): { tag: string | null; text: string }[] {
-  const tags = speakers.map((s) => s.tag).join("|");
+  const tags = speakers.map((s) => s.tag).filter(Boolean).join("|");
   if (!tags) return text.trim() ? [{ tag: null, text: text.trim() }] : [];
   const re = new RegExp(`<(${tags})>([\\s\\S]*?)(?:</\\1>|$)`, "g");
   const parts: { tag: string | null; text: string }[] = [];
+  const untagged = (said: string) => {
+    if (!said) return;
+    const prev = parts.at(-1);
+    if (prev) prev.text = `${prev.text} ${said}`;
+    else parts.push({ tag: null, text: said });
+  };
   let last = 0;
   for (const m of text.matchAll(re)) {
     const [whole, tag = "", said = ""] = m;
-    const before = text.slice(last, m.index).trim();
-    if (before) parts.push({ tag: null, text: before });
+    untagged(text.slice(last, m.index).trim());
     if (said.trim()) parts.push({ tag, text: said.trim() });
     last = (m.index ?? 0) + whole.length;
   }
-  const rest = text.slice(last).trim();
-  if (rest) parts.push({ tag: null, text: rest });
+  untagged(text.slice(last).trim());
   return parts;
 }

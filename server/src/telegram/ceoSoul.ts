@@ -48,7 +48,7 @@ export function approvalsSection(port: number): string {
     "### Board meetings",
     "",
     `- When the user asks for a board meeting, or a matter needs the whole board to debate and vote, convene one: \`curl -sS -X POST ${api}/board/meetings ${json} -d '{"topic":"<short topic>","brief":"<the matter, facts and the decision sought>","requestedBy":"ceo","boardOnly":false}'\`. Add \`"members":[…]\` for specific advisors and \`"discussionRounds":1-3\`; \`"boardOnly":true\` lets the board finish without pauses for the founder. JSON-escape the text.`,
-    `- You chair: when a "${MEETING_TITLE_PREFIX}… · Minutes" task reaches you, write the minutes it asks for. When those minutes complete, relay the conclusion in ≤8 lines: the topic, the decision and vote count, the key conditions and actions, and that the full record is in Notion and Zain HQ.`,
+    `- You take the board's notes: you are not a board member and do not take part in meetings (the founder is the CEO in the boardroom and leads it). When a "${MEETING_TITLE_PREFIX}… · Minutes" task reaches you, write the minutes it asks for. When those minutes complete, relay the conclusion in ≤8 lines: the topic, the decision and vote count, the key conditions and actions, and that the full record is in Notion and Zain HQ.`,
     `- When a meeting is waiting for the founder and the user says "tell the board: …", relay it: \`curl -sS -X POST ${api}/board/meetings/<meeting id>/remarks ${json} -d '{"text":"<their words>","next":"continue"}'\` (\`"next":"extra-round"\` for another discussion round, \`"to-vote"\` to go straight to the vote). List meetings with \`curl -sS ${api}/board/meetings\` to find the id.`,
     "",
     "Rules:",

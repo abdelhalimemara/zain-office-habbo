@@ -5,6 +5,9 @@ import type { BoardMeeting } from "../../shared/meetings";
 import { BOARD_MEMBERS } from "../../shared/board";
 import type { LiveSessionResponse } from "../../shared/voice";
 import type { FetchLike } from "../../server/src/hermes/client";
+import { memoryMemoryStore, type MemoryStore } from "../../server/src/board/memory/notes";
+import type { StoredMeeting } from "../../server/src/board/meetings/engine";
+import { memoryRecordStore, type RecordStore } from "../../server/src/board/recordStore";
 import { meetingBlocks, meetingProperties } from "../../server/src/notion/sync";
 import { STATUS_OPTIONS } from "../../server/src/notion/boardRoom";
 import { boardSoul } from "../../server/src/org/boardPersona";
@@ -102,7 +105,7 @@ beforeEach(async () => {
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
-function liveRoom(opts: { key?: string | null } = {}) {
+function liveRoom(opts: { key?: string | null; memory?: MemoryStore; meetingStore?: RecordStore<StoredMeeting> } = {}) {
   const labs = fakeLabs();
   const key = opts.key === undefined ? KEY : opts.key;
   const client = new ElevenLabsClient(async () => key, labs.fetchImpl, (l) => logs.push(l));
@@ -113,7 +116,10 @@ function liveRoom(opts: { key?: string | null } = {}) {
   const s = setup(kanban.routes, {
     voice,
     now: () => 1_790_000_000,
-    live: (meetings, v) => new LiveService({ client, agent, voice: v, meetings, souls: fileSouls(home), briefs: fileBriefs(root), sleep: async (ms) => void sleeps.push(ms) }),
+    ...(opts.memory ? { memory: opts.memory } : {}),
+    ...(opts.meetingStore ? { meetingStore: opts.meetingStore } : {}),
+    live: (meetings, v, memory) =>
+      new LiveService({ client, agent, voice: v, meetings, souls: fileSouls(home), briefs: fileBriefs(root), memory, sleep: async (ms) => void sleeps.push(ms) }),
   });
   const start = async (body: Record<string, unknown> = {}) => {
     const res = await s.send("POST", "/api/board/meetings", { topic: "Cairo office", brief: "Should we open one in 2027?", mode: "voice", ...body });
@@ -153,7 +159,6 @@ describe("a live session", () => {
     expect(body.signedUrl).toBe(SIGNED);
     expect(JSON.stringify(body)).not.toContain(KEY);
     expect(body.speakers).toEqual([
-      { tag: "Chair", profile: "default", name: "CEO (chair)" },
       { tag: "Hormozi", profile: HORMOZI, name: "Alex Hormozi" },
       { tag: "Buffett", profile: BUFFETT, name: "Warren Buffett" },
     ]);
@@ -164,9 +169,13 @@ describe("a live session", () => {
     expect(config.name).toBe("Zain Board Room");
     const { tts, turn, conversation: convo, agent } = config.conversation_config;
     const labels = (tts.supported_voices as { label: string; voice_id: string }[]).map((v) => v.label);
-    expect(labels).toEqual(["Chair", "Hormozi", "Alwaleed", "Bezos", "Buffett", "Jobs"]);
-    expect(tts.supported_voices[1].voice_id).toBe(OWN_VOICE);
-    expect(tts.voice_id).toBe(tts.supported_voices[0].voice_id);
+    expect(labels).toEqual(["Hormozi", "Alwaleed", "Bezos", "Buffett", "Jobs"]);
+    expect(tts.supported_voices[0].voice_id).toBe(OWN_VOICE);
+    // No chair voice: the default is the first member's, and the founder opens (empty first message).
+    expect(tts.voice_id).toBe(OWN_VOICE);
+    expect(agent.first_message).toBe("");
+    expect(config.conversation_config.language_presets.ar.overrides.agent.first_message).toBe("");
+    expect(JSON.stringify(config)).not.toMatch(/Chair|chair/);
     expect(tts.model_id).toBe("eleven_flash_v2");
     expect(config.conversation_config.language_presets.ar).toBeDefined();
     expect(agent.prompt.llm).toBe("claude-haiku-4-5");
@@ -188,7 +197,7 @@ describe("a live session", () => {
     const { overrides } = (await (await r.session(meeting.id)).json()) as LiveSessionResponse;
     const { prompt } = overrides.agent.prompt;
     expect(overrides.agent.language).toBe("en");
-    expect(overrides.agent.firstMessage).toBe("Welcome, Abdelhalim. We're here on Cairo office. The floor is open: who wants to start?");
+    expect(overrides.agent.firstMessage).toBe("");
     expect(prompt).toContain("Cairo office");
     expect(prompt).toContain("Should we open one in 2027?");
     expect(prompt).not.toContain("BRIEFMARKER");
@@ -196,6 +205,11 @@ describe("a live session", () => {
     expect(prompt).toContain("Grand Slam Offers");
     expect(prompt).toContain("<Buffett>: Warren Buffett. Seat: Business finance");
     expect(prompt).toContain("open-floor discussion");
+    expect(prompt).toContain("Abdelhalim, the founder, is the CEO of Zain Group. He leads this meeting");
+    expect(prompt).toContain("There is no chair");
+    expect(prompt).toContain("wait for him to speak first");
+    expect(prompt).not.toMatch(/<Chair>|chairs the meeting|the chair (opens|names)/);
+    expect(prompt).not.toContain("What the board already knows");
     expect(prompt).toMatch(/Wrap every line in its speaker's tag/);
     expect(prompt).toMatch(/no stage directions/);
     expect(prompt).toMatch(/answers in Arabic/);
@@ -206,8 +220,8 @@ describe("a live session", () => {
     const r = liveRoom();
     const { meeting } = await r.start({ brief: "Agenda:\n1. Budget\n2. Hiring" });
     const { overrides } = (await (await r.session(meeting.id)).json()) as LiveSessionResponse;
-    expect(overrides.agent.prompt.prompt).toContain("Take it item by item");
-    expect(overrides.agent.firstMessage).toContain("agenda item by item");
+    expect(overrides.agent.prompt.prompt).toContain("takes it item by item");
+    expect(overrides.agent.firstMessage).toBe("");
   });
 
   it("updates the agent when a voice changes, and recreates it if it was deleted", async () => {
@@ -218,7 +232,7 @@ describe("a live session", () => {
     expect(put.status).toBe(200);
     await new Promise((resolve) => setTimeout(resolve, 20));
     const [patch] = r.labs.called("PATCH", `/v1/convai/agents/${AGENT}`);
-    expect((patch!.json as any).conversation_config.tts.supported_voices[4]).toMatchObject({ label: "Buffett", voice_id: "BuffettVoice0123456789" });
+    expect((patch!.json as any).conversation_config.tts.supported_voices[3]).toMatchObject({ label: "Buffett", voice_id: "BuffettVoice0123456789" });
 
     r.labs.state.agentGone = true;
     await r.send("PUT", `/api/board/voices/${BUFFETT}`, { voiceId: null });
@@ -252,7 +266,6 @@ describe("ending a live session", () => {
     const ended = (await res.json()).meeting as BoardMeeting;
     expect(ended).toMatchObject({ status: "voting", currentRound: 2, discussionRounds: 0, liveConversationIds: [CONV] });
     expect(ended.turns.map((t) => [t.speaker, t.text, t.at, t.round, t.kind])).toEqual([
-      ["default", "Welcome, Abdelhalim. The floor is open: who wants to start?", 1_790_000_100, 1, "discussion"],
       ["founder", "Should we open in Cairo?", 1_790_000_104, 1, "discussion"],
       [HORMOZI, "Only with a grand slam offer.", 1_790_000_107, 1, "discussion"],
       [BUFFETT, "And only if the cash comes back.", 1_790_000_107, 1, "discussion"],
@@ -277,7 +290,7 @@ describe("ending a live session", () => {
     const [a, b] = await Promise.all([r.end(meeting.id, { conversationId: CONV }), r.end(meeting.id, { conversationId: CONV })]);
     expect([a.status, b.status]).toEqual([200, 200]);
     const again = (await (await r.end(meeting.id, { conversationId: CONV })).json()).meeting as BoardMeeting;
-    expect(again.turns).toHaveLength(5);
+    expect(again.turns).toHaveLength(4);
     expect(r.kanban.byTitle("· Vote")).toHaveLength(2);
     expect(r.labs.called("GET", "/v1/convai/conversations/")).toHaveLength(1);
     expect((await r.end(meeting.id, { conversationId: "conv_another000000001" })).status).toBe(409);
@@ -289,11 +302,11 @@ describe("ending a live session", () => {
     await r.session(meeting.id);
     const checkpoint = (await (await r.end(meeting.id, { conversationId: CONV, final: false })).json()).meeting as BoardMeeting;
     expect(checkpoint).toMatchObject({ status: "live", liveConversationIds: [CONV] });
-    expect(checkpoint.turns).toHaveLength(5);
+    expect(checkpoint.turns).toHaveLength(4);
     expect(r.kanban.tasks.size).toBe(0);
 
     const { overrides } = (await (await r.session(meeting.id)).json()) as LiveSessionResponse;
-    expect(overrides.agent.firstMessage).toBe("We're back, Abdelhalim. Let's pick up where we left off.");
+    expect(overrides.agent.firstMessage).toBe("");
     expect(overrides.agent.prompt.prompt).toContain("## Earlier in this meeting");
     expect(overrides.agent.prompt.prompt).toContain("Hormozi: Only with a grand slam offer.\nBuffett: And only if the cash comes back.\nAbdelhalim: Fair.");
 
@@ -353,7 +366,7 @@ describe("Notion for live meetings", () => {
 
 describe("live prompt parts", () => {
   it("tags speakers with letters only", () => {
-    expect(["default", HORMOZI, "zain-board-alwaleed", "x-2b"].map(speakerTag)).toEqual(["Chair", "Hormozi", "Alwaleed", "B"]);
+    expect(["default", HORMOZI, "zain-board-alwaleed", "x-2b"].map(speakerTag)).toEqual(["", "Hormozi", "Alwaleed", "B"]);
   });
 
   it("tells an agenda from a plain brief", () => {
@@ -406,6 +419,58 @@ describe("live prompt parts", () => {
     const sent = JSON.stringify(await res.json()) + JSON.stringify(r.labs.calls.map((c) => c.json ?? null));
     expect(sent).not.toContain("BRIEFMARKER");
     expect(sent).toContain("Grand Slam Offers");
+  });
+
+  it("tells the room what the board already knows, but never a note or ledger line that repeats a private brief", async () => {
+    const secret = "MEMMARKER-OMEGA the founder's private salary floor is SAR 90k a month";
+    await mkdir(join(root, ".zain", "board"), { recursive: true });
+    await writeFile(join(root, ".zain", "board", `${HORMOZI}.md`), `${PRIVATE_BRIEF}\n\n${secret}\n`);
+    const memory = memoryMemoryStore();
+    await memory.add(HORMOZI, { insights: ["Founder wants Studio priced as a premium brand.", `Remember: ${secret}, keep it quiet.`], at: 1_789_000_000 });
+    await memory.add(BUFFETT, { insights: ["Founder will not take on debt.", "MEMMARKER-OMEGA the founder's private salary floor"], at: 1_789_000_000 });
+    const past: BoardMeeting = {
+      id: "mtg_00000000aa", topic: "Studio pricing", brief: "b", members: [HORMOZI, BUFFETT], boardOnly: true, discussionRounds: 1,
+      status: "concluded", currentRound: 3, turns: [], decision: "approved", conclusion: "Raise retainers by 20%.", requestedBy: "hq", createdAt: 1_789_000_000, updatedAt: 1_789_000_100,
+      votes: [
+        { member: HORMOZI, vote: "approve", rationale: `As noted, ${secret}.` },
+        { member: BUFFETT, vote: "approve", rationale: "Pricing power is the best moat." },
+      ],
+    };
+    const r = liveRoom({ memory, meetingStore: memoryRecordStore<StoredMeeting>([{ id: past.id, meeting: past, rounds: [] }]) });
+    const { meeting } = await r.start();
+    const res = await r.session(meeting.id);
+    const body = (await res.json()) as LiveSessionResponse;
+    const sent = JSON.stringify(body) + JSON.stringify(r.labs.calls.map((c) => c.json ?? null));
+    expect(sent).not.toMatch(/MEMMARKER|BRIEFMARKER|salary floor/);
+    const { prompt } = body.overrides.agent.prompt;
+    expect(prompt).toContain("## What the board already knows");
+    expect(prompt).toContain(`"Studio pricing" → approved`);
+    expect(prompt).toContain("Warren Buffett: approve — Pricing power is the best moat.");
+    expect(prompt).not.toContain("Alex Hormozi: approve");
+    expect(prompt).toContain("### Alex Hormozi remembers\n- 2026-09-10: Founder wants Studio priced as a premium brand.");
+    expect(prompt).toContain("Founder will not take on debt.");
+    expect(prompt.length).toBeLessThan(12_000);
+  });
+
+  it("keeps the live prompt under 12k characters with a full memory", async () => {
+    const memory = memoryMemoryStore();
+    for (const p of [HORMOZI, BUFFETT]) {
+      for (let i = 0; i < 40; i++) await memory.add(p, { insights: [`Insight ${i} for ${p}: ${"durable detail ".repeat(12)}`], at: 1_789_000_000 + i });
+    }
+    const stored = Array.from({ length: 12 }, (_, i): StoredMeeting => {
+      const id = `mtg_00000001${String(i).padStart(2, "0")}`;
+      const m: BoardMeeting = {
+        id, topic: `Past topic ${i} ${"x".repeat(100)}`, brief: "b", members: [HORMOZI, BUFFETT], boardOnly: true, discussionRounds: 1, status: "concluded",
+        currentRound: 3, turns: [], decision: "rejected", conclusion: "long minutes ".repeat(200), requestedBy: "hq", createdAt: 1_789_000_000 + i, updatedAt: 1_789_000_000 + i,
+        votes: [{ member: HORMOZI, vote: "reject", rationale: "because ".repeat(100) }, { member: BUFFETT, vote: "reject", rationale: "no ".repeat(100) }],
+      };
+      return { id, meeting: m, rounds: [] };
+    });
+    const r = liveRoom({ memory, meetingStore: memoryRecordStore(stored) });
+    const { meeting } = await r.start({ brief: "Should we open one in 2027? ".repeat(10) });
+    const { prompt } = ((await (await r.session(meeting.id)).json()) as LiveSessionResponse).overrides.agent.prompt;
+    expect(prompt).toContain("Insight 39 for zain-board-hormozi");
+    expect(prompt.length).toBeLessThan(12_000);
   });
 
   it("reads no SOUL for a profile that is not a plain name", async () => {
