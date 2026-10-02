@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { join } from "node:path";
+import { AccessVerifier, loadAccessConfig } from "./access";
 import { DEFAULT_PORT, createApp, defaultClients, guardOptions } from "./app";
 import { ConsultationLog, isConsultationRecord } from "./board/consultLog";
 import { MeetingEngine, isStoredMeeting } from "./board/meetings/engine";
@@ -56,7 +57,7 @@ const app = createApp({
   hires,
   teams: fileTeamStore(process.cwd()),
   briefs: fileBriefs(process.cwd()),
-  guard: guardOptions(port, process.env),
+  guard: { ...guardOptions(port, process.env), access: remoteAccess() },
   reconcilerStatus: () => reconciler.status(),
   meetings,
   consultations,
@@ -74,3 +75,11 @@ serve({ fetch: app.fetch, hostname: HOST, port }, (info) => {
   console.log(`Zain HQ server listening on http://${HOST}:${info.port}`);
   reconciler.start();
 });
+
+/** Remote access via the Cloudflare Tunnel, from .zain/tunnel.json; a broken file stops the server rather than opening up. */
+function remoteAccess(): AccessVerifier | null {
+  const config = loadAccessConfig(process.cwd());
+  if (!config) return null;
+  console.log(`zain: remote access on https://${config.host} for ${config.emails.length} allowed email(s)`);
+  return new AccessVerifier(config);
+}

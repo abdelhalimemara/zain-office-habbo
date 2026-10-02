@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { VOICE_API } from "../../shared/voice";
+import { ACCESS_HEADER, type AccessVerifier } from "./access";
 import { HttpError } from "./http";
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
@@ -14,6 +15,8 @@ export interface GuardOptions {
   port: number;
   /** Extra exact origins, e.g. from ZAIN_ALLOWED_ORIGINS. */
   extraOrigins?: readonly string[];
+  /** Remote access through a Cloudflare Tunnel; requests to its host must carry a valid Access token. */
+  access?: AccessVerifier | null;
 }
 
 export function allowedOrigins({ port, extraOrigins = [] }: GuardOptions): Set<string> {
@@ -38,13 +41,22 @@ function hostname(host: string): string {
 
 /**
  * The server holds a Hermes token and can create mandates and profiles, so it only serves
- * loopback hosts (defeats DNS rebinding) and only accepts JSON writes from known local origins
+ * loopback hosts (defeats DNS rebinding), plus the tunnel host when a request carries a valid Cloudflare
+ * Access token, and only accepts JSON writes from known origins
  * (a non-simple content type forces a CORS preflight, which fails since no CORS headers are sent).
  */
 export function localOnly(options: GuardOptions): MiddlewareHandler {
+  const access = options.access ?? null;
   const origins = allowedOrigins(options);
+  if (access) origins.add(`https://${access.config.host}`);
   return async (c, next) => {
-    if (!LOCAL_HOSTS.has(hostname(c.req.header("host") ?? ""))) throw new HttpError(403, "forbidden host");
+    const host = hostname(c.req.header("host") ?? "");
+    if (access && host === access.config.host) {
+      // Through the tunnel: only requests Cloudflare Access signed for an allowed person.
+      if (!(await access.verify(c.req.header(ACCESS_HEADER)))) throw new HttpError(403, "access required");
+    } else if (!LOCAL_HOSTS.has(host)) {
+      throw new HttpError(403, "forbidden host");
+    }
     if (c.req.method !== "GET" && c.req.method !== "HEAD") {
       const contentType = c.req.header("content-type") ?? "";
       if (AUDIO_PATHS.has(c.req.path)) {
