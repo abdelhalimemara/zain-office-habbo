@@ -1,5 +1,5 @@
 import { ROSTER, type Rank } from "../../shared/roster";
-import { HQ_TEAMS, type FloorImage, type FloorSeat, type SeatRole } from "./layouts/floorImages";
+import { HQ_TEAMS, type FloorPlan, type PlanSeat, type SeatRole } from "./plan";
 
 export interface SeatCandidate {
   profile: string;
@@ -7,7 +7,7 @@ export interface SeatCandidate {
 }
 
 export interface SeatAssignment {
-  seats: Map<string, FloorSeat>;
+  seats: Map<string, PlanSeat>;
   /** Agents with no seat left; they stand in the idle areas. */
   overflow: string[];
 }
@@ -28,17 +28,17 @@ const ROLE_FOR_RANK: Partial<Record<Rank, SeatRole>> = { ceo: "ceo", vp: "manage
  * Deterministic seating: the CEO, the division manager and board members take their role seats; HQ leads sit in
  * their department; everyone else fills the remaining workstations in roster order.
  */
-export function assignSeats(floor: FloorImage, agents: readonly SeatCandidate[]): SeatAssignment {
-  const seats = new Map<string, FloorSeat>();
+export function assignSeats(floor: FloorPlan, agents: readonly SeatCandidate[]): SeatAssignment {
+  const seats = new Map<string, PlanSeat>();
   const overflow: string[] = [];
   const taken = new Set<string>();
-  const take = (seat: FloorSeat | undefined, profile: string): boolean => {
+  const take = (seat: PlanSeat | undefined, profile: string): boolean => {
     if (!seat) return false;
     taken.add(seat.id);
     seats.set(profile, seat);
     return true;
   };
-  const free = (pred: (s: FloorSeat) => boolean) => floor.seats.find((s) => !taken.has(s.id) && pred(s));
+  const free = (pred: (s: PlanSeat) => boolean) => floor.seats.find((s) => !taken.has(s.id) && pred(s));
 
   const rest: SeatCandidate[] = [];
   for (const a of rosterOrder(agents)) {

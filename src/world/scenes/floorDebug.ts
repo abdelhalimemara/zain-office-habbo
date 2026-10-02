@@ -1,23 +1,20 @@
 import { Graphics } from "pixi.js";
-import type { FloorImage } from "../layouts/floorImages";
+import { toScreen } from "../iso";
+import { walkGrid } from "../plan/grid";
+import type { FloorPlan } from "../plan";
 
-/** Dev aid: waypoint graph (blue), seats (magenta) and idle spots (green) over the floor image. */
-export function drawFloorDebug(floor: FloorImage): Graphics {
+/** Dev aid: blocked tiles (red), seats (magenta, board gold) and idle spots (green) over the floor. */
+export function drawFloorDebug(plan: FloorPlan): Graphics {
   const g = new Graphics();
-  const at = new Map<string, { x: number; y: number }>();
-  for (const w of floor.waypoints) at.set(w.id, w);
-  for (const w of floor.waypoints) {
-    for (const l of w.links) {
-      const o = at.get(l);
-      if (o) g.moveTo(w.x, w.y).lineTo(o.x, o.y).stroke({ color: 0x2f6bff, width: 3, alpha: 0.8 });
-    }
+  const grid = walkGrid(plan);
+  const diamond = (x: number, y: number, inset: number, color: number, alpha: number) => {
+    const pts = [toScreen(x + inset, y + inset), toScreen(x + 1 - inset, y + inset), toScreen(x + 1 - inset, y + 1 - inset), toScreen(x + inset, y + 1 - inset)];
+    g.poly(pts.flatMap((p) => [p.x, p.y])).fill({ color, alpha });
+  };
+  for (let y = 0; y < plan.rows; y++) {
+    for (let x = 0; x < plan.cols; x++) if (grid.blocked[y * plan.cols + x]) diamond(x, y, 0.05, 0xff3b3b, 0.22);
   }
-  for (const s of [...floor.seats, ...floor.idle]) {
-    const via = at.get(s.via);
-    if (via) g.moveTo(s.x, s.y).lineTo(via.x, via.y).stroke({ color: 0x2fc6ff, width: 1.5, alpha: 0.7 });
-  }
-  for (const w of floor.waypoints) g.rect(w.x - 5, w.y - 5, 10, 10).fill(0x2f6bff);
-  for (const s of floor.seats) g.circle(s.x, s.y, 6).fill(s.role === "board" ? 0xf2c230 : 0xff2bb4);
-  for (const s of floor.idle) g.circle(s.x, s.y, 6).fill(0x22c55e);
+  for (const s of plan.seats) diamond(s.x, s.y, 0.2, s.role === "board" ? 0xf2c230 : 0xff2bb4, 0.75);
+  for (const s of plan.idle) diamond(s.x, s.y, 0.25, 0x22c55e, 0.85);
   return g;
 }
