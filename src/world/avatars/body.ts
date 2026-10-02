@@ -175,13 +175,11 @@ export function upperArmPaint(spec: AvatarSpec, d: Dims): Paint {
   };
 }
 
-export function foreArmPaint(spec: AvatarSpec, d: Dims, thumb: boolean): Paint {
+export function foreArmPaint(spec: AvatarSpec): Paint {
   const t = spec.top;
   const sleeve = t.sleeve ?? (t.kind === "dress" ? "none" : t.kind === "overshirt" ? "short" : "long");
   const shirt = t.accent ?? 0xeeeae4;
-  const handD = d.armD;
-  return (_a, b, c) => {
-    if (b >= handD) return thumb && c < HAND_H && c >= 1 && _a >= 1 && _a <= 2 ? shade(spec.skin, 0.04) : -1;
+  return (_a, _b, c) => {
     if (c < HAND_H) return spec.skin;
     if (sleeve !== "long") return spec.skin;
     switch (t.kind) {

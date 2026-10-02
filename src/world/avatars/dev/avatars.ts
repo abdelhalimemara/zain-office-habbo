@@ -1,7 +1,7 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, type Texture } from "pixi.js";
 import { SPRITE_URLS } from "../../assets/floorAssets";
 import type { SpriteKey } from "../../characters";
-import { AVATAR_KEYS, avatarCacheSize, EMOTES, FACINGS, POSES, portraitTexture, setAvatarRenderer, specFor, VoxelAvatar } from "../index";
+import { AVATAR_KEYS, avatarCacheSize, loadAvatarAtlases, EMOTES, FACINGS, POSES, portraitTexture, setAvatarRenderer, specFor, VoxelAvatar } from "../index";
 import type { Emote, Facing, Pose } from "../types";
 
 const params = new URLSearchParams(location.search);
@@ -14,7 +14,7 @@ const keys = AVATAR_KEYS.filter((k) => !filter || filter.split(",").some((f) => 
 
 const bar = document.getElementById("bar")!;
 if (mode === "solo") bar.style.display = "none";
-for (const m of ["compare", "facings", "poses", "emotes", "portraits", "crowd"]) {
+for (const m of ["compare", "sheet", "facings", "poses", "emotes", "portraits", "crowd"]) {
   const a = document.createElement("a");
   a.href = `?mode=${m}${filter ? `&keys=${filter}` : ""}`;
   a.textContent = m;
@@ -80,6 +80,20 @@ function grid(root: Container, columns: { title: string; facing: Facing; pose: P
 
 function columnsFor(m: string) {
   if (m === "facings") return FACINGS.flatMap((f) => POSES.map((p) => ({ title: `${f} ${p}`, facing: f, pose: p, emote: "none" as Emote, warm: p === "walk" ? 220 : 130 })));
+  if (m === "sheet") {
+    const col = (title: string, pose: Pose, emote: Emote, warm: number, facing: Facing = "SW") => ({ title, facing, pose, emote, warm });
+    return [
+      col("stand", "stand", "none", 0),
+      col("walk mid-stride", "walk", "none", 111),
+      col("walk SE", "walk", "none", 441, "SE"),
+      col("sit", "sit", "none", 0),
+      col("type", "type", "none", 0),
+      col("wave", "stand", "wave", 320),
+      col("thumbs up", "stand", "thumbsUp", 10),
+      col("thinking", "stand", "thinking", 10),
+      col("walk NE", "walk", "none", 111, "NE"),
+    ];
+  }
   if (m === "poses") {
     return [0, 1, 2, 3, 4, 5]
       .map((f) => ({ title: `walk ${f}`, facing: "SW" as Facing, pose: "walk" as Pose, emote: "none" as Emote, warm: f * 110 + 1 }))
@@ -129,6 +143,7 @@ function crowd(root: Container): [number, number] {
 async function main(): Promise<void> {
   await app.init({ background: 0xc8c8cd, width: 400, height: 300, antialias: true, resolution: 1 });
   setAvatarRenderer(app.renderer);
+  if (params.get("voxel") !== "1") await loadAvatarAtlases();
   document.getElementById("stage")!.appendChild(app.canvas);
   const root = new Container();
   app.stage.addChild(root);

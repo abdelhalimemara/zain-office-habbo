@@ -109,9 +109,11 @@ export function buildParts(spec: AvatarSpec, rig: Rig): NamedPart[] {
     const upperLen = d.upperArm - pivotDown;
     add(`upper${sfx}`, d.armW, d.armD, d.upperArm, mul(shoulderM, translate(-d.armW / 2, -d.armD / 2, -upperLen)), upperArmPaint(spec, d), 9 + side);
     const elbowM = mul(shoulderM, mul(translate(0, 0, -upperLen), pitch(elbow)));
-    const thumb = side > 0 && rig.thumbL;
-    const foreD = d.armD + (thumb ? 2 : 0);
-    add(`fore${sfx}`, d.armW, foreD, d.foreArm + 1, mul(elbowM, translate(-d.armW / 2, -d.armD / 2, -d.foreArm)), foreArmPaint(spec, d, thumb), 11 + side);
+    add(`fore${sfx}`, d.armW, d.armD, d.foreArm + 1, mul(elbowM, translate(-d.armW / 2, -d.armD / 2, -d.foreArm)), foreArmPaint(spec), 11 + side);
+    if (side > 0 && rig.thumbL) {
+      const skin = spec.skin;
+      add("thumb", 2, 2, 3, mul(elbowM, translate(-d.armW / 2 + Math.floor((d.armW - 2) / 2), d.armD / 2, 1 - d.foreArm)), () => skin, 15);
+    }
   }
 
   const neckTop = L + d.torsoH + 1;

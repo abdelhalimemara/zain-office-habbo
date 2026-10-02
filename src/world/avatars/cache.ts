@@ -4,7 +4,8 @@ import { bodyOf } from "./body";
 import type { Mesh } from "./mesh";
 import { rigFor } from "./rig";
 import { REST_RIG } from "./model";
-import type { AvatarSpec, Emote, Facing, Pose } from "./types";
+import { texturedFigure } from "./textured";
+import type { AvatarSpec, Emote, Facing, Pose, Rig } from "./types";
 
 /** One cached pose frame: either a baked texture or (without a renderer) a shared GraphicsContext. */
 export interface FrameArt {
@@ -15,6 +16,15 @@ export interface FrameArt {
   y: number;
   /** How far the body is lowered in this frame (sitting, stride), in voxels. */
   drop: number;
+  /** Draw mirrored (SE and NE reuse the SW and NW art). */
+  mirror: boolean;
+}
+
+/** Screen px per model unit; textured figures may stretch vertically to match their reference. */
+export interface AvatarScale {
+  sx: number;
+  sy: number;
+  textured: boolean;
 }
 
 let renderer: Renderer | null = null;
@@ -71,13 +81,27 @@ export function bake(mesh: Mesh, unit: number, resolution: number): FrameArt {
   if (!renderer) {
     const context = new GraphicsContext();
     drawMesh(context, mesh, unit);
-    return { texture: null, context, x: 0, y: 0, drop: 0 };
+    return { texture: null, context, x: 0, y: 0, drop: 0, mirror: false };
   }
   const g = new Graphics();
   drawMesh(g, mesh, unit);
   const texture = renderer.generateTexture({ target: g, frame: new Rectangle(x, y, w, h), resolution, antialias: false });
   g.destroy();
-  return { texture, context: null, x, y, drop: 0 };
+  return { texture, context: null, x, y, drop: 0, mirror: false };
+}
+
+const MIRROR: Readonly<Record<Facing, Extract<Facing, "SW" | "NW">>> = { SW: "SW", SE: "SW", NW: "NW", NE: "NW" };
+
+function bakeTextured(spec: AvatarSpec, rig: Rig, facing: Facing, scale: AvatarScale, resolution: number): FrameArt | null {
+  if (!renderer) return null;
+  const fig = texturedFigure(spec, rig, MIRROR[facing], scale.sx, scale.sy);
+  if (!fig) return null;
+  const b = fig.getLocalBounds();
+  const x = Math.floor(b.minX) - 1;
+  const y = Math.floor(b.minY) - 1;
+  const texture = renderer.generateTexture({ target: fig, frame: new Rectangle(x, y, Math.ceil(b.maxX) + 1 - x, Math.ceil(b.maxY) + 1 - y), resolution, antialias: true });
+  fig.destroy({ children: true });
+  return { texture, context: null, x, y, drop: rig.drop, mirror: facing !== MIRROR[facing] };
 }
 
 export function frameArt(
@@ -87,17 +111,18 @@ export function frameArt(
   poseFrame: number,
   emote: Emote,
   emoteFrame: number,
-  unit: number,
+  scale: AvatarScale,
   resolution: number,
 ): FrameArt {
-  const key = `${spec.key}|${unit.toFixed(3)}|${resolution}|${facing}|${pose}${poseFrame}|${emote}${emoteFrame}|${renderer ? "t" : "g"}`;
+  const look = scale.textured ? MIRROR[facing] + "x" : facing;
+  const key = `${spec.key}|${scale.sx.toFixed(3)}x${scale.sy.toFixed(3)}|${resolution}|${look}|${pose}${poseFrame}|${emote}${emoteFrame}|${renderer ? "t" : "g"}`;
   let art = frames.get(key);
   if (!art) {
     const rig = rigForFrame(spec, pose, poseFrame, emote, emoteFrame);
-    art = { ...bake(buildMesh(spec, rig, facing), unit, resolution), drop: rig.drop };
+    art = (scale.textured && bakeTextured(spec, rig, facing, scale, resolution)) || { ...bake(buildMesh(spec, rig, facing), scale.sx, resolution), drop: rig.drop };
     frames.set(key, art);
   }
-  return art;
+  return scale.textured && art.mirror !== (facing !== MIRROR[facing]) ? { ...art, mirror: !art.mirror } : art;
 }
 
 export function avatarCacheSize(): number {

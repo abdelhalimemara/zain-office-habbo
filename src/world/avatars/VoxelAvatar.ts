@@ -1,10 +1,11 @@
 import { Container, Graphics, Point, Sprite, Texture, type DestroyOptions, type PointData } from "pixi.js";
 import { AvatarAnimator } from "./animator";
-import { frameArt, unitFor, type FrameArt } from "./cache";
+import { avatarRenderer, frameArt, unitFor, type AvatarScale, type FrameArt } from "./cache";
 import { EmoteFx } from "./fx";
 import { Z_SCALE } from "./mesh";
 import { seatHeight } from "./model";
 import { EMOTE_CLIPS } from "./rig";
+import { texturedScale } from "./textured";
 import type { AvatarSpec, Emote, Facing, Pose } from "./types";
 
 export interface VoxelAvatarOptions {
@@ -23,8 +24,11 @@ export interface VoxelAvatarOptions {
  */
 export class VoxelAvatar extends Container {
   readonly spec: AvatarSpec;
-  /** Screen px per voxel step. */
+  /** Screen px per voxel step (horizontal). */
   readonly unit: number;
+  /** Whether this avatar draws the reference-textured boxes (atlas loaded and a renderer set). */
+  readonly textured: boolean;
+  private readonly px: AvatarScale;
   readonly footAnchor: PointData = new Point(0, 0);
   /** Where the hips meet a chair seat, relative to the feet (sit/type poses): place the avatar at seat − seatOffset. */
   readonly seatOffset: PointData;
@@ -43,15 +47,18 @@ export class VoxelAvatar extends Container {
   constructor(spec: AvatarSpec, opts: VoxelAvatarOptions) {
     super();
     this.spec = spec;
-    this.unit = unitFor(spec, opts.height);
+    const ts = avatarRenderer() ? texturedScale(spec, opts.height) : null;
+    this.textured = ts !== null;
+    this.px = ts ? { sx: ts.sx, sy: ts.sy, textured: true } : { sx: unitFor(spec, opts.height), sy: unitFor(spec, opts.height), textured: false };
+    this.unit = this.px.sx;
     this.resolution = opts.resolution ?? (typeof window === "undefined" ? 1 : Math.min(2, window.devicePixelRatio || 1));
     this.anim = new AvatarAnimator(opts.reducedMotion ?? false);
     this.anim.setPose(opts.pose ?? "stand");
     this.facingValue = opts.facing ?? "SW";
-    this.seatOffset = new Point(0, -seatHeight(spec) * Z_SCALE * this.unit);
-    this.headTop = new Point(0, -opts.height);
+    this.seatOffset = new Point(0, -seatHeight(spec) * Z_SCALE * this.px.sy);
+    this.headTop = new Point(0, ts ? ts.top : -opts.height);
     this.fx.scale.set(this.unit);
-    this.fx.position.set(0, -opts.height);
+    this.fx.position.set(0, this.headTop.y);
     this.addChild(this.sprite, this.vector, this.fx);
     this.resetSlots();
   }
@@ -118,13 +125,14 @@ export class VoxelAvatar extends Container {
     const i = a.poseFrame * this.slotEmoteFrames + a.emoteFrame;
     let art = this.slots[i];
     if (!art) {
-      art = frameArt(this.spec, this.facingValue, a.pose, a.poseFrame, a.emote, a.emoteFrame, this.unit, this.resolution);
+      art = frameArt(this.spec, this.facingValue, a.pose, a.poseFrame, a.emote, a.emoteFrame, this.px, this.resolution);
       this.slots[i] = art;
     }
-    const hop = a.hop * Z_SCALE * this.unit;
+    const hop = a.hop * Z_SCALE * this.px.sy;
     if (art.texture) {
       this.sprite.texture = art.texture;
-      this.sprite.position.set(art.x, art.y - hop);
+      this.sprite.scale.x = art.mirror ? -1 : 1;
+      this.sprite.position.set(art.mirror ? -art.x : art.x, art.y - hop);
       this.sprite.visible = true;
       this.vector.visible = false;
     } else if (art.context) {
@@ -133,7 +141,7 @@ export class VoxelAvatar extends Container {
       this.vector.visible = true;
       this.sprite.visible = false;
     }
-    this.fx.y = this.headTop.y + art.drop * Z_SCALE * this.unit - hop;
+    this.fx.y = this.headTop.y + art.drop * Z_SCALE * this.px.sy - hop;
   }
 
   override destroy(options?: DestroyOptions): void {
