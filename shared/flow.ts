@@ -38,8 +38,19 @@ function createdInDivision(task: KanbanTask, assignee: RosterAgent, roster?: rea
   return !!creator && WORKER_RANKS.has(creator.rank) && creator.division === assignee.division;
 }
 
+const TEAM_REVIEW_MARKER = /<!-- zain-team-review:(t_[A-Za-z0-9_]+) -->/;
+
+export function teamReviewMarker(taskId: string): string {
+  return `<!-- zain-team-review:${taskId} -->`;
+}
+
+/** The task a team-review helper (HQ waking a manager to review their team's work) reviews; null for other tasks. */
+export function teamReviewTarget(task: Pick<KanbanTask, "body">): string | null {
+  return TEAM_REVIEW_MARKER.exec(task.body ?? "")?.[1] ?? null;
+}
+
 export function isMandate(task: KanbanTask, roster?: readonly RosterAgent[]): boolean {
-  if (!task.assignee) return false;
+  if (!task.assignee || teamReviewTarget(task)) return false;
   const agent = findAgent(task.assignee, roster);
   return agent?.rank === "vp" && !createdInDivision(task, agent, roster);
 }

@@ -20,6 +20,7 @@ import { NotionBoardSink } from "./notion/sync";
 import { fileHireStore, fullRoster } from "./org/hireStore";
 import { fileBriefs } from "./org/privateBriefs";
 import { Reconciler } from "./org/reconcile";
+import { TeamReviews } from "./org/teamReviews";
 import { fileTeamStore } from "./org/teamStore";
 import { fileVoiceStore } from "./voice/assignments";
 import { ElevenLabsClient, envApiKey } from "./voice/elevenlabs";
@@ -97,11 +98,12 @@ const audits = new AuditEngine({
   root,
   publicBase: process.env.ZAIN_PUBLIC_URL ?? (tunnel ? `https://${tunnel.host}` : DEFAULT_PUBLIC_BASE),
 });
+const teamReviews = new TeamReviews({ hermes: clients.hermes, hires });
 const reconciler = new Reconciler({
   hermes: clients.hermes,
   hires,
   ceoWake: clients.ceoWake,
-  steps: [() => meetings.tick(), () => consultations.tick(), () => audits.tick()],
+  steps: [() => meetings.tick(), () => consultations.tick(), () => audits.tick(), () => teamReviews.tick()],
 });
 const app = createApp({
   ...clients,
