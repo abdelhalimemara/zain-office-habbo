@@ -66,6 +66,8 @@ export interface LiveSessionResponse {
 export interface EndLiveRequest {
   /** The ElevenLabs conversation id from the session; the server pulls the transcript from ElevenLabs. */
   conversationId: string;
+  /** false: save a dropped session's transcript and keep the meeting live (reconnect). Default true: go to the vote. */
+  final?: boolean;
 }
 
 export const LIVE_API = {

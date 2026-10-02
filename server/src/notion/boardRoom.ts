@@ -13,7 +13,7 @@ export interface BoardRoomIds {
   dataSourceId: string;
 }
 
-export const STATUS_OPTIONS = ["In round", "Awaiting founder", "Voting", "Minutes", "Concluded", "Cancelled", "Awaiting answers", "Answered"];
+export const STATUS_OPTIONS = ["Live", "In round", "Awaiting founder", "Voting", "Minutes", "Concluded", "Cancelled", "Awaiting answers", "Answered"];
 export const DECISION_OPTIONS = ["Approved", "Approved with conditions", "Rejected", "No decision"];
 export const REQUESTED_BY_OPTIONS = ["HQ", "CEO", "Board"];
 

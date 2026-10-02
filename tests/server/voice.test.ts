@@ -70,7 +70,7 @@ function voiceRoom(opts: { key?: string | null; respond?: Parameters<typeof fake
     await s.send("POST", `/api/board/meetings/${meeting.id}/remarks`, { text: "Go on.", next: "continue" });
     return s.meetings.get(meeting.id);
   };
-  return { ...s, labs, audio, transcribe, meetingWithTurns };
+  return { ...s, kanban, labs, audio, transcribe, meetingWithTurns };
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 20));
@@ -252,12 +252,20 @@ describe("turn audio", () => {
     await flush();
     expect(chat.labs.calls).toEqual([]);
 
+    // A voice meeting's live turns were already spoken in the room; only the vote that follows is prefetched.
     const live = voiceRoom();
-    const m = await live.meetingWithTurns("voice");
+    const res = await live.send("POST", "/api/board/meetings", { topic: "Cairo office", brief: "Open one in 2027?", mode: "voice" });
+    const { meeting } = (await res.json()) as { meeting: BoardMeeting };
+    await live.meetings.recordLive(meeting.id, "conv_room000000000001", [{ round: 1, kind: "discussion", speaker: HORMOZI, text: "Raise prices.", at: 1 }], true);
     await flush();
-    expect(m.mode).toBe("voice");
-    expect(live.labs.calls).toHaveLength(2);
-    expect((await live.audio(m.id, 0)).status).toBe(200);
+    expect(live.labs.calls).toEqual([]);
+    live.kanban.completeAll("· Vote", () => "VOTE: approve\nCairo is promising.");
+    await live.meetings.tick();
+    const m = await live.meetings.get(meeting.id);
+    expect(m.turns.map((t) => t.speaker)).toEqual([HORMOZI, HORMOZI, BUFFETT]);
+    // Prefetch is fire-and-forget: wait for it rather than for a fixed delay.
+    await vi.waitFor(() => expect(live.labs.calls).toHaveLength(2), { timeout: 2000 });
+    expect((await live.audio(m.id, 1)).status).toBe(200);
     expect(live.labs.calls).toHaveLength(2);
   });
 });

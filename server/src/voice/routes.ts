@@ -5,6 +5,7 @@ import { TRANSCRIBE_MAX_BYTES, VOICE_API, VOICE_ID_PATTERN, type TranscribeRespo
 import type { MeetingEngine } from "../board/meetings/engine";
 import { meetingIdParam } from "../board/meetings/validate";
 import { HttpError, badRequest, readJsonObject } from "../http";
+import { parseEndLive, type LiveService } from "./live";
 import type { VoiceService } from "./service";
 
 const TURN_INDEX = /^(0|[1-9][0-9]{0,5})$/;
@@ -17,15 +18,29 @@ export function parseVoiceId(body: Record<string, unknown>): string | null {
 }
 
 /**
- * Voice board meetings (shared/voice.ts VOICE_API). Audio is served with an ETag of its cache key
+ * Voice board meetings (shared/voice.ts VOICE_API and LIVE_API). Audio is served with an ETag of its cache key
  * and `no-cache`, so a changed voice assignment is picked up on the next play.
  */
-export function voiceRoutes(app: Hono, voice: VoiceService, meetings: MeetingEngine): void {
+export function voiceRoutes(app: Hono, voice: VoiceService, meetings: MeetingEngine, live?: LiveService): void {
+  const liveRoom = () => {
+    if (!live) throw new HttpError(503, "live meetings are not set up on this server");
+    return live;
+  };
   app.get(VOICE_API.voices, async (c) => c.json(await voice.voices()));
 
   app.put(`${VOICE_API.voices}/:profile`, async (c) => {
     const voiceId = parseVoiceId(await readJsonObject(c));
-    return c.json(await voice.setVoice(c.req.param("profile"), voiceId));
+    const res = await voice.setVoice(c.req.param("profile"), voiceId);
+    // The board room agent picks up the new voice now; failing that, at the next session.
+    live?.refreshVoices().catch((err: unknown) => console.warn(`voice: board room voices not updated (${err instanceof Error ? err.message : "error"})`));
+    return c.json(res);
+  });
+
+  app.post(`${MEETINGS_API.list}/:id/live`, async (c) => c.json(await liveRoom().session(meetingIdParam(c.req.param("id")))));
+
+  app.post(`${MEETINGS_API.list}/:id/live/end`, async (c) => {
+    const id = meetingIdParam(c.req.param("id"));
+    return c.json({ meeting: await liveRoom().end(id, parseEndLive(await readJsonObject(c))) });
   });
 
   app.get(`${MEETINGS_API.list}/:id/turns/:index/audio`, async (c) => {
