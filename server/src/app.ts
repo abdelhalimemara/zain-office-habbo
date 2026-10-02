@@ -14,6 +14,8 @@ import { consultBoard, parseConsult } from "./org/consult";
 import { hire, parseHireRequest } from "./org/hire";
 import { fullRoster, type HireStore } from "./org/hireStore";
 import { mergeRoster } from "./org/rosterView";
+import { allTeams, memoryTeamStore, type TeamStore } from "./org/teamStore";
+import { createTeam, defaultGhExec, listTeams, parseTeamRequest, type GhCheck } from "./org/techTeams";
 import { UI_AUTHOR, approve, createMandate, parseMandate, reject, reopen, taskDetail, unblock } from "./org/tasks";
 
 export interface AppDeps {
@@ -27,6 +29,10 @@ export interface AppDeps {
   guard?: GuardOptions;
   /** Status of the background dependency reconciler, when one runs alongside the app. */
   reconcilerStatus?: () => ReconcilerStatus;
+  /** Zain Tech teams added at runtime; in memory when omitted. */
+  teams?: TeamStore;
+  /** How POST /api/tech/teams asks `gh` whether a repo exists. */
+  gh?: GhCheck;
 }
 
 export const DEFAULT_PORT = 8787;
@@ -34,6 +40,8 @@ const MAX_BODY_BYTES = 128 * 1024;
 
 export function createApp(deps: AppDeps): Hono {
   const { hermes, headcount, hires, ceoWake, guard = { port: DEFAULT_PORT } } = deps;
+  const teams = deps.teams ?? memoryTeamStore();
+  const gh = deps.gh ?? { execFile: defaultGhExec };
   const app = new Hono();
 
   app.use("/api/*", localOnly(guard));
@@ -65,7 +73,7 @@ export function createApp(deps: AppDeps): Hono {
 
   app.post("/api/mandates", async (c) => {
     const req = parseMandate(await readJsonObject(c));
-    return c.json(await createMandate(req, hermes, hires, ceoWake), 201);
+    return c.json(await createMandate(req, hermes, hires, ceoWake, await allTeams(teams)), 201);
   });
 
   app.post("/api/approvals/:id/approve", async (c) => {
@@ -105,9 +113,16 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   app.post("/api/hire", async (c) => {
-    const agent = await parseHireRequest(await readJsonObject(c), { headcount, hires });
-    const result = await hire(agent, { hermes, headcount, hires, briefs: deps.briefs });
+    const agent = await parseHireRequest(await readJsonObject(c), { headcount, hires, teams });
+    const result = await hire(agent, { hermes, headcount, hires, briefs: deps.briefs, teams });
     return c.json(result);
+  });
+
+  app.get("/api/tech/teams", async (c) => c.json(await listTeams(teams, hires, hermes)));
+
+  app.post("/api/tech/teams", async (c) => {
+    const req = parseTeamRequest(await readJsonObject(c));
+    return c.json({ team: await createTeam(req, teams, gh) }, 201);
   });
 
   app.get("/api/headcount/catalog", async (c) => c.json(await headcount.catalog()));

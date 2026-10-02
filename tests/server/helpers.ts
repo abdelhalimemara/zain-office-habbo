@@ -6,6 +6,8 @@ import { CeoWake, type ExecFileLike } from "../../server/src/telegram/ceoWake";
 import { HEADCOUNT_REF, HeadcountSource } from "../../server/src/headcount/catalog";
 import { HermesClient, type FetchLike } from "../../server/src/hermes/client";
 import { memoryHireStore, type HireStore } from "../../server/src/org/hireStore";
+import { memoryTeamStore, type TeamStore } from "../../server/src/org/teamStore";
+import type { GhCheck } from "../../server/src/org/techTeams";
 import type { KanbanTask } from "../../shared/hermes";
 import { ROSTER } from "../../shared/roster";
 import { SKILL_SOURCES, skillSourceFor } from "../../shared/skillSources";
@@ -160,18 +162,22 @@ export function setup(
     exec?: ReturnType<typeof mockExec>;
     briefs?: BriefReader;
     connections?: (hermes: HermesClient, ceoWake: CeoWake) => ConnectionsService;
+    teams?: TeamStore;
+    gh?: GhCheck;
   } = {},
 ) {
   const hermesFetch = mockFetch({ ...hermesBase, ...routes });
-  const gh = githubFetch({ down: options.githubDown });
+  const githubCalls = githubFetch({ down: options.githubDown });
   const hermes = new HermesClient({ baseUrl: "http://hermes.test", fetchImpl: hermesFetch.fetchImpl });
-  const headcount = new HeadcountSource({ fetchImpl: gh.fetchImpl });
+  const headcount = new HeadcountSource({ fetchImpl: githubCalls.fetchImpl });
   const hires = options.hires ?? memoryHireStore();
   const exec = options.exec ?? mockExec();
   const ceoWake = new CeoWake({ hermes, execFile: exec.execFile, hermesBin: "/opt/hermes/bin/hermes", log: () => undefined });
   const briefs = options.briefs ?? NO_BRIEFS;
   const connections = options.connections?.(hermes, ceoWake) ?? stubConnections(hermes, ceoWake);
-  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard });
+  const teams = options.teams ?? memoryTeamStore();
+  const gh = options.gh ?? { execFile: mockExec(() => true).execFile, ghBin: "/opt/gh" };
+  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
@@ -182,5 +188,5 @@ export function setup(
       },
       body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
     });
-  return { app, send, hermes, headcount, hires, hermesFetch, gh, exec, ceoWake, briefs, connections };
+  return { app, send, hermes, headcount, hires, hermesFetch, gh: githubCalls, exec, ceoWake, briefs, connections, teams };
 }

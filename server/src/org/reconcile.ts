@@ -1,7 +1,7 @@
 import type { ReconcilerStatus } from "../../../shared/api";
 import { allTasks, isMandate } from "../../../shared/flow";
 import type { KanbanTask } from "../../../shared/hermes";
-import type { RosterAgent } from "../../../shared/roster";
+import { findAgent, type RosterAgent } from "../../../shared/roster";
 import { HermesError, type HermesClient } from "../hermes/client";
 import type { CeoWake } from "../telegram/ceoWake";
 import { fullRoster, type HireStore } from "./hireStore";
@@ -29,7 +29,28 @@ function reversedChildren(mandate: KanbanTask, childIds: readonly string[], onBo
   });
 }
 
-async function repairMandate(hermes: HermesClient, mandate: KanbanTask, reversed: string[], log: Log): Promise<number> {
+/**
+ * A team lead's task legitimately gates the mandate above it (its child), so only children
+ * assigned to the lead's own reports are reversed subtask edges.
+ */
+function reversedReportChildren(
+  task: KanbanTask,
+  childIds: readonly string[],
+  onBoard: Map<string, KanbanTask>,
+  roster: readonly RosterAgent[],
+): string[] {
+  return reversedChildren(task, childIds, onBoard).filter((id) => {
+    const assignee = onBoard.get(id)?.assignee;
+    return !!assignee && findAgent(assignee, roster)?.reportsTo === task.assignee;
+  });
+}
+
+function isTeamLeadTask(task: KanbanTask, roster: readonly RosterAgent[]): boolean {
+  const agent = task.assignee ? findAgent(task.assignee, roster) : undefined;
+  return agent?.rank === "lead" && !!agent.team;
+}
+
+async function repairMandate(hermes: HermesClient, mandate: KanbanTask, reversed: string[], log: Log, kind = "mandate"): Promise<number> {
   const fixed: string[] = [];
   for (const sub of reversed) {
     try {
@@ -58,9 +79,9 @@ async function repairMandate(hermes: HermesClient, mandate: KanbanTask, reversed
     await hermes.addComment(
       mandate.id,
       `Zain HQ repaired the dependencies: ${fixed.join(", ")} ` +
-        `${fixed.length === 1 ? "is now a prerequisite" : "are now prerequisites"} of this mandate ` +
+        `${fixed.length === 1 ? "is now a prerequisite" : "are now prerequisites"} of this ${kind} ` +
         `(linked the wrong way round before). ` +
-        `The mandate resumes automatically when all are done.`,
+        `The ${kind} resumes automatically when all are done.`,
       UI_AUTHOR,
     );
   } catch (err) {
@@ -74,19 +95,24 @@ export async function reconcileOnce(hermes: HermesClient, roster: readonly Roste
   const tasks = allTasks(await hermes.board());
   const onBoard = new Map(tasks.map((t) => [t.id, t]));
   const candidates = tasks.filter(
-    (t) => isMandate(t, roster) && (t.link_counts?.children ?? 0) > 0 && t.status !== "running" && !FINISHED.has(t.status),
+    (t) =>
+      (isMandate(t, roster) || isTeamLeadTask(t, roster)) &&
+      (t.link_counts?.children ?? 0) > 0 &&
+      t.status !== "running" &&
+      !FINISHED.has(t.status),
   );
   let repaired = 0;
-  for (const mandate of candidates) {
+  for (const fanOut of candidates) {
     let childIds: string[];
     try {
-      childIds = (await hermes.task(mandate.id)).links?.children ?? [];
+      childIds = (await hermes.task(fanOut.id)).links?.children ?? [];
     } catch (err) {
-      log(`reconcile: reading ${mandate.id} failed (${reason(err)})`);
+      log(`reconcile: reading ${fanOut.id} failed (${reason(err)})`);
       continue;
     }
-    const reversed = reversedChildren(mandate, childIds, onBoard);
-    if (reversed.length) repaired += await repairMandate(hermes, mandate, reversed, log);
+    const mandate = isMandate(fanOut, roster);
+    const reversed = mandate ? reversedChildren(fanOut, childIds, onBoard) : reversedReportChildren(fanOut, childIds, onBoard, roster);
+    if (reversed.length) repaired += await repairMandate(hermes, fanOut, reversed, log, mandate ? "mandate" : "task");
   }
   return repaired;
 }

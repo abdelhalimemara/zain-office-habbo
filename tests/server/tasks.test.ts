@@ -138,7 +138,7 @@ describe("POST /api/mandates", () => {
     expect(hermesFetch.called(`POST ${KANBAN}/tasks`)).toHaveLength(0);
   });
 
-  it("sends the mandate straight to the division VP with the fan-out protocol for only that team", async () => {
+  it("sends a Zain Tech mandate to the VP with the fan-out protocol for the team leads only", async () => {
     const hires = memoryHireStore([
       { profile: "zain-tech-data", title: "Data Engineer", division: "tech", rank: "specialist", reportsTo: "zain-tech-vp", skills: [] },
       { profile: "zain-growth-intern", title: "Growth Intern", division: "growth", rank: "specialist", reportsTo: "zain-growth-vp", skills: [] },
@@ -158,17 +158,19 @@ describe("POST /api/mandates", () => {
     expect(sent).toMatchObject({ title: "Ship the client portal", assignee: "zain-tech-vp", tenant: "zain-tech", triage: false, priority: 2 });
     const body = sent.body as string;
     expect(body.startsWith("Brief here")).toBe(true);
-    for (const p of ["zain-tech-fullstack", "zain-tech-ai", "zain-tech-devops", "zain-tech-qa", "zain-tech-security", "zain-tech-data"]) {
-      expect(body).toContain(`\`${p}\``);
+    for (const team of ["storelens", "zaincrm", "bookme", "ppl-lab", "website"]) {
+      expect(body).toContain(`\`zain-tech-${team}-head\``);
+      expect(body).toContain(`\`zain-tech-${team}-pm\``);
     }
-    expect(body).not.toMatch(/zain-(growth|studio|labs|hq)-/);
+    for (const p of ["zain-tech-fullstack", "zain-tech-data", "zain-tech-storelens-frontend"]) expect(body).not.toContain(`\`${p}\``);
+    expect(body).not.toMatch(/`zain-(growth|studio|labs|hq)-/);
     expect(body).toContain('tenant="zain-tech"');
     expect(body).toContain("kanban_create");
     expect(body).toContain("kanban_link(parent_id=<subtask id>, child_id=<this mandate's id>)");
     expect(body).toContain('kanban_block(kind="dependency"');
     expect(body).toContain("kanban_request_review");
     expect(body).toMatch(/Never complete the mandate yourself/);
-    expect(body).toMatch(/never assign work outside your team/);
+    expect(body).toMatch(/Never assign work to specialists yourself/);
     const steps = ["kanban_create", "kanban_link", "kanban_block", "kanban_request_review"].map((t) => body.indexOf(t));
     expect([...steps].sort((a, b) => a - b)).toEqual(steps);
   });

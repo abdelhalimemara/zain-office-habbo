@@ -4,8 +4,8 @@ export const PROFILE_PATTERN = /^zain-[a-z0-9-]{2,40}$/;
 export const TITLE_MAX = 60;
 export const MIN_SKILLS = 1;
 export const MAX_SKILLS = 20;
-/** `department:skill` for headcount, `<source>:skill` for a registered skill source. */
-export const SKILL_ID_PATTERN = /^[a-z0-9-]+:[a-z0-9-]+$/;
+/** `department:skill` for headcount, `<source>:skill` or `<source>:dir/skill` for a registered skill source. */
+export const SKILL_ID_PATTERN = /^[a-z0-9-]+:(?:[a-z0-9-]+\/)?[a-z0-9-]+$/;
 
 export interface HireFields {
   profile: string;

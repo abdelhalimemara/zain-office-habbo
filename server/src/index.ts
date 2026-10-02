@@ -5,6 +5,7 @@ import { DEFAULT_PORT, createApp, defaultClients, guardOptions } from "./app";
 import { fileHireStore } from "./org/hireStore";
 import { fileBriefs } from "./org/privateBriefs";
 import { Reconciler } from "./org/reconcile";
+import { fileTeamStore } from "./org/teamStore";
 
 const HOST = "127.0.0.1";
 const port = Number(process.env.ZAIN_SERVER_PORT ?? DEFAULT_PORT);
@@ -18,6 +19,7 @@ const reconciler = new Reconciler({ hermes: clients.hermes, hires, ceoWake: clie
 const app = createApp({
   ...clients,
   hires,
+  teams: fileTeamStore(process.cwd()),
   briefs: fileBriefs(process.cwd()),
   guard: guardOptions(port, process.env),
   reconcilerStatus: () => reconciler.status(),
