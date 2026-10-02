@@ -4,6 +4,7 @@
 @import "./client.css";
 @import "./conn.css";
 @import "./meetings.css";
+@import "./voice.css";
 
 .zui-hud {
   position: absolute;

@@ -42,6 +42,8 @@ export interface UiState {
   railCollapsed: boolean;
   /** Phone mandates sheet expanded; starts folded every visit. */
   railSheetOpen: boolean;
+  /** The "Call a meeting" modal is open over whatever else is showing. */
+  callMeetingOpen: boolean;
   goToCity: () => void;
   enterDivision: (division: DivisionId) => void;
   openPanel: (panel: Panel) => void;
@@ -51,21 +53,23 @@ export interface UiState {
   openMandate: (id: string, division: DivisionId) => void;
   setRailCollapsed: (collapsed: boolean) => void;
   setRailSheetOpen: (open: boolean) => void;
+  setCallMeetingOpen: (open: boolean) => void;
 }
 
-export const initialUiState: Pick<UiState, "view" | "selectedAgent" | "panel" | "railCollapsed" | "railSheetOpen"> = {
+export const initialUiState: Pick<UiState, "view" | "selectedAgent" | "panel" | "railCollapsed" | "railSheetOpen" | "callMeetingOpen"> = {
   view: { kind: "city" },
   selectedAgent: null,
   panel: null,
   railCollapsed: false,
   railSheetOpen: false,
+  callMeetingOpen: false,
 };
 
 export const useUiStore = create<UiState>()((set) => ({
   ...initialUiState,
   railCollapsed: loadRailCollapsed(),
-  goToCity: () => set({ view: { kind: "city" }, selectedAgent: null, panel: null }),
-  enterDivision: (division) => set({ view: { kind: "floor", division }, selectedAgent: null, panel: null }),
+  goToCity: () => set({ view: { kind: "city" }, selectedAgent: null, panel: null, callMeetingOpen: false }),
+  enterDivision: (division) => set({ view: { kind: "floor", division }, selectedAgent: null, panel: null, callMeetingOpen: false }),
   openPanel: (panel) =>
     set((s) => ({ panel, selectedAgent: panel.kind === "agent" ? panel.profile : s.selectedAgent })),
   closePanel: () => set({ panel: null, selectedAgent: null }),
@@ -78,4 +82,5 @@ export const useUiStore = create<UiState>()((set) => ({
     set({ railCollapsed });
   },
   setRailSheetOpen: (railSheetOpen) => set({ railSheetOpen }),
+  setCallMeetingOpen: (callMeetingOpen) => set({ callMeetingOpen }),
 }));

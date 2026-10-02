@@ -1,14 +1,19 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { RosterEntry } from "@shared/api";
 import { FOUNDER_REMARK_MAX, MAX_DISCUSSION_ROUNDS, type BoardMeeting, type FounderRemarkRequest, type MeetingTurn } from "@shared/meetings";
 import { isMeetingActive, useCancelMeeting, useFounderRemark, useMeeting } from "../api/meetingHooks";
+import { useVoices } from "../api/voiceHooks";
 import { useUiStore } from "../state/store";
 import { ErrorNote, Text, useRosterAgents } from "./common";
 import { absoluteTime, relativeTime } from "./mandates";
 import { FOUNDER, groupTurns, isMinutes, shortName, speakerName, tallyVotes, VOTES, waitingFor } from "./meetingModel";
 import { DecisionChip, MeetingStatusChip, NotionLink } from "./MeetingsTab";
+import { MicButton } from "./MicButton";
 import { Panel } from "./Panel";
 import { Portrait } from "./Portrait";
+import { useVoiceQueue, type VoiceQueue } from "./useVoiceQueue";
+import { Equalizer, SpeakerIcon, VoiceModeBadge } from "./VoiceBits";
+import { VoicePlayer } from "./VoicePlayer";
 
 const BOARD_COLOR = "#C9A227";
 
@@ -19,23 +24,44 @@ export const DEFAULT_REMARK: Record<NonNullable<FounderRemarkRequest["next"]>, s
   "to-vote": "Please move to the vote.",
 };
 
-function Bubble({ turn, agents, now }: { turn: MeetingTurn; agents: readonly RosterEntry[]; now: number }) {
+/** Voice controls a transcript gets in a voice meeting whose audio is reachable. */
+interface TurnVoice {
+  meeting: BoardMeeting;
+  queue: VoiceQueue;
+}
+
+function Bubble({ turn, agents, now, voice }: { turn: MeetingTurn; agents: readonly RosterEntry[]; now: number; voice?: TurnVoice }) {
   const founder = turn.speaker === FOUNDER;
   const agent = agents.find((a) => a.profile === turn.speaker);
   const name = speakerName(turn.speaker, agents);
+  const index = voice && !founder ? voice.meeting.turns.indexOf(turn) : -1;
+  const current = index >= 0 && voice!.queue.current === index;
+  const speaking = current && voice!.queue.status === "playing";
+  const failed = index >= 0 ? voice!.queue.failed.get(index) : undefined;
+  const ref = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (current) ref.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [current]);
   return (
-    <li className={`zui-turn${founder ? " zui-turn--founder" : ""}`}>
+    <li ref={ref} className={`zui-turn${founder ? " zui-turn--founder" : ""}${current ? " zui-turn--current" : ""}${speaking ? " zui-turn--speaking" : ""}`}>
       {!founder && <Portrait agent={agent} name={name} size="md" />}
       <div className="zui-turn__bubble">
         <div className="zui-turn__head">
           <span className="zui-turn__name">{name}</span>
+          {speaking && <Equalizer />}
           <time className="zui-turn__time" dateTime={new Date(turn.at * 1000).toISOString()} title={absoluteTime(turn.at)}>
             {relativeTime(turn.at, now)}
           </time>
+          {index >= 0 && (
+            <button type="button" className="zui-turn__play" aria-label={`Play ${name}'s turn`} title={failed ?? "Play this turn"} onClick={() => voice!.queue.replay(index)}>
+              <SpeakerIcon off={!!failed} />
+            </button>
+          )}
         </div>
         <p className="zui-turn__text" dir="auto">
           {turn.text}
         </p>
+        {failed && <span className="zui-turn__fallback">{failed} · text only</span>}
       </div>
     </li>
   );
@@ -104,7 +130,7 @@ function Votes({ meeting, agents }: { meeting: BoardMeeting; agents: readonly Ro
   );
 }
 
-function Composer({ meeting }: { meeting: BoardMeeting }) {
+function Composer({ meeting, voice, onRecord }: { meeting: BoardMeeting; voice: boolean; onRecord?: () => void }) {
   const remark = useFounderRemark();
   const [text, setText] = useState("");
   const id = useId();
@@ -117,6 +143,7 @@ function Composer({ meeting }: { meeting: BoardMeeting }) {
         Your remarks to the board <span className="zui-hint">(optional)</span>
       </label>
       <textarea id={id} className="zui-input" rows={3} maxLength={FOUNDER_REMARK_MAX} dir="auto" value={text} onChange={(e) => setText(e.target.value)} />
+      {voice && <MicButton disabled={remark.isPending} onRecord={onRecord} onText={(said) => setText((t) => (t.trim() ? `${t.trimEnd()} ${said}` : said).slice(0, FOUNDER_REMARK_MAX))} />}
       <div className="zui-row">
         <button type="button" className="zui-btn zui-btn--primary" disabled={remark.isPending} onClick={() => send("continue")}>
           Continue
@@ -159,7 +186,7 @@ function CancelMeeting({ id }: { id: string }) {
   );
 }
 
-function Transcript({ meeting, agents }: { meeting: BoardMeeting; agents: readonly RosterEntry[] }) {
+function Transcript({ meeting, agents, voice }: { meeting: BoardMeeting; agents: readonly RosterEntry[]; voice?: TurnVoice }) {
   const now = Date.now() / 1000;
   const waiting = waitingFor(meeting);
   return (
@@ -172,7 +199,7 @@ function Transcript({ meeting, agents }: { meeting: BoardMeeting; agents: readon
             <h4 className="zui-round__title">{g.label}</h4>
             <ol className="zui-turns">
               {g.turns.map((t, i) => (
-                <Bubble key={`${t.speaker}-${t.at}-${i}`} turn={t} agents={agents} now={now} />
+                <Bubble key={`${t.speaker}-${t.at}-${i}`} turn={t} agents={agents} now={now} voice={voice} />
               ))}
             </ol>
           </section>
@@ -200,6 +227,11 @@ export function MeetingRoom({ id }: { id: string }) {
   const closePanel = useUiStore((s) => s.closePanel);
   const meeting = data?.meeting;
   const hasMinutes = meeting?.turns.some(isMinutes) ?? false;
+  const isVoice = meeting?.mode === "voice";
+  const voices = useVoices(isVoice);
+  const configured = voices.data?.configured !== false;
+  const queue = useVoiceQueue(id, meeting?.turns ?? [], isVoice && configured && !voices.isPending);
+  const turnVoice = meeting && isVoice && configured ? { meeting, queue } : undefined;
 
   return (
     <Panel title={meeting?.topic ?? "Board meeting"} accent={BOARD_COLOR} onClose={closePanel} className="zui-panel--meeting">
@@ -208,6 +240,7 @@ export function MeetingRoom({ id }: { id: string }) {
           ‹ All meetings
         </button>
         {meeting && <MeetingStatusChip meeting={meeting} />}
+        {isVoice && <VoiceModeBadge />}
         {meeting?.decision && <DecisionChip decision={meeting.decision} />}
         {meeting?.notionPageUrl && <NotionLink url={meeting.notionPageUrl} />}
       </div>
@@ -226,7 +259,8 @@ export function MeetingRoom({ id }: { id: string }) {
               <Text>{meeting.brief}</Text>
             </details>
           )}
-          <Transcript meeting={meeting} agents={agents} />
+          {isVoice && <VoicePlayer meeting={meeting} agents={agents} queue={queue} configured={configured} />}
+          <Transcript meeting={meeting} agents={agents} voice={turnVoice} />
           {meeting.status === "concluded" && meeting.conclusion && !hasMinutes && (
             <section className="zui-minutes" aria-label="Conclusion">
               <h4 className="zui-minutes__title">Conclusion</h4>
@@ -241,7 +275,7 @@ export function MeetingRoom({ id }: { id: string }) {
               <DecisionChip decision={meeting.decision} />
             </section>
           )}
-          {meeting.status === "awaiting-founder" && <Composer meeting={meeting} />}
+          {meeting.status === "awaiting-founder" && <Composer meeting={meeting} voice={isVoice} onRecord={queue.pause} />}
           {isMeetingActive(meeting) && <CancelMeeting id={meeting.id} />}
         </>
       )}
