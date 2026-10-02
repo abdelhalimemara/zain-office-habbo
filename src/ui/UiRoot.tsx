@@ -4,6 +4,7 @@ import { useUiStore, type Panel } from "../state/store";
 import { AgentCard } from "./AgentCard";
 import { ApprovalsInbox } from "./ApprovalsInbox";
 import { BoardPanel } from "./BoardPanel";
+import { MeetingRoom } from "./MeetingRoom";
 import { HireDialog } from "./HireDialog";
 import { Hud } from "./Hud";
 import { KanbanPanel } from "./KanbanPanel";
@@ -27,7 +28,9 @@ function panelKey(panel: Panel): string {
     case "approvals":
       return "approvals";
     case "board":
-      return `board:${panel.members?.join(",") ?? ""}`;
+      return `board:${panel.members?.join(",") ?? ""}:${panel.tab ?? ""}`;
+    case "meeting":
+      return `meeting:${panel.id}`;
   }
 }
 
@@ -38,7 +41,9 @@ function OpenPanel({ panel }: { panel: Panel }) {
     case "approvals":
       return <ApprovalsInbox />;
     case "board":
-      return <BoardPanel members={panel.members} />;
+      return <BoardPanel members={panel.members} tab={panel.tab} />;
+    case "meeting":
+      return <MeetingRoom id={panel.id} />;
     case "agent":
       return <AgentCard profile={panel.profile} />;
     case "task":
