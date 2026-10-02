@@ -17,6 +17,7 @@ export function Panel({ title, accent, onClose, children, wide }: ShellProps) {
   return (
     <aside className={`zui-panel${wide ? " zui-panel--wide" : ""}`} aria-labelledby={titleId} style={accentStyle(accent)}>
       <header className="zui-panel__header">
+        <span className="zui-panel__dot" aria-hidden="true" />
         <h2 id={titleId} className="zui-heading">
           {title}
         </h2>
@@ -69,6 +70,7 @@ export function Dialog({ title, accent, onClose, children }: ShellProps) {
         onKeyDown={trapTab}
       >
         <header className="zui-panel__header">
+          <span className="zui-panel__dot" aria-hidden="true" />
           <h2 id={titleId} className="zui-heading">
             {title}
           </h2>

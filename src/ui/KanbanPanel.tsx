@@ -5,7 +5,7 @@ import { agentActivity, tasksForTenant } from "@shared/flow";
 import type { KanbanTask } from "@shared/hermes";
 import { useBoard } from "../api/hooks";
 import { useUiStore } from "../state/store";
-import { ActivityBadge, divisionManager, ErrorNote, useRosterAgents } from "./common";
+import { ActivityBadge, Avatar, divisionManager, ErrorNote, useRosterAgents } from "./common";
 import { DONE_PREVIEW, LANES, defaultLane, groupByLane, type Lane, type LaneId } from "./lanes";
 import { Panel } from "./Panel";
 import { TaskCard } from "./TaskCard";
@@ -98,8 +98,12 @@ export function KanbanPanel({ division }: { division: DivisionId }) {
   return (
     <Panel title={`${d.name} · Kanban`} accent={d.color} onClose={closePanel} wide>
       <section className="zui-manager">
-        <div>
-          <strong>{manager.title}</strong> <span className="zui-mono">{manager.profile}</span>
+        <div className="zui-profile">
+          <Avatar name={manager.title} color={d.color} size="md" />
+          <div className="zui-profile__text">
+            <strong>{manager.title}</strong>
+            <span className="zui-mono">{manager.profile}</span>
+          </div>
           {managerActivity && <ActivityBadge activity={managerActivity} />}
         </div>
         <button type="button" className="zui-btn zui-btn--primary" onClick={() => openPanel({ kind: "mandate", division })}>
