@@ -14,6 +14,9 @@ import { Reconciler } from "./org/reconcile";
 import { fileTeamStore } from "./org/teamStore";
 import { fileVoiceStore } from "./voice/assignments";
 import { ElevenLabsClient, envApiKey } from "./voice/elevenlabs";
+import { LiveService } from "./voice/live";
+import { BoardRoomAgent, fileAgentStore } from "./voice/liveAgent";
+import { fileSouls } from "./voice/livePrompt";
 import { VoiceService } from "./voice/service";
 
 const HOST = "127.0.0.1";
@@ -26,7 +29,8 @@ const clients = defaultClients(process.env);
 const hires = fileHireStore(process.cwd());
 const root = process.cwd();
 const sink = new NotionBoardSink(new NotionClient(envToken()), root);
-const voice = new VoiceService({ root, client: new ElevenLabsClient(envApiKey()), store: fileVoiceStore(root), roster: () => fullRoster(hires) });
+const labs = new ElevenLabsClient(envApiKey());
+const voice = new VoiceService({ root, client: labs, store: fileVoiceStore(root), roster: () => fullRoster(hires) });
 const meetings = new MeetingEngine({
   hermes: clients.hermes,
   hires,
@@ -35,6 +39,7 @@ const meetings = new MeetingEngine({
   sink,
   onTurns: (meeting, from) => voice.prefetch(meeting, from),
 });
+const live = new LiveService({ client: labs, agent: new BoardRoomAgent(labs, fileAgentStore(root)), voice, meetings, souls: fileSouls(), briefs: fileBriefs(root) });
 const consultations = new ConsultationLog({
   hermes: clients.hermes,
   store: fileRecordStore(join(root, ".zain", "consultations.json"), isConsultationRecord),
@@ -56,6 +61,7 @@ const app = createApp({
   meetings,
   consultations,
   voice,
+  live,
   connections: new ConnectionsService({ hermes: clients.hermes, ceoWake: clients.ceoWake, hermesBin: process.env.HERMES_BIN }),
 });
 

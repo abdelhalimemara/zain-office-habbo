@@ -17,6 +17,7 @@ import { ROSTER } from "../../shared/roster";
 import { SKILL_SOURCES, skillSourceFor } from "../../shared/skillSources";
 import { memoryVoiceStore } from "../../server/src/voice/assignments";
 import { ElevenLabsClient } from "../../server/src/voice/elevenlabs";
+import type { LiveService } from "../../server/src/voice/live";
 import { VoiceService } from "../../server/src/voice/service";
 
 export const TOKEN = "tok-secret-123";
@@ -194,6 +195,8 @@ export function setup(
     sink?: MeetingSink & ConsultationSink;
     now?: () => number;
     voice?: VoiceService;
+    /** Built once the meeting engine exists, e.g. a LiveService over a fake ElevenLabs. */
+    live?: (meetings: MeetingEngine, voice: VoiceService) => LiveService;
     onTurns?: (meeting: BoardMeeting, from: number) => void;
   } = {},
 ) {
@@ -227,7 +230,8 @@ export function setup(
   });
   const consultations = new ConsultationLog({ hermes, store: consultationStore, sink: options.sink, now: options.now, log: quiet });
   const voice = options.voice ?? stubVoice();
-  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations, voice });
+  const live = options.live?.(meetings, voice);
+  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations, voice, live });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
@@ -256,5 +260,6 @@ export function setup(
     consultations,
     consultationStore,
     voice,
+    live,
   };
 }

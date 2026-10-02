@@ -1,7 +1,7 @@
 import type { BoardMeeting, Decision, MeetingStatus } from "../../../shared/meetings";
 import type { ConsultationRecord, ConsultationSink } from "../board/consultLog";
 import type { MeetingSink } from "../board/meetings/engine";
-import { FOUNDER, roundLabel, speakerName, votesSummary } from "../board/meetings/rounds";
+import { FOUNDER, meetingRoundLabel, speakerName, votesSummary } from "../board/meetings/rounds";
 import { CEO_PROFILE } from "../../../shared/roster";
 import { readBoardRoomIds, type BoardRoomIds } from "./boardRoom";
 import { NotionClient, RICH_TEXT_MAX, bullet, callout, heading, paragraphs, richText } from "./client";
@@ -57,7 +57,7 @@ export function meetingBlocks(m: BoardMeeting): Json[] {
     if (turn.speaker === CEO_PROFILE && m.conclusion !== undefined && turn.text === m.conclusion) continue;
     if (turn.round !== round) {
       round = turn.round;
-      blocks.push(heading(`Round ${round} · ${roundLabel(round, m.discussionRounds)}`));
+      blocks.push(heading(`Round ${round} · ${meetingRoundLabel(round, m.discussionRounds, m.mode)}`));
     }
     blocks.push(callout(speakerName(turn.speaker), turn.text, emojiFor(turn.speaker)));
   }
