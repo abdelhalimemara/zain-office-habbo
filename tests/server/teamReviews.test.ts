@@ -14,8 +14,8 @@ const HEAD = "zain-tech-storelens-head";
 const FRONTEND = "zain-tech-storelens-frontend";
 const NOW = 1_000_000;
 
-const requested = (taskId: string, implementer: string, reviewer: string | null, at = NOW - 60): HermesEvent => ({
-  id: 0, task_id: taskId, kind: "review_requested", payload: { summary: "done", implementer, reviewer }, created_at: at, run_id: 1,
+const requested = (taskId: string, implementer: string, reviewer: string | null, at = NOW - 60, summary = "done"): HermesEvent => ({
+  id: 0, task_id: taskId, kind: "review_requested", payload: { summary, implementer, reviewer }, created_at: at, run_id: 1,
 });
 
 /** A stateful Hermes kanban: tasks, events and comments, routed for any task id. */
@@ -185,24 +185,49 @@ describe("team reviews", () => {
     ]);
   });
 
-  it("applies an approval: the task is completed with its own result kept", async () => {
-    const h = fakeHermes([headTask()], [requested("t_sub", HEAD, VP)]);
+  it("applies an approval: done, with the implementer's full handoff and the verdict as the result", async () => {
+    const full = "Onboarding doc written\nBuild passes on Node 22; 114 tests pass.";
+    const h = fakeHermes([{ ...headTask(), latest_summary: full }], [requested("t_sub", HEAD, VP, NOW - 60, "Onboarding doc written")]);
     await step(h).tick();
     h.tasks.set("t_new1", { ...h.tasks.get("t_new1")!, status: "done", completed_at: NOW, latest_summary: "APPROVED: doc is complete and accurate" });
     await step(h).tick();
     const patch = h.fetch.called(`PATCH ${KANBAN}/tasks/t_sub`)[0]!.body;
-    expect(patch).toEqual({ status: "done", summary: `Approved by ${VP}: doc is complete and accurate`, result: "Onboarding doc written" });
+    expect(patch).toEqual({
+      status: "done",
+      summary: `Approved by ${VP}: doc is complete and accurate`,
+      result: `${full}\n\nReviewer verdict (${VP}): APPROVED: doc is complete and accurate`,
+    });
+    expect(h.tasks.get("t_sub")!.result).toContain("114 tests pass");
     expect(h.comments.map((c) => [c.task_id, c.author])).toEqual([["t_sub", "zain-hq-ui"]]);
     expect(h.helpers()).toHaveLength(1);
   });
 
-  it("applies requested changes: the task goes back with the reviewer's changes", async () => {
+  it("an approval falls back to the event's summary when the task carries no matching handoff", async () => {
+    const h = fakeHermes([{ ...headTask(), latest_summary: null, result: null }], [requested("t_sub", HEAD, VP, NOW - 60, "Shipped the fix")]);
+    await step(h).tick();
+    h.tasks.set("t_new1", { ...h.tasks.get("t_new1")!, status: "done", completed_at: NOW, latest_summary: "APPROVED" });
+    await step(h).tick();
+    expect((h.fetch.called(`PATCH ${KANBAN}/tasks/t_sub`)[0]!.body as UpdateTaskInput).result).toBe(`Shipped the fix\n\nReviewer verdict (${VP}): APPROVED`);
+  });
+
+  it("applies requested changes: reopened, reassigned to the implementer, with the changes as a comment", async () => {
     const h = fakeHermes([headTask()], [requested("t_sub", HEAD, VP)]);
     await step(h).tick();
     h.tasks.set("t_new1", { ...h.tasks.get("t_new1")!, status: "done", completed_at: NOW, latest_summary: "CHANGES REQUESTED: rerun tests on Node 22" });
     await step(h).tick();
-    expect(h.fetch.called(`PATCH ${KANBAN}/tasks/t_sub`)[0]!.body).toEqual({ status: "todo" });
-    expect(h.comments[0]!.body).toBe(`Changes requested by ${VP}: rerun tests on Node 22`);
+    expect(h.fetch.called(`PATCH ${KANBAN}/tasks/t_sub`).map((c) => c.body)).toEqual([{ status: "todo" }, { assignee: HEAD }]);
+    expect(h.tasks.get("t_sub")!.assignee).toBe(HEAD);
+    expect(h.comments.map((c) => [c.task_id, c.body])).toEqual([["t_sub", `Changes requested by ${VP}: rerun tests on Node 22`]]);
+  });
+
+  it("requested changes on a task still assigned to its implementer need no reassignment", async () => {
+    const t = task({ id: "t_fe", assignee: FRONTEND, created_by: HEAD, tenant: "zain-tech", status: "review" });
+    const h = fakeHermes([t], [requested("t_fe", FRONTEND, null)]);
+    await step(h).tick();
+    h.tasks.set("t_new1", { ...h.tasks.get("t_new1")!, status: "done", completed_at: NOW, latest_summary: "CHANGES REQUESTED: add a test" });
+    await step(h).tick();
+    expect(h.fetch.called(`PATCH ${KANBAN}/tasks/t_fe`).map((c) => c.body)).toEqual([{ status: "todo" }]);
+    expect(h.comments[0]!.body).toBe(`Changes requested by ${HEAD}: add a test`);
   });
 
   it("a done helper without a verdict: no new helper, one comment after the grace period", async () => {

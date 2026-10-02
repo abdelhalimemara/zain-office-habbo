@@ -72,6 +72,17 @@ export function reviewerOf(
   return { reviewer, implementer };
 }
 
+/**
+ * The implementer's handoff from the review request. Hermes caps the event's copy to its first line
+ * (`_first_line(summary, 400)`), so the task's full run summary is used when it is that same handoff.
+ */
+function implementerSummary(task: KanbanTask, request: HermesEvent | undefined): string | null {
+  const short = str(request?.payload ?? null, "summary");
+  const full = task.latest_summary?.trim() || null;
+  if (short && full?.startsWith(short.trim())) return full;
+  return short ?? full ?? task.result;
+}
+
 export function parseVerdict(text: string | null | undefined): Verdict | null {
   const match = VERDICT.exec(text ?? "");
   if (!match) return null;
@@ -168,7 +179,7 @@ export class TeamReviews {
       .filter((h) => h.status === "done" && h.created_at >= since)
       .sort((a, b) => (b.completed_at ?? 0) - (a.completed_at ?? 0))[0];
     if (answered) {
-      await this.settle(detail, answered);
+      await this.settle(detail, request, answered);
       return 0;
     }
     if (!mayCreate) return 0;
@@ -191,7 +202,7 @@ export class TeamReviews {
   }
 
   /** Applies a done helper's verdict to the reviewed task; without one, reports it once after the grace period. */
-  private async settle(detail: HermesTaskDetail, helper: KanbanTask): Promise<void> {
+  private async settle(detail: HermesTaskDetail, request: HermesEvent | undefined, helper: KanbanTask): Promise<void> {
     const { hermes, now = Date.now, graceMs = VERDICT_GRACE_MS } = this.options;
     const task = detail.task;
     const { task: full } = await hermes.task(helper.id);
@@ -201,12 +212,15 @@ export class TeamReviews {
       try {
         if (verdict.approved) {
           const summary = verdict.text ? `Approved by ${by}: ${verdict.text}` : `Approved by ${by}`;
-          const result = task.result ?? task.latest_summary ?? undefined;
+          // complete_task overwrites `result`, and the mandate's roll-up reads its subtasks' results.
+          const handoff = implementerSummary(task, request);
+          const result = [handoff, `Reviewer verdict (${by}): APPROVED${verdict.text ? `: ${verdict.text}` : ""}`].filter(Boolean).join("\n\n");
           await hermes.addComment(task.id, summary, UI_AUTHOR);
-          await hermes.updateTask(task.id, { status: "done", summary, ...(result ? { result } : {}) });
+          await hermes.updateTask(task.id, { status: "done", summary, result });
         } else {
           await hermes.addComment(task.id, `Changes requested by ${by}: ${verdict.text}`, UI_AUTHOR);
-          await hermes.updateTask(task.id, { status: "todo" });
+          const reopened = await hermes.updateTask(task.id, { status: "todo" });
+          await this.returnToImplementer(task.id, reopened, str(request?.payload ?? null, "implementer"));
         }
         this.log(`team-review: ${by} ${verdict.approved ? "approved" : "requested changes on"} ${task.id} (${helper.id})`);
         return;
@@ -225,6 +239,16 @@ export class TeamReviews {
       `${marker}\nZain HQ: ${by} finished the review task ${helper.id} without a verdict HQ could apply, and this task is still waiting in review. A human needs to approve it or send it back.`,
       UI_AUTHOR,
     );
+  }
+
+  /** Hermes reassigned the task to the reviewer on review; changes go back to whoever did the work. */
+  private async returnToImplementer(id: string, reopened: KanbanTask, implementer: string | null): Promise<void> {
+    if (!implementer || reopened.assignee === implementer) return;
+    try {
+      await this.options.hermes.updateTask(id, { assignee: implementer });
+    } catch (err) {
+      this.log(`team-review: reassigning ${id} to ${implementer} failed (${reason(err)})`);
+    }
   }
 
   /** Archives open helpers whose task has left review; a running helper is left to finish. */
