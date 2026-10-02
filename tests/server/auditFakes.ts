@@ -157,6 +157,7 @@ export function fakeApify(opts: { actors?: Record<string, Items | ((input: Input
 
 export function fakeHermes(profiles: string[] = []) {
   const tasks = new Map<string, KanbanTask>();
+  const comments: { id: string; body: string; author: string }[] = [];
   let next = 0;
   const hermes: AuditHermes = {
     listProfiles: async () => [{ name: "default" }, ...profiles.map((name) => ({ name }))] as Awaited<ReturnType<AuditHermes["listProfiles"]>>,
@@ -166,6 +167,9 @@ export function fakeHermes(profiles: string[] = []) {
       return t;
     },
     task: async (id) => ({ task: tasks.get(id)!, comments: [], links: { parents: [], children: [] } }) as unknown as Awaited<ReturnType<AuditHermes["task"]>>,
+    addComment: async (id, body, author) => {
+      comments.push({ id, body, author });
+    },
     updateTask: async (id, patch) => {
       const t = { ...tasks.get(id)!, ...(patch as Partial<KanbanTask>) };
       tasks.set(id, t);
@@ -175,8 +179,14 @@ export function fakeHermes(profiles: string[] = []) {
   return {
     hermes,
     tasks,
+    comments,
+    /** A task created outside the audit (e.g. Rami's request task), in a given status. */
+    add(t: Partial<KanbanTask> & { id: string }) {
+      tasks.set(t.id, task({ status: "running", result: null, ...t }));
+    },
+    /** Completes the open analysis tasks (not tasks added with add()). */
     complete(result: string) {
-      for (const t of tasks.values()) if (t.status !== "done") tasks.set(t.id, { ...t, status: "done", result });
+      for (const t of tasks.values()) if (t.status !== "done" && t.title.startsWith("Prospect audit · ")) tasks.set(t.id, { ...t, status: "done", result });
     },
   };
 }

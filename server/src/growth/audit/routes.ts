@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises";
 import type { Hono } from "hono";
 import { AUDITS_API, type StartAuditRequest } from "../../../../shared/audits";
-import { HttpError, badRequest, optionalString, readJsonObject } from "../../http";
+import { HttpError, TASK_ID, badRequest, optionalString, readJsonObject } from "../../http";
+import type { CeoWake } from "../../telegram/ceoWake";
 import { CRM_ID, type AuditCrm } from "./crm";
+import { createAuditRequest, parseAuditRequest } from "./requests";
 import type { AuditEngine } from "./engine";
 
 const AUDIT_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -32,6 +34,11 @@ export function parseStartAudit(body: Record<string, unknown>): StartAuditReques
   if (website) req.website = website;
   if (name) req.name = name;
   if (!req.leadId && !req.companyId && !req.website) throw badRequest("give leadId, companyId or website");
+  const parent = optionalString(body, "parentTaskId", 64);
+  if (parent !== undefined) {
+    if (!TASK_ID.test(parent)) throw badRequest("parentTaskId must be a kanban task id");
+    req.parentTaskId = parent;
+  }
   if (body.socials !== undefined && body.socials !== null) {
     if (typeof body.socials !== "object" || Array.isArray(body.socials)) throw badRequest("socials must be an object");
     const socials = body.socials as Record<string, unknown>;
@@ -49,7 +56,13 @@ export const PROSPECTS_API = "/api/growth/prospects";
 const MAX_QUERY = 80;
 
 /** Prospect audits API (shared/audits.ts AUDITS_API); the Growth agents start audits through it with curl. */
-export function auditRoutes(app: Hono, audits: AuditEngine, crm: AuditCrm): void {
+export function auditRoutes(app: Hono, audits: AuditEngine, crm: AuditCrm, ceoWake: Pick<CeoWake, "subscribe">): void {
+  // Ask Rami for an audit: a task for zain-growth-audit that wakes the CEO agent when he completes it.
+  app.post(AUDITS_API.request, async (c) => {
+    const req = parseAuditRequest(await readJsonObject(c));
+    return c.json(await createAuditRequest(req, { hermes: audits.hermes, ceoWake, crm, resolve: audits.resolver, log: console.warn }), 201);
+  });
+
   // CRM lookup for the New audit form: read-only, at most ten leads and companies.
   app.get(PROSPECTS_API, async (c) => {
     const q = (c.req.query("q") ?? "").trim();
