@@ -1,8 +1,6 @@
 import {
   AUDIT_STEPS,
-  type AuditFinding,
   type AuditProspect,
-  type AuditScore,
   type AuditStatus,
   type AuditStep,
   type AuditStepId,
@@ -44,18 +42,6 @@ export const STATUS_LABEL: Record<AuditStatus, string> = {
   done: "Done",
   failed: "Failed",
   cancelled: "Cancelled",
-};
-
-export type SectionId = keyof AuditScore["sections"];
-
-export const SECTIONS: readonly SectionId[] = ["website", "search", "social", "ads", "tracking"];
-
-export const SECTION_LABEL: Record<SectionId, string> = {
-  website: "Website & SEO",
-  search: "Search visibility",
-  social: "Social",
-  ads: "Paid ads",
-  tracking: "Tracking",
 };
 
 export const GRADE_HINT: Record<Grade, string> = {
@@ -189,16 +175,6 @@ export function isApifyMissing(note: string | undefined): boolean {
 
 export function apifyMissing(audit: Pick<ProspectAudit, "steps" | "error">): boolean {
   return isApifyMissing(audit.error) || audit.steps.some((s) => isApifyMissing(s.note));
-}
-
-const SEVERITY_RANK: Record<AuditFinding["severity"], number> = { high: 0, medium: 1, low: 2 };
-
-/** Findings by section in section order, most severe first; empty sections are left out. */
-export function groupFindings(findings: readonly AuditFinding[]): { section: SectionId; findings: AuditFinding[] }[] {
-  return SECTIONS.map((section) => ({
-    section,
-    findings: findings.filter((f) => f.section === section).sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]),
-  })).filter((g) => g.findings.length > 0);
 }
 
 /** Failed or cancelled audits, and finished ones with a failed step (a CRM or Notion filing, say), can be rerun. */

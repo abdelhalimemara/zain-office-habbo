@@ -42,35 +42,63 @@ describe("Audit detail", () => {
     open(doneAudit);
     await screen.findByRole("heading", { name: "Nakheel Dental" });
 
-    expect(within(section("Executive summary")).getByText(/strong Instagram following/)).toBeInTheDocument();
+    const summary = section("Executive summary");
+    expect(within(summary).getByText(/paid search is empty/)).toBeInTheDocument();
+    expect(within(summary).getByText(/strong Instagram following/)).toBeInTheDocument();
+    const tiles = Object.fromEntries(
+      within(summary)
+        .getAllByRole("term")
+        .map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]),
+    );
+    expect(tiles).toEqual({ "Gaps identified": "4", "Rated critical": "1", "Areas measured": "5 of 7", "Est. monthly visits": "~2,042" });
+    expect(within(summary).getByText("2 not measurable this pass")).toBeInTheDocument();
+    expect(within(within(summary).getByRole("list", { name: "Key points" })).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(summary).getByText(/Bottom line: findable/)).toBeInTheDocument();
     expect(screen.getByText(/Open with the implant keyword gap/)).toBeInTheDocument();
 
-    const bars = within(section("Scores")).getAllByRole("meter");
-    expect(bars.map((b) => [b.getAttribute("aria-label"), b.getAttribute("aria-valuenow")])).toEqual([
-      ["Website & SEO score", "72"],
-      ["Search visibility score", "48"],
-      ["Social score", "81"],
-      ["Paid ads score", "20"],
-      ["Tracking score", "55"],
+    const rows = within(within(section("The seven areas, at a glance")).getByRole("list", { name: "Seven areas" })).getAllByRole("listitem");
+    expect(rows.map((r) => r.querySelector("strong")!.textContent)).toEqual([
+      "Website and Infrastructure",
+      "Brand and Local Presence",
+      "Non-brand Search Demand",
+      "Social and Content",
+      "Performance Media and Measurement",
+      "Conversion and CRM",
+      "Reputation and Compliance",
     ]);
-    expect(within(section("Scores")).getByText("30% weight")).toBeInTheDocument();
-    expect(within(section("Scores")).getByText("No schema markup")).toBeInTheDocument();
+    expect(rows.map((r) => r.querySelectorAll(".zui-gap-pill")[0]!.textContent)).toEqual(["Fair", "Fair", "Weak", "Fair", "Weak", "Not measured", "Not measured"]);
+    expect(within(rows[4]!).getByText("Critical")).toHaveClass("zui-gap-pill--critical");
+    expect(rows[4]).toHaveTextContent("quoted (research_tech)");
+    expect(rows[5]!.querySelectorAll(".zui-gap-pill")).toHaveLength(1);
 
-    const findings = section("Findings");
-    const website = within(findings).getByRole("region", { name: "Website & SEO findings" });
-    expect(within(website).getAllByRole("listitem").map((li) => li.querySelector("strong")!.textContent)).toEqual(["Thin service pages", "Missing schema"]);
-    expect(within(website).getAllByText("high")).toHaveLength(1);
-    expect(within(findings).getByRole("region", { name: "Tracking findings" })).toHaveTextContent("No Meta pixel");
+    const bench = within(section("The competitive gap")).getByRole("table");
+    const benchRows = within(bench).getAllByRole("row").slice(1);
+    expect(benchRows[0]).toHaveClass("zui-gap-table__prospect");
+    expect(benchRows[0]).toHaveTextContent("Nakheel Dental");
+    expect(benchRows[0]).toHaveTextContent("12,040");
+    expect(benchRows[1]).toHaveTextContent("20 active, text/image, since 13 Aug 2022");
+    expect(benchRows[1]).toHaveTextContent("~10,628 (est.)");
+    expect(benchRows[2]).toHaveTextContent("not measured");
+    expect(within(section("The competitive gap")).getByText(/5x the traffic/)).toBeInTheDocument();
+
+    const gaps = section("The gaps");
+    const cards = within(within(gaps).getByRole("list", { name: "Gaps" })).getAllByRole("listitem");
+    expect(cards.map((c) => c.querySelector("strong")!.textContent)).toEqual(["No measurement", "Thin service pages", "Outranked on implants", "Low engagement"]);
+    expect(cards[0]).toHaveTextContent("Critical");
+    expect(cards[0]).toHaveTextContent("Performance Media and Measurement · quoted (research_tech)");
+    expect(within(gaps).getByText("Not measured this pass: Conversion and CRM, Reputation and Compliance.")).toBeInTheDocument();
+
+    const fix = section("The fix");
+    const phases = within(within(fix).getByRole("list", { name: "Fix phases" })).getAllByRole("listitem");
+    expect(phases.map((p) => p.querySelector(".zui-gap-eyebrow")!.textContent)).toEqual(["Phase 1 · Foundation", "Phase 2 · Demand Capture", "Phase 3 · Demand Generation"]);
+    expect(within(fix).getByText("Booked implant consultations per month.")).toBeInTheDocument();
+    expect(within(fix).getByText("A 30-minute walkthrough with the clinic manager.")).toBeInTheDocument();
 
     const opps = within(section("Opportunities")).getAllByRole("listitem");
     expect(opps[0]).toHaveTextContent("Launch implant search campaign");
     expect(opps[0]).toHaveTextContent("Google Ads");
     expect(opps[0]).toHaveTextContent("high impact");
     expect(opps[0]).toHaveTextContent("Small effort");
-
-    const comps = within(section("Competitors")).getAllByRole("listitem");
-    expect(comps[0]).toHaveTextContent("Smile Hub smilehub.sa");
-    expect(comps[1]).toHaveTextContent("Pearl Clinic");
 
     const steps = within(section("Pipeline")).getAllByRole("listitem");
     expect(steps).toHaveLength(9);
@@ -79,6 +107,14 @@ describe("Audit detail", () => {
     expect(steps[0]).toHaveTextContent("15s");
     expect(steps[3]).toHaveTextContent("Skipped");
     expect(steps[3]).toHaveTextContent("No ads in Meta Ad Library");
+  });
+
+  it("shows the area table before the analyst has written up", async () => {
+    open({ ...doneAudit, status: "running", analysis: undefined });
+    await screen.findByRole("heading", { name: "Nakheel Dental" });
+    expect(section("The seven areas, at a glance")).toBeInTheDocument();
+    expect(section("The competitive gap")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "The gaps" })).not.toBeInTheDocument();
   });
 
   it("links the PDF, CRM and Notion and offers neither retry nor cancel when done", async () => {

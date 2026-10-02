@@ -17,8 +17,9 @@ import {
   safeHref,
   websiteHref,
 } from "./auditModel";
-import { ApifyHint, Competitors, Findings, Opportunities, ScoreBars, StepTimeline } from "./AuditSections";
-import { ErrorNote, Text } from "./common";
+import { AtAGlance, Benchmark, ExecutiveSummary, FixPhases, Gaps } from "./AuditReport";
+import { ApifyHint, Opportunities, StepTimeline } from "./AuditSections";
+import { ErrorNote } from "./common";
 import { absoluteTime } from "./mandates";
 
 /** A link styled as a button, or the same button disabled with the reason as its tooltip. */
@@ -137,25 +138,34 @@ export function AuditBody({ audit, now }: { audit: ProspectAudit; now: number })
       )}
       {analysis && (
         <Section title="Executive summary">
-          <Text>{analysis.executiveSummary}</Text>
+          <ExecutiveSummary audit={audit} analysis={analysis} />
         </Section>
       )}
       {audit.score && (
-        <Section title="Scores">
-          <ScoreBars score={audit.score} />
+        <Section title="The seven areas, at a glance">
+          <AtAGlance score={audit.score} />
+        </Section>
+      )}
+      {audit.benchmark && audit.benchmark.length > 0 && (
+        <Section title="The competitive gap">
+          <Benchmark rows={audit.benchmark} bottomLine={analysis?.bottomLines.competitive} />
         </Section>
       )}
       {analysis && (
         <>
-          <Section title="Findings">
-            <Findings findings={analysis.findings} />
+          <Section title="The gaps">
+            <Gaps findings={analysis.findings} score={audit.score} />
           </Section>
-          <Section title="Opportunities">
-            <Opportunities items={analysis.opportunities} />
-          </Section>
-          <Section title="Competitors">
-            <Competitors items={analysis.competitors} />
-          </Section>
+          {analysis.fix.length > 0 && (
+            <Section title="The fix">
+              <FixPhases analysis={analysis} />
+            </Section>
+          )}
+          {analysis.opportunities.length > 0 && (
+            <Section title="Opportunities">
+              <Opportunities items={analysis.opportunities} />
+            </Section>
+          )}
         </>
       )}
       {!pipelineFirst && pipeline}

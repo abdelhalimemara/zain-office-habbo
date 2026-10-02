@@ -12,7 +12,6 @@ import {
   domainOf,
   formatCost,
   formatDuration,
-  groupFindings,
   isApifyMissing,
   orderedSteps,
   safeHref,
@@ -128,11 +127,5 @@ describe("audit state", () => {
     const filingFailed = { ...doneAudit, steps: doneAudit.steps.map((s) => (s.id === "notion" ? { ...s, status: "failed" as const } : s)) };
     expect(canRetry(filingFailed)).toBe(true);
     expect([canCancel(runningAudit), canCancel({ status: "queued" }), canCancel(doneAudit), canCancel(failedAudit)]).toEqual([true, true, false, false]);
-  });
-
-  it("groups findings by section in section order, most severe first", () => {
-    const groups = groupFindings(doneAudit.analysis!.findings);
-    expect(groups.map((g) => g.section)).toEqual(["website", "search", "tracking"]);
-    expect(groups[0]!.findings.map((f) => f.severity)).toEqual(["high", "medium"]);
   });
 });

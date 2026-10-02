@@ -53,7 +53,7 @@ function panelWidth(panelKind: string, viewportWidth: number): number {
       : panelKind === "meeting" || panelKind === "leadership"
         ? Math.min(760, viewportWidth * 0.54)
         : panelKind === "audits"
-          ? Math.min(560, viewportWidth - 24)
+          ? Math.min(600, viewportWidth - 24)
           : Math.min(440, viewportWidth - 16);
   return Math.round(width + PANEL_GAP);
 }
