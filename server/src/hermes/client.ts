@@ -54,8 +54,29 @@ export interface HermesConfig {
   kanban?: { review_dispatch?: unknown } | null;
 }
 
+export interface GatewayPlatformState {
+  state?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  needs_attention?: boolean | null;
+}
+
 export interface HermesStatus {
-  gateway_platforms?: Record<string, { state?: string | null } | undefined> | null;
+  gateway_platforms?: Record<string, GatewayPlatformState | undefined> | null;
+  gateway_state?: string | null;
+  gateway_running?: boolean | null;
+}
+
+/** GET /api/mcp/servers entry (hermes_cli/web_server_mcp.py `_mcp_server_summary`; env is redacted). */
+export interface McpServer {
+  name: string;
+  transport: "http" | "stdio" | "unknown";
+  url: string | null;
+  command: string | null;
+  args: string[];
+  auth: string | null;
+  enabled: boolean;
+  source?: string;
 }
 
 export interface HomeChannel {
@@ -156,6 +177,11 @@ export class HermesClient {
 
   async setEnv(profile: string, key: string, value: string): Promise<void> {
     await this.request("PUT", "/api/env", { key, value, profile });
+  }
+
+  async mcpServers(profile?: string): Promise<McpServer[]> {
+    const query = profile ? `?profile=${encodeURIComponent(profile)}` : "";
+    return (await this.request<{ servers?: McpServer[] }>("GET", `/api/mcp/servers${query}`)).servers ?? [];
   }
 
   async cronJobs(profile: string): Promise<CronJob[]> {

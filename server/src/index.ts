@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
+import { ConnectionsService } from "./connections/service";
 import { DEFAULT_PORT, createApp, defaultClients, guardOptions } from "./app";
 import { fileHireStore } from "./org/hireStore";
 import { fileBriefs } from "./org/privateBriefs";
@@ -20,6 +21,7 @@ const app = createApp({
   briefs: fileBriefs(process.cwd()),
   guard: guardOptions(port, process.env),
   reconcilerStatus: () => reconciler.status(),
+  connections: new ConnectionsService({ hermes: clients.hermes, ceoWake: clients.ceoWake, hermesBin: process.env.HERMES_BIN }),
 });
 
 if (process.env.NODE_ENV === "production") {

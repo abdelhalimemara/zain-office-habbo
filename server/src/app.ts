@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { ReconcilerStatus } from "../../shared/api";
+import type { ConnectionsService } from "./connections/service";
 import { localOnly, parseOriginList, type GuardOptions } from "./guard";
 import { HermesClient } from "./hermes/client";
 import { HeadcountSource } from "./headcount/catalog";
@@ -20,6 +21,7 @@ export interface AppDeps {
   headcount: HeadcountSource;
   hires: HireStore;
   ceoWake: CeoWake;
+  connections: ConnectionsService;
   /** Board members' private briefs, read only when writing their SOUL. */
   briefs: BriefReader;
   guard?: GuardOptions;
@@ -47,6 +49,8 @@ export function createApp(deps: AppDeps): Hono {
   app.onError(errorResponse);
 
   app.get("/api/health", async (c) => c.json(await health(hermes, deps.reconcilerStatus, ceoWake)));
+
+  app.get("/api/connections", async (c) => c.json(await deps.connections.get()));
 
   app.get("/api/board", async (c) => c.json(await boardWithProgress(hermes, hires)));
 
