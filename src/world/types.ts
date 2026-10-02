@@ -12,6 +12,10 @@ export interface WorldAgent {
   activity: AgentActivity;
   bubble?: string;
   hired: boolean;
+  /** Zain Tech repo team id (shared/techTeams.ts or a team the VP added at runtime). */
+  team?: string;
+  /** Role inside a Tech team: "head-engineer", "project-manager" or "specialist". */
+  teamRole?: string;
 }
 
 export interface WorldCallbacks {
@@ -19,8 +23,13 @@ export interface WorldCallbacks {
   onSelectAgent(profile: string): void;
   /** Css colour behind the active scene (light for the city render, navy for floors). */
   onBackgroundChange?(color: string): void;
+  /** A Tech team pod's name plate was clicked. */
+  onSelectTeam?(teamId: string): void;
 }
 
 export type WorldStats = Record<DivisionId, DivisionStats>;
 
-export type Hit = { kind: "building"; division: DivisionId } | { kind: "agent"; profile: string };
+export type Hit =
+  | { kind: "building"; division: DivisionId }
+  | { kind: "agent"; profile: string }
+  | { kind: "team"; team: string };

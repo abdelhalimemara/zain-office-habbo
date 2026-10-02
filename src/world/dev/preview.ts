@@ -1,6 +1,7 @@
 import { DIVISION_IDS, type DivisionId } from "../../../shared/divisions";
 import type { AgentActivity, DivisionStats } from "../../../shared/flow";
 import { ROSTER } from "../../../shared/roster";
+import { TECH_TEAMS } from "../../../shared/techTeams";
 import { World, type WorldAgent, type WorldView } from "../index";
 
 const ACTIVITIES: AgentActivity[] = ["working", "blocked", "awaiting-approval", "queued", "idle"];
@@ -24,6 +25,27 @@ function mockAgents(): WorldAgent[] {
   for (const b of extraBoard) {
     if (agents.some((a) => a.profile === b.profile)) continue;
     agents.push({ ...b, division: "hq", rank: "board", activity: "idle", hired: params.get("board") === "all" });
+  }
+  if (params.get("tech") === "teams") {
+    let n = 0;
+    for (const t of TECH_TEAMS) {
+      const people = [
+        { id: "head", title: `Head Engineer · ${t.name}`, rank: "lead" as const },
+        { id: "pm", title: `Project Manager · ${t.name}`, rank: "lead" as const },
+        ...[0, 1, 2, 3].map((i) => ({ id: `dev${i}`, title: `Engineer · ${t.name}`, rank: "specialist" as const })),
+      ];
+      for (const p of people) {
+        agents.push({
+          profile: `zain-tech-${t.id}-${p.id}`,
+          title: p.title,
+          division: "tech",
+          rank: p.rank,
+          team: t.id,
+          activity: ACTIVITIES[n++ % ACTIVITIES.length]!,
+          hired: true,
+        });
+      }
+    }
   }
   return agents;
 }
@@ -53,6 +75,9 @@ const world = await World.create(stage, {
   onSelectBuilding: (d) => {
     log.textContent = `building: ${d}`;
     world.setView({ kind: "floor", division: d });
+  },
+  onSelectTeam: (t) => {
+    log.textContent = `team: ${t}`;
   },
   onSelectAgent: (p) => {
     log.textContent = `agent: ${p}`;

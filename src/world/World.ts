@@ -155,6 +155,11 @@ export class World {
     this.scene?.setSelected(profile);
   }
 
+  /** Css-pixel rectangle (relative to the world's container) of a Tech team's pod, when a floor showing it is open. */
+  teamZone(teamId: string): { x: number; y: number; w: number; h: number } | null {
+    return this.scene instanceof FloorScene ? this.scene.teamZone(teamId) : null;
+  }
+
   /** Css pixels of the canvas covered by overlay UI; the camera re-fits into the remaining area. */
   setInsets(insets: Partial<Insets>): void {
     const next = normalizeInsets(insets);
@@ -370,6 +375,7 @@ export class World {
       const hit = this.hitAt(e);
       if (hit?.kind === "building") this.callbacks.onSelectBuilding(hit.division);
       else if (hit?.kind === "agent") this.callbacks.onSelectAgent(hit.profile);
+      else if (hit?.kind === "team") this.callbacks.onSelectTeam?.(hit.team);
     }
     this.dragged = false;
     this.setHover(e.pointerType === "mouse" ? this.hitAt(e) : null);
