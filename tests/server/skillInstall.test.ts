@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HeadcountSource, SUPPORTING_FILE } from "../../server/src/headcount/catalog";
@@ -85,6 +85,39 @@ describe("diskSkillFiles", () => {
     await expect(sink.write(skillMd, "references/../../escape.md", "x")).rejects.toThrow(/refusing/);
     await expect(sink.write(join(root, "README.md"), "references/a.md", "x")).rejects.toThrow(/not a Hermes SKILL.md/);
     await expect(sink.write("relative/skills/x/SKILL.md", "references/a.md", "x")).rejects.toThrow(/not a Hermes SKILL.md/);
+  });
+
+  it("rejects every way out of the profile's skills directory and never overwrites SKILL.md", async () => {
+    const sink = diskSkillFiles();
+    const skillDir = join(root, "profiles/zain-growth-paid/skills/zain-marketing/mk-ads");
+    const outside = join(root, "outside");
+    await mkdir(outside, { recursive: true });
+
+    // A references/ folder that is a symlink out of the skill folder.
+    await symlink(outside, join(skillDir, "references"));
+    await expect(sink.write(skillMd, "references/a.md", "x")).rejects.toThrow(/leaves the skill folder/);
+
+    // A skill folder reached through a symlinked category that points outside the skills directory.
+    const elsewhere = join(outside, "mk-evil");
+    await mkdir(elsewhere, { recursive: true });
+    await symlink(outside, join(root, "profiles/zain-growth-paid/skills/linked"));
+    await expect(sink.write(join(root, "profiles/zain-growth-paid/skills/linked/mk-evil/SKILL.md"), "assets/a.html", "x")).rejects.toThrow(
+      /outside/,
+    );
+
+    // An existing file that is a symlink to something outside is left alone, not followed.
+    await mkdir(join(skillDir, "assets"));
+    await writeFile(join(outside, "victim.txt"), "keep");
+    await symlink(join(outside, "victim.txt"), join(skillDir, "assets", "a.html"));
+    expect(await sink.write(skillMd, "assets/a.html", "pwned")).toBe(false);
+    expect(await readFile(join(outside, "victim.txt"), "utf8")).toBe("keep");
+
+    for (const bad of ["SKILL.md", "assets/SKILL.md", "../SKILL.md", "assets/../../SKILL.md"]) {
+      await expect(sink.write(skillMd, bad, "x")).rejects.toThrow(/refusing/);
+    }
+    expect(await readFile(skillMd, "utf8")).toBe("---\nname: mk-ads\n---\n");
+    expect(await readdir(outside)).toEqual(["mk-evil", "victim.txt"]);
+    expect((await readdir(join(skillDir, "assets"))).filter((f) => f.endsWith(".tmp"))).toEqual([]);
   });
 
   it("refuses a skill folder that is a symlink", async () => {
