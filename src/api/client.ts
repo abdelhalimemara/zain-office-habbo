@@ -16,6 +16,7 @@ import {
   type RosterResponse,
   type TaskDetailResponse,
 } from "@shared/api";
+import { AUDITS_API, type AuditResponse, type AuditsResponse, type StartAuditRequest } from "@shared/audits";
 import { LEADERSHIP_API, type AssignActionsRequest, type StartLeadershipRequest, type UpdateActionsRequest } from "@shared/leadership";
 import { BOARD_MEMORY_API, type BoardMemoryResponse } from "@shared/boardMemory";
 import {
@@ -26,6 +27,26 @@ import {
   type StartMeetingRequest,
 } from "@shared/meetings";
 import { LIVE_API, VOICE_API, type EndLiveRequest, type LiveSessionResponse, type SetVoiceRequest, type VoicesResponse } from "@shared/voice";
+
+/** A CRM lead or company the audit can start from (GET /api/growth/prospects?q=). */
+export interface ProspectHit {
+  id: string;
+  kind: "lead" | "company";
+  name: string;
+  website?: string;
+  instagram?: string;
+  tiktok?: string;
+  facebook?: string;
+  x?: string;
+  linkedin?: string;
+  city?: string;
+}
+
+export interface ProspectsResponse {
+  prospects: ProspectHit[];
+}
+
+export const PROSPECTS_API = (q: string) => `/api/growth/prospects?q=${encodeURIComponent(q)}`;
 
 /** One action's assignment; `ok: false` leaves the action proposed so it can be retried. */
 export interface AssignOutcome {
@@ -90,6 +111,12 @@ export const api = {
   /** `keepalive` lets the request finish while the page unloads; it keeps the JSON headers the origin guard needs. */
   endLive: (id: string, input: EndLiveRequest, keepalive = false) =>
     request<MeetingResponse>(LIVE_API.end(id), { method: "POST", body: JSON.stringify(input), ...(keepalive ? { keepalive } : {}) }),
+  audits: () => request<AuditsResponse>(AUDITS_API.list),
+  audit: (id: string) => request<AuditResponse>(AUDITS_API.one(id)),
+  startAudit: (input: StartAuditRequest) => post<AuditResponse>(AUDITS_API.list, input),
+  retryAudit: (id: string) => post<AuditResponse>(AUDITS_API.retry(id), {}),
+  cancelAudit: (id: string) => post<AuditResponse>(AUDITS_API.cancel(id), {}),
+  prospects: (q: string) => request<ProspectsResponse>(PROSPECTS_API(q)),
   health: () => request<HealthResponse>(API.health),
   connections: () => request<ConnectionsResponse>(API.connections),
   board: () => request<BoardResponse>(API.board),

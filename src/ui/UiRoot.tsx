@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { railVisible } from "../state/rail";
 import { useUiStore, type Panel } from "../state/store";
 import { AgentCard } from "./AgentCard";
+import { AuditsCta } from "./AuditsCta";
+import { AuditsPanel } from "./AuditsPanel";
 import { ApprovalsInbox } from "./ApprovalsInbox";
 import { BoardPanel } from "./BoardPanel";
 import { CallMeetingCta } from "./CallMeetingCta";
@@ -38,6 +40,8 @@ function panelKey(panel: Panel): string {
       return `meeting:${panel.id}`;
     case "leadership":
       return `leadership:${panel.id ?? ""}`;
+    case "audits":
+      return `audits:${panel.id ?? ""}:${panel.compose ? "new" : ""}`;
   }
 }
 
@@ -53,6 +57,8 @@ function OpenPanel({ panel }: { panel: Panel }) {
       return <MeetingRoom id={panel.id} />;
     case "leadership":
       return <LeadershipPanel id={panel.id} />;
+    case "audits":
+      return <AuditsPanel id={panel.id} compose={panel.compose} />;
     case "agent":
       return <AgentCard profile={panel.profile} />;
     case "task":
@@ -91,6 +97,7 @@ export function UiRoot() {
       {railVisible(view, panel?.kind ?? null) && <MandatesRail />}
       {view.kind === "floor" && view.division === "hq" && <CallMeetingCta />}
       {view.kind === "floor" && view.division === "hq" && <LeadershipCta />}
+      {view.kind === "floor" && view.division === "growth" && <AuditsCta />}
       {panel && <OpenPanel key={panelKey(panel)} panel={panel} />}
       {callMeetingOpen && <CallMeetingDialog />}
       {leadershipDialogOpen && <StartLeadershipDialog />}
