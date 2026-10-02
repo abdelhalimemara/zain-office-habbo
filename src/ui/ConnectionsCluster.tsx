@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNo
 import { createPortal } from "react-dom";
 import type { Connection, ConnectionKind, ConnectionStatus } from "@shared/api";
 import { useConnections } from "../api/hooks";
+import { connectionIcon } from "./connectionIcons";
 import { checkedAgo, CONNECTION_GROUPS, describeCounts, groupConnections, STATUS_META, worstStatus, type ConnectionGroup } from "./connections";
 
 export function StatusMark({ status }: { status: ConnectionStatus }) {
@@ -12,10 +13,37 @@ export function StatusMark({ status }: { status: ConnectionStatus }) {
   );
 }
 
+/** A connection's logo (or lettered tile) with its status dot tucked into the corner. */
+export function ConnectionGlyph({ c }: { c: Pick<Connection, "id" | "name" | "status"> }) {
+  const { icon, badge } = connectionIcon(c);
+  return (
+    <span className="zui-conn-glyph" aria-hidden="true" data-icon={icon.type === "brand" ? icon.brand : icon.type === "mail" ? "mail" : `monogram:${icon.letter}`}>
+      {icon.type === "brand" ? (
+        <svg className="zui-conn-glyph__logo" viewBox="0 0 24 24" width="14" height="14" fill={icon.hex}>
+          <path d={icon.path} />
+        </svg>
+      ) : icon.type === "mail" ? (
+        <svg className="zui-conn-glyph__logo" viewBox="0 0 16 16" width="14" height="14">
+          <path d="M2 4h12v8H2z M2 4l6 5 6-5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+      ) : (
+        <span className={`zui-conn-glyph__mono${icon.hermes ? " zui-conn-glyph__mono--hermes" : ""}`}>{icon.letter}</span>
+      )}
+      {badge && (
+        <svg className="zui-conn-glyph__badge" viewBox="0 0 10 10" width="9" height="9">
+          <path d="M5 .8 8.8 2.2v2.6C8.8 7.2 7.1 8.7 5 9.4 2.9 8.7 1.2 7.2 1.2 4.8V2.2z" />
+          <path d="m3.3 5 1.2 1.2L6.9 3.8" fill="none" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+      <span className={`zui-conn-dot zui-conn-dot--${c.status}`} />
+    </span>
+  );
+}
+
 function ConnectionRow({ c, now }: { c: Connection; now: number }) {
   return (
     <li className={`zui-conn zui-conn--${c.status}`}>
-      <StatusMark status={c.status} />
+      <ConnectionGlyph c={c} />
       <div className="zui-conn__text">
         <div className="zui-conn__head">
           <span className="zui-conn__name">{c.name}</span>
@@ -229,15 +257,14 @@ export function ConnectionsRow() {
               <button
                 key={c.id}
                 type="button"
-                className={`zui-conn-pill zui-conn-pill--${c.status}`}
+                className={`zui-conn-chip zui-conn-chip--${c.status}`}
                 aria-label={`${c.name}: ${STATUS_META[c.status].label}`}
-                title={c.detail}
+                title={`${c.name} — ${STATUS_META[c.status].label}\n${c.detail}`}
                 aria-expanded={openId === c.id}
                 aria-haspopup="dialog"
                 onClick={(e) => toggle(c, e.currentTarget)}
               >
-                <StatusMark status={c.status} />
-                <span className="zui-conn-pill__label">{c.name}</span>
+                <ConnectionGlyph c={c} />
               </button>
             ))}
           </Fragment>

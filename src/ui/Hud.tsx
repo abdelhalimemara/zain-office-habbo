@@ -123,6 +123,7 @@ export function Hud() {
         <StatusDot label="Telegram" state={telegram ? TELEGRAM_DOT[telegram] : "unknown"} detail={telegram ?? "unknown"} visible={connectionsDown && !phone} />
         {phone && <ConnectionsSummary />}
       </div>
+      {!phone && <ConnectionsRow />}
       {phone && <MoreMenu onBoard={openBoard} />}
       <div className="zui-hud__actions">
         {division && (
@@ -150,7 +151,6 @@ export function Hud() {
           Hire
         </button>
       </div>
-      {!phone && <ConnectionsRow />}
       {health.data?.reviewDispatch === "on" && (
         <p className="zui-banner zui-banner--warn" role="alert">
           Hermes review agent is on: it can approve mandates before HQ sees them.
