@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import type { DivisionId } from "../../shared/divisions";
 import { findAgent } from "../../shared/roster";
 import { useBoard, useRoster } from "../api/hooks";
+import { railVisible } from "../state/rail";
 import { useUiStore } from "../state/store";
 import { UiRoot } from "../ui/UiRoot";
 import { useHudBottom } from "../ui/useHudBottom";
@@ -21,7 +22,13 @@ export function App() {
   const panelKind = useUiStore((s) => s.panel?.kind ?? null);
   const viewport = useViewport();
   const hudBottom = useHudBottom();
-  const insets = useMemo(() => worldInsets(panelKind, viewport, hudBottom), [panelKind, viewport, hudBottom]);
+  const railCollapsed = useUiStore((s) => s.railCollapsed);
+  const railSheetOpen = useUiStore((s) => s.railSheetOpen);
+  const rail = railVisible(view, panelKind);
+  const insets = useMemo(
+    () => worldInsets(panelKind, viewport, hudBottom, rail ? { collapsed: railCollapsed, sheetOpen: railSheetOpen } : null),
+    [panelKind, viewport, hudBottom, rail, railCollapsed, railSheetOpen],
+  );
 
   const roster = useMemo(() => rosterOrFallback(rosterData?.agents), [rosterData]);
   const agents = useMemo(() => toWorldAgents(roster, board), [roster, board]);

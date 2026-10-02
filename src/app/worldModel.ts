@@ -4,6 +4,7 @@ import { agentActivity, divisionStats, type DivisionStats } from "../../shared/f
 import type { KanbanBoard } from "../../shared/hermes";
 import { ROSTER, type RosterAgent } from "../../shared/roster";
 import type { Insets, WorldAgent } from "../world";
+import { RAIL_MARGIN, RAIL_SHEET_BAR, RAIL_SHEET_HEIGHT, RAIL_WIDTH } from "../state/rail";
 
 const BUBBLE_MAX = 28;
 
@@ -48,14 +49,30 @@ function panelWidth(panelKind: string, viewportWidth: number): number {
   return Math.round(width + PANEL_GAP);
 }
 
-/** Screen area the overlay UI covers (HUD bottom edge in css px), so the world fits into what stays visible. */
+export interface RailLayout {
+  collapsed: boolean;
+  sheetOpen: boolean;
+}
+
+function railInsets(rail: RailLayout, viewport: { width: number; height: number }): Pick<Insets, "right" | "bottom"> {
+  if (viewport.width < PHONE_MAX_WIDTH) {
+    return { right: 0, bottom: rail.sheetOpen ? Math.round(viewport.height * RAIL_SHEET_HEIGHT) : RAIL_SHEET_BAR };
+  }
+  return { right: rail.collapsed ? 0 : RAIL_WIDTH + RAIL_MARGIN + PANEL_GAP, bottom: 0 };
+}
+
+/**
+ * Screen area the overlay UI covers (HUD bottom edge in css px), so the world fits into what stays visible.
+ * `rail` is the city mandates rail when it is showing.
+ */
 export function worldInsets(
   panelKind: string | null,
   viewport: { width: number; height: number },
   hudBottom: number,
+  rail: RailLayout | null = null,
 ): Insets {
   const top = Math.round(hudBottom + PANEL_GAP);
-  if (!panelKind || !SIDE_PANELS.has(panelKind)) return { top, right: 0, bottom: 0, left: 0 };
+  if (!panelKind || !SIDE_PANELS.has(panelKind)) return { top, left: 0, ...(rail ? railInsets(rail, viewport) : { right: 0, bottom: 0 }) };
   if (viewport.width < PHONE_MAX_WIDTH) {
     return { top, right: 0, bottom: Math.round(viewport.height * PHONE_SHEET_HEIGHT), left: 0 };
   }

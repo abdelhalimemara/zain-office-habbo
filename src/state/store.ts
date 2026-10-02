@@ -15,25 +15,54 @@ export type Panel =
   | { kind: "mandate"; division?: DivisionId }
   | { kind: "hire"; division?: DivisionId; prefill?: HirePrefill };
 
+export const RAIL_COLLAPSED_KEY = "zui.mandatesRail.collapsed";
+
+export function loadRailCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(RAIL_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveRailCollapsed(collapsed: boolean): void {
+  try {
+    window.localStorage.setItem(RAIL_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    return;
+  }
+}
+
 export interface UiState {
   view: View;
   selectedAgent: string | null;
   panel: Panel | null;
+  /** Desktop mandates rail folded to a button; remembered across visits. */
+  railCollapsed: boolean;
+  /** Phone mandates sheet expanded; starts folded every visit. */
+  railSheetOpen: boolean;
   goToCity: () => void;
   enterDivision: (division: DivisionId) => void;
   openPanel: (panel: Panel) => void;
   closePanel: () => void;
   selectAgent: (profile: string | null) => void;
+  /** Enter the mandate's division floor with its task overview open. */
+  openMandate: (id: string, division: DivisionId) => void;
+  setRailCollapsed: (collapsed: boolean) => void;
+  setRailSheetOpen: (open: boolean) => void;
 }
 
-export const initialUiState: Pick<UiState, "view" | "selectedAgent" | "panel"> = {
+export const initialUiState: Pick<UiState, "view" | "selectedAgent" | "panel" | "railCollapsed" | "railSheetOpen"> = {
   view: { kind: "city" },
   selectedAgent: null,
   panel: null,
+  railCollapsed: false,
+  railSheetOpen: false,
 };
 
 export const useUiStore = create<UiState>()((set) => ({
   ...initialUiState,
+  railCollapsed: loadRailCollapsed(),
   goToCity: () => set({ view: { kind: "city" }, selectedAgent: null, panel: null }),
   enterDivision: (division) => set({ view: { kind: "floor", division }, selectedAgent: null, panel: null }),
   openPanel: (panel) =>
@@ -41,4 +70,11 @@ export const useUiStore = create<UiState>()((set) => ({
   closePanel: () => set({ panel: null, selectedAgent: null }),
   selectAgent: (profile) =>
     set(profile ? { selectedAgent: profile, panel: { kind: "agent", profile } } : { selectedAgent: null, panel: null }),
+  openMandate: (id, division) =>
+    set({ view: { kind: "floor", division }, selectedAgent: null, panel: { kind: "task", id }, railSheetOpen: false }),
+  setRailCollapsed: (railCollapsed) => {
+    saveRailCollapsed(railCollapsed);
+    set({ railCollapsed });
+  },
+  setRailSheetOpen: (railSheetOpen) => set({ railSheetOpen }),
 }));
