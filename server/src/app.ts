@@ -61,13 +61,10 @@ export interface AppDeps {
   teams?: TeamStore;
   /** How POST /api/tech/teams asks `gh` whether a repo exists. */
   gh?: GhCheck;
-<<<<<<< HEAD
   /** Writes multi-file skills' references at hire time; multi-file skills install SKILL.md only when omitted. */
   skillFiles?: SkillFileSink;
-=======
   /** Zain Growth prospect audits; their routes are absent when omitted. */
   audits?: AuditEngine;
->>>>>>> feat/audit-server
 }
 
 export const DEFAULT_PORT = 8787;
