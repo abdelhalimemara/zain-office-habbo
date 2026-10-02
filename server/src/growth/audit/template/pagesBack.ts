@@ -103,7 +103,7 @@ export function competitive(ctx: ReportContext): string {
   ];
   const body = `<div class="body">${table(
     ["Business", "Google Ads", "Meta Ads", "Instagram followers", "Est. monthly visits", "Authority (Semrush)"],
-    rows.map((r) => [t(r.name), googleCell(r).split(",")[0]!, metaCell(r).replace(/\s\(.*$/, ""), ig(r), visits(r), r.authorityScore === undefined ? "—" : String(r.authorityScore)]),
+    rows.map((r) => [t(r.name), googleCell(r, ctx).split(",")[0]!, metaCell(r).replace(/\s\(.*$/, ""), ig(r), visits(r), r.authorityScore === undefined ? "—" : String(r.authorityScore)]),
     `Sources as on the previous pages, ${ctx.day}.`,
     0,
   )}</div>`;

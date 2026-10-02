@@ -1,4 +1,6 @@
 import { AUDIT_AREA_LABELS, type BenchmarkRow } from "../../../../../shared/audits";
+import { PLATFORMS, brandRun } from "../collect/search";
+import { shortDate } from "../dates";
 import { tagRead } from "../collect/website";
 import { gaps } from "../score";
 import { bottomLine, cards, esc, fmt, logo, notes, page, severityPill, statusPill, t, table, type ReportContext } from "./layout";
@@ -115,9 +117,11 @@ export function technical(ctx: ReportContext): string {
 
 export function search(ctx: ReportContext): string {
   const runs = ctx.audit.searchRuns ?? [];
-  const brand = runs.find((r) => r.kind === "brand");
+  const brand = brandRun(runs);
   const category = runs.filter((r) => r.kind === "category");
   const inCategory = category.filter((r) => r.prospectPresent);
+  // Who did show up, without marketplaces and social networks.
+  const shownUp = [...new Set(category.flatMap((r) => r.others))].filter((d) => !PLATFORMS.test(d)).slice(0, 2);
   const rows = runs.map((r) => [
     r.kind === "brand" ? `${t(r.query)} (brand)` : t(r.query),
     r.prospectPresent ? "Yes" : "No",
@@ -132,17 +136,26 @@ export function search(ctx: ReportContext): string {
       : { title: "Brand not owned", detail: `A plain search for "${ctx.audit.prospect.name}" does not return the official site (quoted).` },
     inCategory.length
       ? { title: "Category entered", detail: `Present in ${inCategory.length} of ${category.length} live category searches (quoted).` }
-      : { title: "Category not entered", detail: `${ctx.host} did not appear in ${category.length} live category searches${category[0]?.others.length ? `; ${category[0].others.slice(0, 2).join(" and ")} did` : ""} (quoted).` },
+      : { title: "Category not entered", detail: `${ctx.host} did not appear in ${category.length} live category searches${shownUp.length ? `; ${shownUp.join(" and ")} did` : ""} (quoted).` },
     lane
       ? { title: "The keyword lane", detail: `${lane.c.domain} draws an estimated ${Math.round(lane.t!.organicShare! * 100)}% of its traffic from organic search (Similarweb) — evidence the category is winnable.` }
       : { title: "The keyword lane", detail: seo ? `${fmt(seo.read.organicKeywords)} ranking keywords and ~${fmt(seo.read.organicTraffic)} organic visits a month (estimated, Semrush).` : "Organic search share could not be estimated this pass." },
   ];
-  const body = `<div class="body">${table(["Search run", `${ctx.host} present?`, "Who else appears"], rows, `Source: ${ctx.src.search}.`, -1, ["38%", "24%", "38%"])}</div>`;
+  const body = `<div class="body compact">${table(["Search run", `${ctx.host} present?`, "Who else appears"], rows, `Source: ${ctx.src.search}.`, -1, ["38%", "24%", "38%"])}</div>`;
   return page(ctx, 6, "Search: Brand vs Category", "Each row is one live search run this pass.", body, `${cards(items)}${bottomLine(ctx.analysis.bottomLines.search)}`);
 }
 
-const googleCell = (r: BenchmarkRow) =>
-  r.googleAds === "none" ? "None found" : !r.googleAds || r.googleAds === "not-measured" ? "Not measured" : `${r.googleAds.active} active${r.googleAds.formats ? `, ${esc(r.googleAds.formats)}` : ""}${r.googleAds.since ? `, since ${esc(r.googleAds.since)}` : ""}`;
+/** A zero count never comes with formats: "None active (last seen …)" when older ads exist. */
+const googleCell = (r: BenchmarkRow, ctx?: ReportContext) => {
+  if (r.googleAds === "none") return "None found";
+  if (!r.googleAds || r.googleAds === "not-measured") return "Not measured";
+  if (r.googleAds.active === 0) {
+    const g = r.domain ? ctx?.data.ads?.google[r.domain] : undefined;
+    const last = g && g !== "none" ? g.lastSeen : undefined;
+    return last ? `None active (last seen ${esc(shortDate(last))})` : "None active";
+  }
+  return `${r.googleAds.active} active${r.googleAds.formats ? `, ${esc(r.googleAds.formats)}` : ""}${r.googleAds.since ? `, since ${esc(r.googleAds.since)}` : ""}`;
+};
 const metaCell = (r: BenchmarkRow) =>
   r.metaAds === "none" ? "None attributable" : !r.metaAds || r.metaAds === "not-measured" ? "Not measured" : `${r.metaAds.active} active${r.metaAds.note ? ` (${t(r.metaAds.note)} page)` : ""}`;
 
@@ -160,7 +173,7 @@ export function paid(ctx: ReportContext): string {
   ];
   const body = `<div class="body">${table(
     ["Business", "Google Ads (Transparency Center)", "Meta Ads (Ad Library)"],
-    rows.map((r) => [t(r.name), googleCell(r), metaCell(r)]),
+    rows.map((r) => [t(r.name), googleCell(r, ctx), metaCell(r)]),
     `Source: ${ctx.src.googleAds}; ${ctx.src.meta}. Meta counts are keyword-matched; a page not clearly the brand is left out.`,
     0,
     ["24%", "40%", "36%"],

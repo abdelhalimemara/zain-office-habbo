@@ -73,8 +73,9 @@ export interface GoogleAdsRead {
   active: number;
   total: number;
   formats: string[];
-  /** ISO date of the earliest first-shown ad. */
+  /** ISO date of the earliest first-shown ad, and of the latest last-shown one. */
   since?: string;
+  lastSeen?: string;
   advertiser?: string;
 }
 

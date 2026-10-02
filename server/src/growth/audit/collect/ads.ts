@@ -2,6 +2,7 @@ import type { AuditProspect } from "../../../../../shared/audits";
 import { CostCapReached, type Budget } from "../budget";
 import { onHost, siteHost } from "../url";
 import type { AdsData, Competitor, CrmFlags, GoogleAdsRead, MapsRead, StepResult, TrafficRead } from "../types";
+import { finalPeers, type Candidate } from "./peers";
 import { facebookUrl, when } from "./social";
 
 const DAY = 86_400_000;
@@ -48,6 +49,7 @@ export function summarizeGoogleAds(items: readonly Item[], now: number): GoogleA
   const ads = items.filter((i) => i.creativeId || i.adUrl || i.format);
   if (!ads.length) return "none";
   const firsts = ads.map((a) => when(a.firstShown)).filter((t): t is number => t !== undefined);
+  const lasts = ads.map((a) => when(a.lastShown)).filter((t): t is number => t !== undefined);
   return {
     active: ads.filter((a) => {
       const last = when(a.lastShown);
@@ -56,6 +58,7 @@ export function summarizeGoogleAds(items: readonly Item[], now: number): GoogleA
     total: ads.length,
     formats: [...new Set(ads.map((a) => String(a.format ?? "").toLowerCase()).filter(Boolean))].sort(),
     since: firsts.length ? new Date(Math.min(...firsts)).toISOString().slice(0, 10) : undefined,
+    lastSeen: lasts.length ? new Date(Math.max(...lasts)).toISOString().slice(0, 10) : undefined,
     advertiser: typeof ads[0]!.advertiserName === "string" ? ads[0]!.advertiserName : undefined,
   };
 }
@@ -139,13 +142,12 @@ export function mapsRead(prospect: AuditProspect, items: readonly Item[]): MapsR
 export async function collectAds(
   auditId: string,
   prospect: AuditProspect,
-  competitors: readonly Competitor[],
+  candidates: readonly Candidate[],
   budget: Budget,
   flags?: CrmFlags,
   now = Date.now(),
-): Promise<StepResult<AdsData>> {
-  const businesses: Business[] = [{ domain: siteHost(prospect.website), name: prospect.name, facebook: prospect.facebook }, ...competitors];
-  const domains = businesses.map((b) => b.domain);
+): Promise<StepResult<AdsData> & { competitors: Competitor[] }> {
+  const prospectDomain = siteHost(prospect.website);
   const data: AdsData = { google: {}, meta: {}, traffic: {} };
   const problems: string[] = [];
   let costUsd = 0;
@@ -159,6 +161,21 @@ export async function collectAds(
       else problems.push(`${label}: ${err instanceof Error ? err.message.slice(0, 60) : "error"}`);
     }
   };
+  // Traffic first: it decides which candidates are Saudi peers of the prospect's size (peers.ts).
+  await attempt("Similarweb", async () => {
+    const domains = [prospectDomain, ...candidates.map((c) => c.domain)];
+    const r = await budget.run(auditId, "similarweb", { searchType: "similarweb", domains });
+    costUsd += r.costUsd;
+    for (const item of r.items) {
+      const d = siteHost(`https://${String(item.SiteName ?? "")}`);
+      const t = domains.includes(d) ? trafficRead(item) : null;
+      if (t) data.traffic[d] = t;
+    }
+  });
+  const competitors = finalPeers(candidates, data.traffic, prospectDomain);
+  for (const d of Object.keys(data.traffic)) if (d !== prospectDomain && !competitors.some((c) => c.domain === d)) delete data.traffic[d];
+  const businesses: Business[] = [{ domain: prospectDomain, name: prospect.name, facebook: prospect.facebook }, ...competitors];
+  const domains = businesses.map((b) => b.domain);
   const metaUrls = businesses.map((b, i) => ({ b, ...metaUrl(b, i === 0 ? flags : {}) }));
   await Promise.all([
     attempt("Google Ads", async () => {
@@ -171,15 +188,6 @@ export async function collectAds(
       costUsd += r.costUsd;
       for (const m of metaUrls) data.meta[m.b.domain] = attributeMeta(m.b, r.items.filter((i) => i.inputUrl === m.url || i.url === m.url), m.byKeyword);
     }),
-    attempt("Similarweb", async () => {
-      const r = await budget.run(auditId, "similarweb", { searchType: "similarweb", domains });
-      costUsd += r.costUsd;
-      for (const item of r.items) {
-        const d = siteHost(`https://${String(item.SiteName ?? "")}`);
-        const t = domains.includes(d) ? trafficRead(item) : null;
-        if (t) data.traffic[d] = t;
-      }
-    }),
     attempt("Maps", async () => {
       const r = await budget.run(auditId, "maps", mapsInput(prospect));
       costUsd += r.costUsd;
@@ -188,7 +196,7 @@ export async function collectAds(
   ]);
   const read = [Object.keys(data.google).length, Object.keys(data.meta).length, Object.keys(data.traffic).length, data.maps ? 1 : 0].filter(Boolean).length;
   if (read === 0) {
-    if (capped) return { status: "skipped", costUsd, note: capped };
+    if (capped) return { status: "skipped", costUsd, note: capped, competitors };
     throw Object.assign(new Error(problems.join("; ") || "No ad library or traffic source could be read"), { costUsd });
   }
   const p = businesses[0]!.domain;
@@ -204,5 +212,6 @@ export async function collectAds(
     data.traffic[p] ? `~${data.traffic[p]!.monthlyVisits.toLocaleString("en-US")} visits/month` : "traffic not measured",
     data.maps && data.maps !== "none" ? `Maps ${data.maps.rating ?? "–"}★ (${data.maps.reviews ?? 0})` : "no Maps listing matched",
   ];
-  return { status: "done", data, costUsd, note: `${parts.join(" · ")}${competitors.length ? ` · ${competitors.length} competitors benchmarked` : ""}${capped ? ` (${capped.toLowerCase()})` : ""}` };
+  const peers = `${competitors.length} of ${candidates.length} candidates kept as Saudi peers`;
+  return { status: "done", data, competitors, costUsd, note: `${parts.join(" · ")} · ${peers}${capped ? ` (${capped.toLowerCase()})` : ""}` };
 }

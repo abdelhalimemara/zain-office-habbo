@@ -14,8 +14,8 @@ const dateLabel = (iso: string | undefined) => (iso ? shortDate(iso) : undefined
 /** The prospect first, then up to three competitors, on the same public measures. */
 export function buildBenchmark(prospect: AuditProspect, data: CollectedData): BenchmarkRow[] {
   const prospectRow: Competitor = { domain: siteHost(prospect.website), name: prospect.name };
-  // Three competitors at most: when the social step could not narrow the candidates, the first three stand.
-  const businesses = [prospectRow, ...(data.competitors ?? []).slice(0, 3)];
+  // The ads step leaves only Saudi peers (at most three); before it runs, no candidate is shown.
+  const businesses = [prospectRow, ...(data.ads ? (data.competitors ?? []).slice(0, 3) : [])];
   return businesses.map((b, i) => {
     const isProspect = i === 0;
     const g = data.ads?.google[b.domain];
@@ -28,7 +28,8 @@ export function buildBenchmark(prospect: AuditProspect, data: CollectedData): Be
       name: b.name,
       domain: b.domain,
       isProspect,
-      googleAds: !data.ads ? "not-measured" : g === undefined ? "not-measured" : g === "none" ? "none" : { active: g.active, formats: g.formats.join("/") || undefined, since: dateLabel(g.since) },
+      // No active ads: just the count, never formats and a "since" that read as if they were running.
+      googleAds: !data.ads || g === undefined ? "not-measured" : g === "none" ? "none" : g.active === 0 ? { active: 0 } : { active: g.active, formats: g.formats.join("/") || undefined, since: dateLabel(g.since) },
       metaAds: !data.ads ? "not-measured" : m === undefined ? "not-measured" : m === "none" ? "none" : { active: m.active, ...(m.pageName ? { note: m.pageName } : {}) },
       instagramFollowers: typeof ig === "number" ? ig : "not-measured",
       traffic: t ? { monthlyVisits: t.monthlyVisits, bounceRate: t.bounceRate, topSource: t.topSource, saudiShare: t.saudiShare, period: t.period } : "not-measured",

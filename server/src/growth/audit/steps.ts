@@ -10,7 +10,8 @@ import type { PdfRenderer, Screenshotter } from "./chrome";
 import { collectAds } from "./collect/ads";
 import { collectSearch, pickCompetitors } from "./collect/search";
 import { semrushAudit, semrushDomains } from "./collect/seo";
-import { MAX_COMPETITORS, collectSocial } from "./collect/social";
+import { categoryTerms } from "./collect/peers";
+import { collectSocial } from "./collect/social";
 import { collectWebsite, tagRead } from "./collect/website";
 import type { AuditCrm, CrmRecordKind } from "./crm";
 import type { AuditNotionSink } from "./notion";
@@ -160,7 +161,7 @@ export async function runStep(step: AuditStepId, s: StoredAudit, ctx: StepContex
       return capped(() => searchStep(s, ctx));
     case "social":
       return capped(async () => {
-        const r = await collectSocial(s.id, p, data.website, data.competitors ?? [], ctx.budget);
+        const r = await collectSocial(s.id, p, data.website, data.competitors ?? [], ctx.budget, Date.now(), categoryTerms(data.search?.runs ?? []));
         return {
           status: r.status,
           note: r.note,
@@ -176,8 +177,17 @@ export async function runStep(step: AuditStepId, s: StoredAudit, ctx: StepContex
       });
     case "ads":
       return capped(async () => {
-        const r = await collectAds(s.id, p, (data.competitors ?? []).slice(0, MAX_COMPETITORS), ctx.budget, s.crmFlags);
-        return { status: r.status, note: r.note, costUsd: r.costUsd, patch: (x) => r.data && (x.data.ads = r.data) };
+        const r = await collectAds(s.id, p, data.competitors ?? [], ctx.budget, s.crmFlags);
+        return {
+          status: r.status,
+          note: r.note,
+          costUsd: r.costUsd,
+          patch: (x) => {
+            if (r.data) x.data.ads = r.data;
+            // The final cut: only Saudi peers stay in the benchmark (peers.ts).
+            x.data.competitors = r.competitors;
+          },
+        };
       });
     case "score": {
       const score = scoreAudit(data, p, data.asOf ?? asOfLabel(audit.createdAt));
