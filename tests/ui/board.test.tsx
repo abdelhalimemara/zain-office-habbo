@@ -37,7 +37,7 @@ describe("BoardPanel", () => {
 
   it("shows each member with seat, hired state and activity", async () => {
     routes();
-    renderUi(<BoardPanel />);
+    renderUi(<BoardPanel tab="consult" />);
     const members = await screen.findByRole("list", { name: "Board members" });
     const card = within(members).getByRole("button", { name: "Alex Hormozi" }).closest("li")!;
     expect(await within(card).findByText("Hired")).toBeInTheDocument();
@@ -47,7 +47,7 @@ describe("BoardPanel", () => {
 
   it("consults the hired members by default with the question and related task", async () => {
     const fetch = routes(rosterEntries, { [`POST ${API.boardConsult}`]: { tasks: [task({ id: "b9" })], telegramSubscribed: true } });
-    renderUi(<BoardPanel />);
+    renderUi(<BoardPanel tab="consult" />);
     expect(await screen.findByRole("checkbox", { name: /Alex Hormozi/ })).toBeChecked();
     for (const m of BOARD_MEMBERS) expect(screen.getByRole("checkbox", { name: new RegExp(m.name) })).toBeChecked();
     await userEvent.type(screen.getByLabelText("Question"), "Should we raise prices 30%?");
@@ -61,7 +61,7 @@ describe("BoardPanel", () => {
 
   it("requires a question and at least one advisor", async () => {
     const fetch = routes();
-    renderUi(<BoardPanel />);
+    renderUi(<BoardPanel tab="consult" />);
     await userEvent.click(await screen.findByRole("button", { name: "Consult the board" }));
     expect(screen.getByText("Write a question for the board.")).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Question"), "x");
@@ -73,14 +73,14 @@ describe("BoardPanel", () => {
 
   it("explains that nobody can be consulted while every seat is vacant", async () => {
     routes(vacantBoard);
-    renderUi(<BoardPanel />);
+    renderUi(<BoardPanel tab="consult" />);
     expect(await screen.findByText(/No board member is hired yet/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Consult the board" })).not.toBeInTheDocument();
   });
 
   it("lists recent consultations newest first with a result preview and opens them", async () => {
     routes();
-    renderUi(<BoardPanel />);
+    renderUi(<BoardPanel tab="consult" />);
     const list = await screen.findByRole("list", { name: "Recent consultations" });
     const items = await within(list).findAllByRole("listitem");
     expect(items.map((i) => within(i).getAllByRole("button")[0]!.textContent)).toEqual(["Price Studio retainers?", "Raise Labs share?"]);

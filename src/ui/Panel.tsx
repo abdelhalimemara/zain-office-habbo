@@ -6,16 +6,17 @@ interface ShellProps {
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  className?: string;
 }
 
 function accentStyle(accent?: string): CSSProperties | undefined {
   return accent ? ({ "--accent": accent } as CSSProperties) : undefined;
 }
 
-export function Panel({ title, accent, onClose, children, wide }: ShellProps) {
+export function Panel({ title, accent, onClose, children, wide, className }: ShellProps) {
   const titleId = useId();
   return (
-    <aside className={`zui-panel${wide ? " zui-panel--wide" : ""}`} aria-labelledby={titleId} style={accentStyle(accent)}>
+    <aside className={`zui-panel${wide ? " zui-panel--wide" : ""}${className ? ` ${className}` : ""}`} aria-labelledby={titleId} style={accentStyle(accent)}>
       <header className="zui-panel__header">
         <span className="zui-panel__dot" aria-hidden="true" />
         <h2 id={titleId} className="zui-heading">

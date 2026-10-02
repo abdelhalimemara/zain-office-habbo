@@ -16,6 +16,13 @@ import {
   type RosterResponse,
   type TaskDetailResponse,
 } from "@shared/api";
+import {
+  MEETINGS_API,
+  type FounderRemarkRequest,
+  type MeetingResponse,
+  type MeetingsResponse,
+  type StartMeetingRequest,
+} from "@shared/meetings";
 
 export class ApiRequestError extends Error {
   constructor(
@@ -49,6 +56,11 @@ function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const api = {
+  meetings: () => request<MeetingsResponse>(MEETINGS_API.list),
+  meeting: (id: string) => request<MeetingResponse>(MEETINGS_API.one(id)),
+  startMeeting: (input: StartMeetingRequest) => post<MeetingResponse>(MEETINGS_API.list, input),
+  founderRemark: (id: string, input: FounderRemarkRequest) => post<MeetingResponse>(MEETINGS_API.remark(id), input),
+  cancelMeeting: (id: string) => post<MeetingResponse>(MEETINGS_API.cancel(id), {}),
   health: () => request<HealthResponse>(API.health),
   connections: () => request<ConnectionsResponse>(API.connections),
   board: () => request<BoardResponse>(API.board),

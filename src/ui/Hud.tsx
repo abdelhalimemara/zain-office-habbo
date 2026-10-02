@@ -3,6 +3,7 @@ import type { HealthResponse } from "@shared/api";
 import { getDivision } from "@shared/divisions";
 import { hqDecisionCount } from "@shared/flow";
 import { useBoard, useConnections, useHealth } from "../api/hooks";
+import { useMeetings } from "../api/meetingHooks";
 import { useUiStore } from "../state/store";
 import { useRosterAgents } from "./common";
 import { ConnectionsRow, ConnectionsSummary } from "./ConnectionsCluster";
@@ -25,7 +26,20 @@ function StatusDot({ label, state, detail, visible }: { label: string; state: Do
   );
 }
 
-function MoreMenu({ onBoard }: { onBoard: () => void }) {
+function BoardBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="zui-count zui-count--alert" aria-hidden="true">
+      {count}
+    </span>
+  );
+}
+
+function boardLabel(count: number): string | undefined {
+  return count > 0 ? `Board, ${count} ${count === 1 ? "meeting needs" : "meetings need"} you` : undefined;
+}
+
+function MoreMenu({ onBoard, meetingsWaiting }: { onBoard: () => void; meetingsWaiting: number }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -49,19 +63,20 @@ function MoreMenu({ onBoard }: { onBoard: () => void }) {
   return (
     <div className="zui-hud__more" ref={ref}>
       <button type="button" className="zui-btn zui-btn--icon" aria-label="More" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen(!open)}>
-        ⋯
+        ⋯{meetingsWaiting > 0 && <span className="zui-more-dot" aria-hidden="true" />}
       </button>
       {open && (
         <div className="zui-menu">
           <button
             type="button"
             className="zui-menu__item"
+            aria-label={boardLabel(meetingsWaiting)}
             onClick={() => {
               setOpen(false);
               onBoard();
             }}
           >
-            Board
+            Board <BoardBadge count={meetingsWaiting} />
           </button>
         </div>
       )}
@@ -85,7 +100,8 @@ export function Hud() {
   const phone = useMediaQuery(PHONE_QUERY);
   const ref = useRef<HTMLElement>(null);
   usePublishHudBottom(ref);
-  const openBoard = () => openPanel({ kind: "board" });
+  const meetingsWaiting = useMeetings().data?.meetings.filter((m) => m.status === "awaiting-founder").length ?? 0;
+  const openBoard = () => openPanel({ kind: "board", ...(meetingsWaiting > 0 ? { tab: "meetings" as const } : {}) });
 
   return (
     <header className="zui-hud" ref={ref}>
@@ -124,7 +140,7 @@ export function Hud() {
         {phone && <ConnectionsSummary />}
       </div>
       {!phone && <ConnectionsRow />}
-      {phone && <MoreMenu onBoard={openBoard} />}
+      {phone && <MoreMenu onBoard={openBoard} meetingsWaiting={meetingsWaiting} />}
       <div className="zui-hud__actions">
         {division && (
           <button type="button" className="zui-btn" onClick={() => openPanel({ kind: "kanban", division })}>
@@ -140,8 +156,9 @@ export function Hud() {
           )}
         </button>
         {!phone && (
-          <button type="button" className="zui-btn" onClick={openBoard}>
+          <button type="button" className="zui-btn" onClick={openBoard} aria-label={boardLabel(meetingsWaiting)}>
             Board
+            <BoardBadge count={meetingsWaiting} />
           </button>
         )}
         <button type="button" className="zui-btn zui-btn--primary" onClick={() => openPanel({ kind: "mandate", division })}>

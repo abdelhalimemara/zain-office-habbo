@@ -6,6 +6,7 @@ import type { KanbanTask } from "@shared/hermes";
 import { useBoard, useBoardConsult } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { ActivityBadge, AgentChip, ErrorNote, Text, useRosterAgents } from "./common";
+import { MeetingsTab } from "./MeetingsTab";
 import { Portrait } from "./Portrait";
 import { Panel } from "./Panel";
 
@@ -126,31 +127,57 @@ function Consultation({ task, agents }: { task: KanbanTask; agents: readonly Ros
   );
 }
 
-export function BoardPanel({ members: preselect }: { members?: string[] }) {
+export function BoardPanel({ members: preselect, tab: initialTab }: { members?: string[]; tab?: "meetings" | "consult" }) {
   const { agents, loaded } = useRosterAgents();
   const board = useBoard();
   const closePanel = useUiStore((s) => s.closePanel);
   const advisors = agents.filter((a) => a.rank === "board");
   const recent = board.data ? boardConsultations(board.data, agents).slice(0, RECENT) : [];
+  const [tab, setTab] = useState<"meetings" | "consult">(initialTab ?? (preselect ? "consult" : "meetings"));
+  const tabId = useId();
 
   return (
     <Panel title="Board of advisors" accent={BOARD_COLOR} onClose={closePanel}>
       <p className="zui-hint">AI advisors modelled on public figures' published thinking. They advise the CEO and founder; they don't run work.</p>
-      <ul className="zui-board-members" aria-label="Board members">
-        {advisors.map((a) => (
-          <MemberCard key={a.profile} agent={a} loaded={loaded} />
+      <div role="tablist" aria-label="Board" className="zui-segmented">
+        {(["meetings", "consult"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            id={`${tabId}-${t}`}
+            aria-selected={tab === t}
+            aria-controls={`${tabId}-panel`}
+            className="zui-segmented__tab"
+            onClick={() => setTab(t)}
+          >
+            {t === "meetings" ? "Meetings" : "Consult"}
+          </button>
         ))}
-      </ul>
-      <h3 className="zui-subheading">Consult the board</h3>
-      <ConsultForm advisors={advisors} preselect={preselect} />
-      <h3 className="zui-subheading">Recent consultations</h3>
-      <ErrorNote error={board.error} />
-      {board.data && recent.length === 0 && <p className="zui-hint">No consultations yet.</p>}
-      <ul className="zui-consultations" aria-label="Recent consultations">
-        {recent.map((t) => (
-          <Consultation key={t.id} task={t} agents={agents} />
-        ))}
-      </ul>
+      </div>
+      <div role="tabpanel" id={`${tabId}-panel`} aria-labelledby={`${tabId}-${tab}`} className="zui-board-tab">
+        {tab === "meetings" ? (
+          <MeetingsTab advisors={advisors} agents={agents} />
+        ) : (
+          <>
+            <ul className="zui-board-members" aria-label="Board members">
+              {advisors.map((a) => (
+                <MemberCard key={a.profile} agent={a} loaded={loaded} />
+              ))}
+            </ul>
+            <h3 className="zui-subheading">Consult the board</h3>
+            <ConsultForm advisors={advisors} preselect={preselect} />
+            <h3 className="zui-subheading">Recent consultations</h3>
+            <ErrorNote error={board.error} />
+            {board.data && recent.length === 0 && <p className="zui-hint">No consultations yet.</p>}
+            <ul className="zui-consultations" aria-label="Recent consultations">
+              {recent.map((t) => (
+                <Consultation key={t.id} task={t} agents={agents} />
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
     </Panel>
   );
 }
