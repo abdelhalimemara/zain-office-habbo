@@ -111,9 +111,9 @@ describe("city fit", () => {
     expect(stepSmooth(3, 1, 1, 1)).toBe(3);
   });
 
-  it("paints the image's own background behind the city and navy behind floors", () => {
-    expect(CITY_BACKGROUND).toBe(0xf7f7f7);
-    expect(worldBackground({ kind: "city" })).toBe("#F7F7F7");
-    expect(worldBackground({ kind: "floor", division: "labs" })).toBe("#13294B");
+  it("paints the shared warm-white page behind the city and the floors", () => {
+    expect(CITY_BACKGROUND).toBe(0xf4f1ec);
+    expect(worldBackground({ kind: "city" })).toBe("#F4F1EC");
+    expect(worldBackground({ kind: "floor", division: "labs" })).toBe("#F4F1EC");
   });
 });

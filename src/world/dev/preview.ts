@@ -16,9 +16,14 @@ function mockAgents(): WorldAgent[] {
     bubble: i % 3 === 0 ? "Q4 launch brief" : undefined,
     hired: params.get("vacant") === "all" ? false : a.rank === "board" || i % 7 !== 6,
   }));
-  const seated = agents.filter((a) => a.rank === "board").length;
-  for (let n = seated + 1; n <= 5; n++) {
-    agents.push({ profile: `zain-board-seat-${n}`, title: "Board · Open seat", division: "hq", rank: "board", activity: "idle", hired: false });
+  const extraBoard = [
+    { profile: "zain-board-bezos", title: "Board · Jeff Bezos" },
+    { profile: "zain-board-buffett", title: "Board · Warren Buffett" },
+    { profile: "zain-board-jobs", title: "Board · Steve Jobs" },
+  ];
+  for (const b of extraBoard) {
+    if (agents.some((a) => a.profile === b.profile)) continue;
+    agents.push({ ...b, division: "hq", rank: "board", activity: "idle", hired: params.get("board") === "all" });
   }
   return agents;
 }
@@ -59,7 +64,7 @@ const initial: WorldView = params.get("view") && params.get("view") !== "city"
   ? { kind: "floor", division: params.get("view") as DivisionId }
   : { kind: "city" };
 world.setView(initial);
-world.setAgents(agents);
+if (params.get("agents") !== "none") world.setAgents(agents);
 world.setDivisionStats(mockStats());
 if (params.get("select")) world.setSelectedAgent(params.get("select"));
 
