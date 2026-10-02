@@ -4,7 +4,8 @@ import { DIVISION_IDS } from "../../shared/divisions";
 import { CEO_PROFILE, COO_PROFILE, ROSTER, agentsInDivision, managerOf } from "../../shared/roster";
 import { BOARD_SPRITES, CEO_SPRITE, WORKER_SPRITES, spriteFor } from "../../src/world/characters";
 import { compareBoxes, dynamicDepth } from "../../src/world/iso";
-import { PersonBrain, restingSpot, wantsSeat } from "../../src/world/people";
+import { dirFacing, segmentFacing } from "../../src/world/behavior";
+import { PersonBrain, restingSpot, seatedSortBox, sofaSortBox, wantsSeat } from "../../src/world/people";
 import { HQ_TEAMS, floorPlan } from "../../src/world/plan";
 import { MIN_PERSON_CSS, PERSON_H, fitBounds, itemBox, personBox, planBounds, rankStatics } from "../../src/world/plan/boxes";
 import { isWalkable, standPoint, walkGrid } from "../../src/world/plan/grid";
@@ -103,61 +104,121 @@ describe("people", () => {
   const grid = walkGrid(studio);
   const seat = studio.seats.find((s) => !s.role)!;
   const rest = restingSpot(studio, 0)!;
+  const walkUntilSettled = (brain: PersonBrain, check?: (p: ReturnType<PersonBrain["pose"]>) => void) => {
+    for (let t = 0; t < 60_000 && brain.pose().mode === "walking"; t += 50) {
+      brain.tick(50);
+      check?.(brain.pose());
+    }
+  };
 
-  it("keeps working, vacant and board agents seated", () => {
+  it("keeps working, vacant and board agents at their seats", () => {
     expect(wantsSeat(agent("zain-studio-copy", { activity: "working" }), seat)).toBe(true);
     expect(wantsSeat(agent("zain-studio-copy"), seat)).toBe(false);
     expect(wantsSeat(agent("zain-studio-copy", { hired: false }), seat)).toBe(true);
     expect(wantsSeat(agent("zain-board-hormozi"), seat)).toBe(true);
   });
 
-  it("walks to the desk along walkable tiles, then works with a bob", () => {
+  it("walks to the desk along walkable tiles facing each step, then sits typing on the chair", () => {
     const brain = new PersonBrain(studio, agent("zain-studio-copy"), false);
     brain.assign(seat, rest);
-    expect(brain.pose(0).mode).toBe("standing");
+    expect(brain.pose().pose).toBe("stand");
     brain.setAgent(agent("zain-studio-copy", { activity: "working" }));
-    for (const p of brain.route.slice(0, -1)) expect(isWalkable(grid, Math.floor(p.x), Math.floor(p.y)), `${p.x},${p.y}`).toBe(true);
-    for (let t = 0; t < 60_000 && brain.pose(t).mode === "walking"; t += 50) {
-      brain.tick(50);
-      const p = brain.pose(t);
+    let last = brain.pose();
+    walkUntilSettled(brain, (p) => {
       const tile = { x: Math.floor(p.tx), y: Math.floor(p.ty) };
-      const atSeat = tile.x === seat.x && tile.y === seat.y;
-      expect(atSeat || isWalkable(grid, tile.x, tile.y), `walked through ${tile.x},${tile.y}`).toBe(true);
-    }
-    const seated = brain.pose(1000);
+      expect((tile.x === seat.x && tile.y === seat.y) || isWalkable(grid, tile.x, tile.y), `${tile.x},${tile.y}`).toBe(true);
+      if (p.mode === "walking") {
+        expect(p.pose).toBe("walk");
+        const dx = p.tx - last.tx;
+        const dy = p.ty - last.ty;
+        if (Math.hypot(dx, dy) > 0.01) expect(p.facing).toBe(segmentFacing(dx, dy, last.facing));
+      }
+      last = p;
+    });
+    const seated = brain.pose();
     expect(seated.mode).toBe("seated");
-    expect({ x: seated.tx, y: seated.ty }).toEqual(standPoint(seat));
-    expect([100, 200, 300, 400].map((t) => brain.pose(t).bob).some((b) => b !== 0)).toBe(true);
+    expect(seated.seated).toBe(true);
+    expect(seated.pose).toBe("type");
+    expect(seated.facing).toBe(dirFacing(seat.facing));
+    expect({ x: seated.tx, y: seated.ty, z: seated.z }).toEqual({ x: seat.sit.x, y: seat.sit.y, z: seat.sit.height });
+    brain.setAgent(agent("zain-studio-copy", { activity: "blocked" }));
+    expect(brain.pose().pose).toBe("sit");
   });
 
-  it("strolls between idle spots deterministically", () => {
+  it("keeps a vacant agent standing at their desk", () => {
+    const brain = new PersonBrain(studio, agent("zain-studio-copy", { hired: false }), false);
+    brain.assign(seat, rest);
+    const p = brain.pose();
+    expect(p.pose).toBe("stand");
+    expect({ x: p.tx, y: p.ty }).toEqual(standPoint(seat));
+    expect(p.facing).toBe(dirFacing(seat.facing));
+  });
+
+  it("strolls deterministically between idle spots and sofa cushions", () => {
     const run = () => {
-      const brain = new PersonBrain(studio, agent("zain-studio-art"), false);
-      brain.assign(seat, rest);
+      const claims = new Set<string>();
+      const brains = ["zain-studio-art", "zain-studio-brand", "zain-studio-ux"].map((p) => {
+        const b = new PersonBrain(studio, agent(p), false, claims);
+        b.assign(null, rest);
+        return b;
+      });
       const trace: string[] = [];
-      for (let t = 0; t < 30_000; t += 100) {
-        brain.tick(100);
-        const p = brain.pose(t);
-        trace.push(`${p.tx.toFixed(2)},${p.ty.toFixed(2)}`);
+      let sofa = false;
+      for (let t = 0; t < 120_000; t += 100) {
+        for (const b of brains) {
+          b.tick(100);
+          const p = b.pose();
+          if (p.mode === "sofa") {
+            sofa = true;
+            expect(p.pose).toBe("sit");
+          }
+          trace.push(`${p.tx.toFixed(2)},${p.ty.toFixed(2)},${p.mode}`);
+        }
       }
-      return trace;
+      return { trace, sofa, claims: claims.size };
     };
     const a = run();
     expect(a).toEqual(run());
-    expect(new Set(a).size).toBeGreaterThan(5);
+    expect(a.sofa).toBe(true);
+    expect(a.claims).toBeLessThanOrEqual(3);
   });
 
-  it("never walks or bobs with reduced motion", () => {
+  it("never walks or animates with reduced motion", () => {
     const brain = new PersonBrain(studio, agent("zain-studio-copy", { activity: "working" }), true);
     brain.assign(seat, rest);
+    expect(brain.pose().pose).toBe("type");
     brain.setAgent(agent("zain-studio-copy"));
-    const at = brain.pose(0);
+    const at = brain.pose();
     for (let t = 0; t < 30_000; t += 100) {
       brain.tick(100);
-      const p = brain.pose(t);
-      expect(p.bob).toBe(0);
+      const p = brain.pose();
       expect(p.mode).not.toBe("walking");
       expect({ x: p.tx, y: p.ty }).toEqual({ x: at.tx, y: at.ty });
+    }
+  });
+});
+
+describe("seated depth", () => {
+  it.each(DIVISION_IDS.map((d) => [d]))("sorts everyone seated in %s after their chair and before their desk", (division) => {
+    const plan = floorPlan(division);
+    const statics = rankStatics(plan);
+    for (const seat of plan.seats) {
+      const z = dynamicDepth(statics, seatedSortBox(seat));
+      const desk = statics.find((s) => s.kind === "item" && s.item.id === seat.desk)!;
+      const chair = statics.find((s) => s.kind === "item" && s.item.id === seat.sit.item)!;
+      expect(z, `${seat.id} before desk`).toBeLessThan(desk.depth);
+      expect(z, `${seat.id} after chair`).toBeGreaterThan(chair.depth);
+    }
+  });
+
+  it("puts people on viewer-facing sofas in front of them and on away-facing sofas behind the backrest", () => {
+    const plan = floorPlan("hq");
+    const statics = rankStatics(plan);
+    for (const c of plan.sofaSeats) {
+      const sofa = statics.find((s) => s.kind === "item" && s.item.id === c.item)!;
+      const z = dynamicDepth(statics, sofaSortBox(plan, c));
+      if (c.facing === "+x" || c.facing === "+y") expect(z, c.id).toBeGreaterThan(sofa.depth);
+      else expect(z, c.id).toBeLessThan(sofa.depth);
     }
   });
 });
