@@ -105,7 +105,7 @@ beforeEach(async () => {
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
-function liveRoom(opts: { key?: string | null; memory?: MemoryStore; meetingStore?: RecordStore<StoredMeeting> } = {}) {
+function liveRoom(opts: { key?: string | null; memory?: MemoryStore; meetingStore?: RecordStore<StoredMeeting>; dashboard?: string } = {}) {
   const labs = fakeLabs();
   const key = opts.key === undefined ? KEY : opts.key;
   const client = new ElevenLabsClient(async () => key, labs.fetchImpl, (l) => logs.push(l));
@@ -119,7 +119,7 @@ function liveRoom(opts: { key?: string | null; memory?: MemoryStore; meetingStor
     ...(opts.memory ? { memory: opts.memory } : {}),
     ...(opts.meetingStore ? { meetingStore: opts.meetingStore } : {}),
     live: (meetings, v, memory) =>
-      new LiveService({ client, agent, voice: v, meetings, souls: fileSouls(home), briefs: fileBriefs(root), memory, sleep: async (ms) => void sleeps.push(ms) }),
+      new LiveService({ client, agent, voice: v, meetings, souls: fileSouls(home), briefs: fileBriefs(root), memory, dashboard: async () => opts.dashboard ?? null, sleep: async (ms) => void sleeps.push(ms) }),
   });
   const start = async (body: Record<string, unknown> = {}) => {
     const res = await s.send("POST", "/api/board/meetings", { topic: "Cairo office", brief: "Should we open one in 2027?", mode: "voice", ...body });
@@ -466,11 +466,14 @@ describe("live prompt parts", () => {
       };
       return { id, meeting: m, rounds: [] };
     });
-    const r = liveRoom({ memory, meetingStore: memoryRecordStore(stored) });
+    const dashboard = `Updated: ${new Date().toISOString()} · by coo\n\n| Metric | Value |\n|---|---|\n| Active clients | 5 |\n${"| Detail | row |\n".repeat(400)}`;
+    const r = liveRoom({ memory, meetingStore: memoryRecordStore(stored), dashboard });
     const { meeting } = await r.start({ brief: "Should we open one in 2027? ".repeat(10) });
     const { prompt } = ((await (await r.session(meeting.id)).json()) as LiveSessionResponse).overrides.agent.prompt;
     expect(prompt).toContain("Insight 39 for zain-board-hormozi");
-    expect(prompt.length).toBeLessThan(12_000);
+    expect(prompt).toContain("## Company dashboard");
+    expect(prompt).toContain("| Active clients | 5 |");
+    expect(prompt.length).toBeLessThan(14_000);
   });
 
   it("reads no SOUL for a profile that is not a plain name", async () => {

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { dashboardSection, LIVE_DASHBOARD_CHARS } from "../board/memory/dashboard";
 import { join } from "node:path";
 import { findBoardMember } from "../../../shared/board";
 import type { MemoryNote } from "../../../shared/boardMemory";
@@ -164,9 +165,12 @@ export interface LivePromptInput {
   ledger?: readonly LedgerEntry[];
   /** Each member's memory notes. */
   notes?: Record<string, readonly MemoryNote[]>;
+  /** The company dashboard markdown (board/memory/dashboard.ts), if there is one. */
+  dashboard?: string | null;
 }
 
-export function livePrompt({ meeting, speakers, souls, briefs = {}, ledger = [], notes = {} }: LivePromptInput): string {
+export function livePrompt({ meeting, speakers, souls, briefs = {}, ledger = [], notes = {}, dashboard = null }: LivePromptInput): string {
+  const safe = briefSafe(Object.values(briefs));
   const roster = [
     ...speakers.map((s) => {
       const soul = souls[s.profile];
@@ -198,9 +202,14 @@ export function livePrompt({ meeting, speakers, souls, briefs = {}, ledger = [],
     "",
     "## Brief (for reference; do not read it out)",
     meeting.brief,
-    ...boardKnows(speakers, ledger, notes, briefSafe(Object.values(briefs))),
+    ...boardKnows(speakers, ledger, notes, safe),
+    ...withLeadingBlank(dashboardSection(dashboard, LIVE_DASHBOARD_CHARS, new Date(), safe)),
     ...(prior.length
       ? ["", "## Earlier in this meeting", "The call dropped and has just reconnected. Pick up where the discussion left off; do not start over.", priorTranscript(prior, speakers)]
       : []),
   ].join("\n");
+}
+
+function withLeadingBlank(lines: string[]): string[] {
+  return lines.length ? ["", ...lines] : [];
 }

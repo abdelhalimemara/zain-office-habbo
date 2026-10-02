@@ -2,6 +2,7 @@ import type { BoardMeeting, MeetingTurn } from "../../../shared/meetings";
 import { splitBySpeaker, type EndLiveRequest, type LiveSessionResponse, type LiveSpeaker } from "../../../shared/voice";
 import { boardLedger } from "../board/memory/ledger";
 import type { MemoryStore } from "../board/memory/notes";
+import type { DashboardReader } from "../board/memory/dashboard";
 import type { MeetingEngine } from "../board/meetings/engine";
 import { FOUNDER } from "../board/meetings/rounds";
 import { HttpError, badRequest } from "../http";
@@ -64,6 +65,8 @@ export interface LiveServiceOptions {
   briefs: BriefReader;
   /** Members' notes from earlier meetings, shown to the room after the privacy guard. */
   memory?: MemoryStore;
+  /** The company dashboard, shown to the room after the privacy guard. */
+  dashboard?: DashboardReader;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -76,6 +79,10 @@ export class LiveService {
   private readonly locks = new Map<string, Promise<unknown>>();
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
+
+  private async dashboard(): Promise<string | null> {
+    return (await this.options.dashboard?.().catch(() => null)) ?? null;
+  }
 
   constructor(private readonly options: LiveServiceOptions) {
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
@@ -101,7 +108,7 @@ export class LiveService {
     const memory = Object.fromEntries(Object.entries(notes).map(([p, n]) => [p, n ?? []]));
     return {
       signedUrl,
-      overrides: { agent: { prompt: { prompt: livePrompt({ meeting, speakers, souls, briefs, ledger, notes: memory }) }, firstMessage: LIVE_FIRST_MESSAGE, language: "en" } },
+      overrides: { agent: { prompt: { prompt: livePrompt({ meeting, speakers, souls, briefs, ledger, notes: memory, dashboard: await this.dashboard() }) }, firstMessage: LIVE_FIRST_MESSAGE, language: "en" } },
       speakers,
     };
   }

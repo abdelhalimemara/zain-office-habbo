@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { dashboardSection, HERMES_DASHBOARD_CHARS, type DashboardReader } from "../memory/dashboard";
 import { MAX_DISCUSSION_ROUNDS, type BoardMeeting, type FounderRemarkRequest, type MeetingTurn, type MeetingVote } from "../../../../shared/meetings";
 import type { KanbanTask } from "../../../../shared/hermes";
 import { CEO_PROFILE } from "../../../../shared/roster";
@@ -57,6 +58,8 @@ export interface MeetingEngineDeps {
   sink?: MeetingSink;
   /** Board memory: members' notes go into their prompts, and their votes' MEMORY blocks are kept. */
   memory?: MemoryStore;
+  /** The company dashboard: its numbers go into every round's prompt. */
+  dashboard?: DashboardReader;
   now?: () => number;
   log?: (line: string) => void;
   newId?: () => string;
@@ -235,6 +238,7 @@ export class MeetingEngine {
     const tag = marker(m.id, state.round);
     if (m.members.every((member) => state.tasks[member])) return;
     const ledger = boardLedger((await this.deps.store.list()).map((s) => s.meeting).filter((x) => x.id !== m.id));
+    const dashboard = (await this.deps.dashboard?.().catch(() => null)) ?? null;
     for (const member of m.members) {
       if (state.tasks[member]) continue;
       const existing = board.find((t) => t.assignee === member && (t.body ?? "").includes(tag));
@@ -242,7 +246,7 @@ export class MeetingEngine {
         existing ??
         (await this.deps.hermes.createTask({
           title: taskTitle(m, roundLabel(state.round, m.discussionRounds)),
-          body: roundTaskBody(m, state.round, memorySection(ledger, await this.notes(member))),
+          body: roundTaskBody(m, state.round, [...memorySection(ledger, await this.notes(member)), ...dashboardSection(dashboard, HERMES_DASHBOARD_CHARS)]),
           assignee: member,
           tenant: HQ_TENANT,
           triage: false,

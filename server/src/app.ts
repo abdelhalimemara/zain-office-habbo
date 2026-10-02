@@ -3,6 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import type { ReconcilerStatus } from "../../shared/api";
 import { VOICE_API } from "../../shared/voice";
 import type { ConsultationLog } from "./board/consultLog";
+import { dashboardSection, HERMES_DASHBOARD_CHARS, type DashboardReader } from "./board/memory/dashboard";
 import { boardLedger, memorySection } from "./board/memory/ledger";
 import type { MemoryStore } from "./board/memory/notes";
 import { memoryRoutes } from "./board/memory/routes";
@@ -38,6 +39,8 @@ export interface AppDeps {
   consultations: ConsultationLog;
   /** Board members' notes from earlier meetings; consultations go without when omitted. */
   memory?: MemoryStore;
+  /** The company dashboard; consultations go without when omitted. */
+  dashboard?: DashboardReader;
   /** ElevenLabs voices for voice meetings. */
   voice: VoiceService;
   /** Live voice meetings on the ElevenLabs Board Room agent; their routes answer 503 when omitted. */
@@ -122,7 +125,8 @@ export function createApp(deps: AppDeps): Hono {
   app.post("/api/board/consult", async (c) => {
     const req = parseConsult(await readJsonObject(c));
     const ledger = boardLedger(await deps.meetings.list().catch(() => []));
-    const memory = async (member: string) => memorySection(ledger, (await deps.memory?.notes(member)) ?? []);
+    const dashboard = dashboardSection((await deps.dashboard?.().catch(() => null)) ?? null, HERMES_DASHBOARD_CHARS);
+    const memory = async (member: string) => [...memorySection(ledger, (await deps.memory?.notes(member)) ?? []), ...dashboard];
     const res = await consultBoard(req, { hermes, hires, ceoWake, memory });
     await deps.consultations.record(req, res).catch((err: unknown) => console.warn(`consultations: could not log (${err instanceof Error ? err.message : "error"})`));
     return c.json(res, 201);

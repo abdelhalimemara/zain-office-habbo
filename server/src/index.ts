@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { join } from "node:path";
 import { AccessVerifier, loadAccessConfig } from "./access";
+import { fileDashboard } from "./board/memory/dashboard";
 import { DEFAULT_PORT, createApp, defaultClients, guardOptions } from "./app";
 import { ConsultationLog, isConsultationRecord } from "./board/consultLog";
 import { fileMemoryStore } from "./board/memory/notes";
@@ -34,6 +35,7 @@ const sink = new NotionBoardSink(new NotionClient(envToken()), root);
 const labs = new ElevenLabsClient(envApiKey());
 const memory = fileMemoryStore(root);
 const voice = new VoiceService({ root, client: labs, store: fileVoiceStore(root), roster: () => fullRoster(hires) });
+const dashboard = fileDashboard();
 const meetings = new MeetingEngine({
   hermes: clients.hermes,
   hires,
@@ -41,9 +43,10 @@ const meetings = new MeetingEngine({
   store: fileRecordStore(join(root, ".zain", "meetings.json"), isStoredMeeting),
   sink,
   memory,
+  dashboard,
   onTurns: (meeting, from) => voice.prefetch(meeting, from),
 });
-const live = new LiveService({ client: labs, agent: new BoardRoomAgent(labs, fileAgentStore(root)), voice, meetings, souls: fileSouls(), briefs: fileBriefs(root), memory });
+const live = new LiveService({ client: labs, agent: new BoardRoomAgent(labs, fileAgentStore(root)), voice, meetings, souls: fileSouls(), briefs: fileBriefs(root), memory, dashboard });
 const consultations = new ConsultationLog({
   hermes: clients.hermes,
   store: fileRecordStore(join(root, ".zain", "consultations.json"), isConsultationRecord),
@@ -59,6 +62,7 @@ const app = createApp({
   ...clients,
   hires,
   teams: fileTeamStore(process.cwd()),
+  dashboard,
   briefs: fileBriefs(process.cwd()),
   guard: { ...guardOptions(port, process.env), access: remoteAccess() },
   reconcilerStatus: () => reconciler.status(),
