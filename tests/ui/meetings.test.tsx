@@ -7,7 +7,7 @@ import { MEETING_POLL_ACTIVE_MS, MEETING_POLL_IDLE_MS, meetingsPollInterval } fr
 import { useUiStore } from "../../src/state/store";
 import { BoardPanel } from "../../src/ui/BoardPanel";
 import { Hud } from "../../src/ui/Hud";
-import { MeetingRoom } from "../../src/ui/MeetingRoom";
+import { DEFAULT_REMARK, MeetingRoom } from "../../src/ui/MeetingRoom";
 import { groupTurns, phaseLabel, tallyVotes, waitingFor } from "../../src/ui/meetingModel";
 import { board, mockFetch, NOW, renderUi, resetStore, rosterEntries } from "./helpers";
 
@@ -238,7 +238,7 @@ describe("Meeting room", () => {
     if (text) await userEvent.type(within(composer).getByLabelText(/Your remarks to the board/), text);
     await userEvent.click(within(composer).getByRole("button", { name: button }));
     expect(await within(composer).findByText("Sent — the board is back in session.")).toBeInTheDocument();
-    expect(fetch.calls("POST", MEETINGS_API.remark("m-wait"))).toEqual([{ body: { text, next } }]);
+    expect(fetch.calls("POST", MEETINGS_API.remark("m-wait"))).toEqual([{ body: { text: text || DEFAULT_REMARK[next], next } }]);
   });
 
   it("can't add a round past the maximum", async () => {

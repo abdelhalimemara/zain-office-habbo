@@ -12,6 +12,13 @@ import { Portrait } from "./Portrait";
 
 const BOARD_COLOR = "#C9A227";
 
+/** The server needs remark text; with none typed, the founder's choice is said in words. */
+export const DEFAULT_REMARK: Record<NonNullable<FounderRemarkRequest["next"]>, string> = {
+  continue: "Please continue.",
+  "extra-round": "Please take another discussion round.",
+  "to-vote": "Please move to the vote.",
+};
+
 function Bubble({ turn, agents, now }: { turn: MeetingTurn; agents: readonly RosterEntry[]; now: number }) {
   const founder = turn.speaker === FOUNDER;
   const agent = agents.find((a) => a.profile === turn.speaker);
@@ -102,7 +109,7 @@ function Composer({ meeting }: { meeting: BoardMeeting }) {
   const [text, setText] = useState("");
   const id = useId();
   const send = (next: NonNullable<FounderRemarkRequest["next"]>) =>
-    remark.mutate({ id: meeting.id, text: text.trim(), next }, { onSuccess: () => setText("") });
+    remark.mutate({ id: meeting.id, text: text.trim() || DEFAULT_REMARK[next], next }, { onSuccess: () => setText("") });
   const canExtend = meeting.discussionRounds < MAX_DISCUSSION_ROUNDS;
   return (
     <section className="zui-composer" aria-label="Your remarks">
