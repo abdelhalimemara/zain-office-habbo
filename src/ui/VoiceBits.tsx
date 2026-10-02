@@ -54,7 +54,7 @@ export function VoiceModeBadge() {
   );
 }
 
-export function VoicesOffNotice({ detail = "Voice meetings can still start; they just won't play until it is." }: { detail?: string }) {
+export function VoicesOffNotice({ detail = "Voice meetings can still be called; the live room opens once it is." }: { detail?: string }) {
   return (
     <p className="zui-voice-off" role="status">
       <strong>ElevenLabs isn't connected.</strong> Add <code>ELEVENLABS_API_KEY</code> to the Hermes <code>.env</code>. {detail}

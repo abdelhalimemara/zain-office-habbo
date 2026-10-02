@@ -127,13 +127,19 @@ describe("Call a meeting", () => {
     expect(useUiStore.getState().panel).toEqual({ kind: "meeting", id: "m-new" });
   });
 
-  it("voice mode shows each selected member's voice and starts a voice meeting", async () => {
+  it("voice mode is a live room: no rounds or board-only toggle, an agenda hint, each selected member's voice", async () => {
     const fetch = routes();
     renderUi(<UiRoot />);
     onHqFloor();
     await userEvent.click(await screen.findByRole("button", { name: "Call a meeting" }));
+    expect(screen.getByRole("button", { name: /Voice meeting/ })).toHaveTextContent(
+      "Live room: talk with the board in real time, everyone hears you, anyone can jump in. Open floor unless your brief has an agenda.",
+    );
     await userEvent.click(screen.getByRole("button", { name: /Voice meeting/ }));
     const form = screen.getByRole("form", { name: "Voice meeting details" });
+    expect(within(form).queryByLabelText("Discussion rounds")).not.toBeInTheDocument();
+    expect(within(form).queryByRole("checkbox", { name: /Board discusses on its own/ })).not.toBeInTheDocument();
+    expect(within(form).getByText("Add an agenda (numbered points) if you want them to go item by item.")).toBeInTheDocument();
     const hormozi = within(form).getByRole("checkbox", { name: /Alex Hormozi/ }).closest("label")!;
     expect(await within(hormozi).findByText("Own voice")).toBeInTheDocument();
     expect(within(within(form).getByRole("checkbox", { name: /Jeff Bezos/ }).closest("label")!).getByText("Stock voice")).toBeInTheDocument();
@@ -146,7 +152,10 @@ describe("Call a meeting", () => {
     await userEvent.type(screen.getByLabelText(/Topic/), "Hire a CFO?");
     await userEvent.click(screen.getByRole("button", { name: "Convene" }));
     await screen.findByRole("heading", { name: "Hire a CFO?" });
-    expect(fetch.calls("POST", MEETINGS_API.list)[0]!.body).toMatchObject({ mode: "voice", topic: "Hire a CFO?" });
+    const body = fetch.calls("POST", MEETINGS_API.list)[0]!.body as Record<string, unknown>;
+    expect(body).toMatchObject({ mode: "voice", topic: "Hire a CFO?", brief: "" });
+    expect(body).not.toHaveProperty("discussionRounds");
+    expect(body).not.toHaveProperty("boardOnly");
   });
 
   it("warns when ElevenLabs isn't connected but still lets a voice meeting start", async () => {

@@ -23,7 +23,7 @@ import {
   type MeetingsResponse,
   type StartMeetingRequest,
 } from "@shared/meetings";
-import { VOICE_API, type SetVoiceRequest, type TranscribeResponse, type VoicesResponse } from "@shared/voice";
+import { LIVE_API, VOICE_API, type EndLiveRequest, type LiveSessionResponse, type SetVoiceRequest, type VoicesResponse } from "@shared/voice";
 
 export class ApiRequestError extends Error {
   constructor(
@@ -60,20 +60,6 @@ function put<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "PUT", body: JSON.stringify(body) });
 }
 
-/** Raw audio upload: the body is the recording itself, typed by its own mime. */
-async function transcribe(audio: Blob, contentType: string): Promise<TranscribeResponse> {
-  const res = await fetch(VOICE_API.transcribe, { method: "POST", headers: { Accept: "application/json", "Content-Type": contentType }, body: audio });
-  if (!res.ok) throw new ApiRequestError(await errorMessage(res), res.status);
-  return (await res.json()) as TranscribeResponse;
-}
-
-/** A spoken turn as audio bytes; the status is kept so callers can tell "no audio" from "voice down". */
-async function turnAudio(meetingId: string, index: number, signal?: AbortSignal): Promise<Blob> {
-  const res = await fetch(VOICE_API.turnAudio(meetingId, index), { headers: { Accept: "audio/mpeg" }, signal });
-  if (!res.ok) throw new ApiRequestError(await errorMessage(res), res.status);
-  return res.blob();
-}
-
 export const api = {
   meetings: () => request<MeetingsResponse>(MEETINGS_API.list),
   meeting: (id: string) => request<MeetingResponse>(MEETINGS_API.one(id)),
@@ -82,8 +68,8 @@ export const api = {
   cancelMeeting: (id: string) => post<MeetingResponse>(MEETINGS_API.cancel(id), {}),
   voices: () => request<VoicesResponse>(VOICE_API.voices),
   setVoice: (profile: string, input: SetVoiceRequest) => put<unknown>(VOICE_API.voice(profile), input),
-  transcribe,
-  turnAudio,
+  liveSession: (id: string) => post<LiveSessionResponse>(LIVE_API.session(id), {}),
+  endLive: (id: string, input: EndLiveRequest) => post<MeetingResponse>(LIVE_API.end(id), input),
   health: () => request<HealthResponse>(API.health),
   connections: () => request<ConnectionsResponse>(API.connections),
   board: () => request<BoardResponse>(API.board),

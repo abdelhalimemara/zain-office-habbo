@@ -172,6 +172,18 @@ describe("Meetings tab", () => {
     expect(within(items[0]!).getByTitle("Voice meeting")).toHaveTextContent("Voice");
     expect(within(items[1]!).queryByTitle("Voice meeting")).not.toBeInTheDocument();
   });
+
+  it("shows a live voice meeting with a Live chip and Join as the action", async () => {
+    routes([{ ...live, mode: "voice", status: "live" }, concluded]);
+    renderUi(<BoardPanel />);
+    const items = await within(await screen.findByRole("list", { name: "Board meetings" })).findAllByRole("listitem");
+    expect(within(items[0]!).getByText("Live")).toHaveClass("zui-meeting-status--live");
+    expect(within(items[0]!).getByText("Join")).toBeInTheDocument();
+    expect(within(items[0]!).queryByText("Discussion 1/2")).not.toBeInTheDocument();
+    expect(within(items[1]!).queryByText("Join")).not.toBeInTheDocument();
+    await userEvent.click(within(items[0]!).getByRole("button", { name: "Join Raise retainer prices 30%?" }));
+    expect(useUiStore.getState().panel).toEqual({ kind: "meeting", id: "m-live" });
+  });
 });
 
 describe("Meeting room", () => {
