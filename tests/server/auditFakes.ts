@@ -5,25 +5,28 @@ import type { KanbanTask } from "../../shared/hermes";
 import type { ActorRunOptions, ActorRunner } from "../../server/src/growth/audit/apify";
 import { ApifyError, APIFY_NOT_CONNECTED } from "../../server/src/growth/audit/apify";
 import { memoryRecordStore } from "../../server/src/board/recordStore";
-import type { AuditCrm, CrmProspect, CrmRecordKind } from "../../server/src/growth/audit/crm";
+import type { PdfRenderer, Screenshotter } from "../../server/src/growth/audit/chrome";
+import type { AuditCrm, CrmProspect, CrmRecordKind, ProspectHit } from "../../server/src/growth/audit/crm";
 import { AuditEngine, type AuditEngineDeps } from "../../server/src/growth/audit/engine";
 import type { AuditNotionSink } from "../../server/src/growth/audit/notion";
-import type { PdfRenderer } from "../../server/src/growth/audit/pdf";
 import type { AuditHermes } from "../../server/src/growth/audit/steps";
 import type { StoredAudit } from "../../server/src/growth/audit/types";
 import { HttpError } from "../../server/src/http";
 import { task } from "./helpers";
 
-export const NOW_MS = Date.parse("2026-10-01T12:00:00Z");
-export const NOW = NOW_MS / 1000;
+/** Fixture times are relative to the real clock: collectors count "the last 30 days" from Date.now(). */
+export const NOW_MS = Date.now();
+export const NOW = Math.floor(NOW_MS / 1000);
 const daysAgo = (d: number) => new Date(NOW_MS - d * 86_400_000).toISOString();
 
 export const LEAD_ID = "0314cc38-bf3f-4cc2-8303-586a2f7ca60a";
 export const COMPANY_ID = "00294367-0282-4c94-82db-0f2219d25e46";
 
-/** What each actor returns for thestudio.sa: a small, well-tagged site with Instagram and Meta ads. */
-export function sampleItems(): Record<string, Record<string, unknown>[]> {
-  const page = (url: string, extra: Record<string, unknown> = {}) => ({
+type Items = Record<string, unknown>[];
+type Input = Record<string, unknown>;
+
+export function page(url: string, extra: Record<string, unknown> = {}) {
+  return {
     url,
     lang: "ar",
     title: "THE STUDIO | صالون تجميل في الرياض",
@@ -39,51 +42,114 @@ export function sampleItems(): Record<string, Record<string, unknown>[]> {
     jsonLd: ["BeautySalon"],
     internalLinks: 12,
     socialLinks: ["https://www.instagram.com/thestudio.sa/", "https://www.tiktok.com/@thestudio"],
-    trackers: { metaPixel: true, gtm: true, ga4: false, tiktokPixel: false, snapPixel: false },
+    policyLinks: ["Privacy policy", "Returns"],
+    contact: { whatsapp: true, phone: true },
+    reviews: true,
+    platform: "Salla",
+    trackers: { metaPixel: true, gtm: false, ga4: false, tiktokPixel: false, snapPixel: false, googleAdsConversion: true },
     ...extra,
-  });
+  };
+}
+
+const serpFor = (term: string): Record<string, unknown> => {
+  if (term === '"THE STUDIO"') {
+    return { searchQuery: { term }, organicResults: [{ url: "https://www.thestudio.sa/?srsltid=abc", position: 1 }, { url: "https://www.instagram.com/thestudio.sa/", position: 2 }] };
+  }
+  const organic = [
+    { url: "https://rival.sa/", position: 1 },
+    { url: "https://www.glow.sa/ar", position: 2 },
+    { url: "https://www.instagram.com/someone/", position: 3 },
+    { url: "https://www.google.com.sa/maps/place/x", position: 4 },
+  ];
+  if (term === "beauty salon Riyadh") organic.push({ url: "https://www.thestudio.sa/services", position: 5 });
+  return { searchQuery: { term }, organicResults: organic, paidResults: [] };
+};
+
+const semrushDomain = (domain: string): Record<string, unknown> => {
+  const table: Record<string, [number, number, number]> = { "thestudio.sa": [12, 40, 80], "rival.sa": [25, 4200, 600], "glow.sa": [18, 1500, 300], "glam.sa": [9, 90, 20] };
+  const [authority, traffic, keywords] = table[domain] ?? [1, 0, 0];
   return {
-    "apify/web-scraper": [page("https://www.thestudio.sa/"), page("https://www.thestudio.sa/services", { lang: "en", arabicChars: 0, latinChars: 800 })],
-    "apify/google-search-scraper": [
-      { searchQuery: { term: "beauty salon Riyadh" }, organicResults: [{ url: "https://rival.sa/", position: 1 }, { url: "https://www.thestudio.sa/", position: 3 }], paidResults: [{}] },
-      { searchQuery: { term: "صالون تجميل الرياض" }, organicResults: [{ url: "https://rival.sa/x", position: 1 }, { url: "https://www.instagram.com/a", position: 2 }] },
-      { searchQuery: { term: "THE STUDIO" }, organicResults: [{ url: "https://thestudio.sa/", position: 1 }] },
-    ],
-    "apify/instagram-profile-scraper": [
-      {
-        username: "thestudio.sa",
-        followersCount: 12_000,
-        postsCount: 300,
-        latestPosts: [1, 3, 6, 10, 15, 20, 40].map((d) => ({ timestamp: daysAgo(d), likesCount: 200, commentsCount: 16 })),
-      },
-    ],
-    "clockworks/tiktok-profile-scraper": [2, 9].map((d) => ({ createTimeISO: daysAgo(d), diggCount: 50, commentCount: 5, shareCount: 5, authorMeta: { fans: 800 }, isAd: false })),
-    "apify/facebook-pages-scraper": [],
-    "apify/facebook-posts-scraper": [],
-    "apify/facebook-ads-scraper": [
-      { pageName: "THE STUDIO", isActive: true, startDate: (NOW_MS - 45 * 86_400_000) / 1000, publisherPlatform: ["FACEBOOK", "INSTAGRAM"] },
-      { pageName: "Other Salon", isActive: true, startDate: NOW - 86_400, publisherPlatform: ["FACEBOOK"] },
-    ],
-    "scrapesage/google-ads-transparency-scraper": [],
+    domain,
+    database: "sa",
+    authority_score: authority,
+    organic_traffic: traffic,
+    organic_keywords: keywords,
+    backlinks: authority * 50,
+    referring_domains: authority * 10,
+    organic: {
+      top_keywords: [
+        { keyword: "صالون تجميل", position: 14, volume: 9900, traffic: 30, url: `https://${domain}/` },
+        { keyword: "nail salon riyadh", position: 8, volume: 880, traffic: 10, url: `https://${domain}/services` },
+      ],
+      competitors: [{ domain: "rival.sa", common_keywords: 31 }, { domain: "petstock.co.nz", common_keywords: 1 }],
+    },
+  };
+};
+
+/** Each actor's output for thestudio.sa and its competitors, shaped like the real actors' items (synthetic values). */
+export function sampleActors(): Record<string, Items | ((input: Input) => Items)> {
+  return {
+    "apify/playwright-scraper": (input) =>
+      input.maxCrawlingDepth === 0
+        ? [page("https://rival.sa/", { siteName: "Rival Beauty", socialLinks: ["https://instagram.com/rivalbeauty"] }), page("https://glow.sa/", { siteName: "", title: "Glow Lounge | Riyadh", socialLinks: [] })]
+        : [page("https://www.thestudio.sa/"), page("https://www.thestudio.sa/services", { lang: "en", arabicChars: 0, latinChars: 800 })],
+    "apify/google-search-scraper": (input) => String(input.queries).split("\n").map(serpFor),
+    "pro100chok/semrush-scraper": (input) =>
+      input.mode === "seo_audit"
+        ? [{ url: input.domains, h1_count: 0, has_sitemap: true, has_robots_txt: true, images_missing_alt: 12, title_length: 30, meta_description_length: 120, structured_data_blocks: 1, canonical: "https://thestudio.sa/", semrush: { organic_competitors: [{ domain: "glam.sa" }] } }]
+        : (input.domains as string[]).map(semrushDomain),
+    "apify/instagram-profile-scraper": (input) =>
+      (input.usernames as string[]).flatMap((u) =>
+        u === "thestudio.sa"
+          ? [{ username: u, followersCount: 12_000, postsCount: 300, latestPosts: [1, 3, 6, 10, 15, 20, 40].map((d) => ({ timestamp: daysAgo(d), likesCount: 200, commentsCount: 16 })) }]
+          : u === "rivalbeauty"
+            ? [{ username: u, followersCount: 5_400, postsCount: 120, latestPosts: [] }]
+            : [],
+      ),
+    "clockworks/tiktok-profile-scraper": [2, 9].map((d) => ({ createTimeISO: daysAgo(d), diggCount: 50, commentCount: 5, shareCount: 5, authorMeta: { fans: 800, video: 40 }, isAd: false })),
+    "apify/facebook-ads-scraper": (input) =>
+      (input.startUrls as { url: string }[]).flatMap(({ url }) =>
+        url.includes("THE%20STUDIO")
+          ? [
+              { inputUrl: url, pageName: "THE STUDIO", isActive: true, startDate: Math.floor((NOW_MS - 45 * 86_400_000) / 1000), publisherPlatform: ["FACEBOOK", "INSTAGRAM"] },
+              { inputUrl: url, pageName: "Studio Games 3D", isActive: true, startDate: NOW - 86_400 },
+            ]
+          : [],
+      ),
+    "scrapesage/google-ads-transparency-scraper": (input) =>
+      (input.domains as string[]).flatMap((domain) =>
+        domain === "thestudio.sa" || domain === "rival.sa"
+          ? [1, 2].map((n) => ({ domain, advertiserName: "Studio Trading Co", creativeId: `CR${n}`, format: n === 1 ? "IMAGE" : "TEXT", firstShown: daysAgo(100 + n), lastShown: daysAgo(n), shownForDays: 100 }))
+          : [],
+      ),
+    "pro100chok/similarweb-scraper": (input) =>
+      (input.domains as string[]).map((d, i) => ({
+        SiteName: d,
+        Engagments: { Visits: [2042, 10628, 3747, 900][i] ?? 100, BounceRate: 35.15, Month: 8, Year: 2026 },
+        TrafficSources: { SearchOrganic: 37.67, Direct: 23.09, SearchPaid: 8.94 },
+        TopCountryShares: [{ CountryCode: "SA", Value: 72.62 }],
+      })),
+    "compass/crawler-google-places": [{ title: "THE STUDIO", website: "https://www.thestudio.sa/", totalScore: 4.8, reviewsCount: 651, categoryName: "Beauty salon", url: "https://maps.google.com/?cid=1" }],
   };
 }
 
 export interface FakeApifyCall {
   actor: string;
-  input: Record<string, unknown>;
+  input: Input;
   options: ActorRunOptions;
 }
 
 /** Apify without the network; `fail` makes an actor throw, `connected: false` behaves like a missing token. */
-export function fakeApify(opts: { items?: Record<string, Record<string, unknown>[]>; costUsd?: number; fail?: Record<string, string>; connected?: boolean } = {}) {
-  const items = opts.items ?? sampleItems();
+export function fakeApify(opts: { actors?: Record<string, Items | ((input: Input) => Items)>; costUsd?: number; fail?: Record<string, string>; connected?: boolean } = {}) {
+  const actors = opts.actors ?? sampleActors();
   const calls: FakeApifyCall[] = [];
   const runner: ActorRunner = {
     async run(actor, input, options) {
       calls.push({ actor, input, options });
       if (opts.connected === false) throw new ApifyError(APIFY_NOT_CONNECTED);
       if (opts.fail?.[actor]) throw new ApifyError(opts.fail[actor]);
-      return { items: items[actor] ?? [], costUsd: opts.costUsd ?? 0.01 };
+      const source = actors[actor];
+      return { items: (typeof source === "function" ? source(input) : source) ?? [], costUsd: opts.costUsd ?? 0.01 };
     },
   };
   return { runner, calls, actors: () => calls.map((c) => c.actor) };
@@ -115,6 +181,8 @@ export function fakeHermes(profiles: string[] = []) {
   };
 }
 
+export const HITS: ProspectHit[] = [{ id: LEAD_ID, kind: "lead", name: "THE STUDIO", website: "https://www.thestudio.sa", instagram: "thestudio.sa", city: "RIYADH" }];
+
 export function fakeCrm(records: Partial<Record<string, CrmProspect>> = {}) {
   const calls: string[] = [];
   const crm: AuditCrm = {
@@ -123,6 +191,10 @@ export function fakeCrm(records: Partial<Record<string, CrmProspect>> = {}) {
       const r = records[id];
       if (!r) throw new HttpError(404, `CRM ${kind} ${id} not found`);
       return r;
+    },
+    async search(q) {
+      calls.push(`search ${q}`);
+      return HITS.filter((h) => h.name.toLowerCase().includes(q.toLowerCase()));
     },
     async uploadPdf(name) {
       calls.push(`upload ${name}`);
@@ -146,16 +218,29 @@ export const theStudioLead: CrmProspect = {
   flags: { hasPixel: true },
 };
 
-export function fakePdf() {
+export const PNG = Buffer.from("89504e470d0a1a0a", "hex");
+
+export function fakeChrome(opts: { captureFails?: boolean } = {}) {
   const rendered: string[] = [];
+  const captured: string[] = [];
+  const write = async (out: string, bytes: Buffer | string) => {
+    await mkdir(dirname(out), { recursive: true });
+    await writeFile(out, bytes);
+  };
   const pdf: PdfRenderer = {
     async render(html, out) {
       rendered.push(html);
-      await mkdir(dirname(out), { recursive: true });
-      await writeFile(out, "%PDF-1.4 fake");
+      await write(out, "%PDF-1.4 fake");
     },
   };
-  return { pdf, rendered };
+  const screenshots: Screenshotter = {
+    async capture(url, out) {
+      if (opts.captureFails) throw new Error("navigation timed out");
+      captured.push(url);
+      await write(out, PNG);
+    },
+  };
+  return { pdf, screenshots, rendered, captured };
 }
 
 export function fakeNotion() {
@@ -175,11 +260,12 @@ export async function tempRoot(): Promise<string> {
   return mkdtemp(join(tmpdir(), "zain-audits-"));
 }
 
-export async function auditRig(overrides: Partial<AuditEngineDeps> & { apifyOpts?: Parameters<typeof fakeApify>[0]; profiles?: string[] } = {}) {
-  const apify = fakeApify(overrides.apifyOpts);
-  const hermes = fakeHermes(overrides.profiles);
+export async function auditRig(overrides: Partial<AuditEngineDeps> & { apifyOpts?: Parameters<typeof fakeApify>[0]; profiles?: string[]; captureFails?: boolean } = {}) {
+  const { apifyOpts, profiles, captureFails, ...deps } = overrides;
+  const apify = fakeApify(apifyOpts);
+  const hermes = fakeHermes(profiles);
   const crm = fakeCrm({ [LEAD_ID]: theStudioLead });
-  const pdf = fakePdf();
+  const chrome = fakeChrome({ captureFails });
   const notion = fakeNotion();
   const store = memoryRecordStore<StoredAudit>();
   const root = await tempRoot();
@@ -190,7 +276,8 @@ export async function auditRig(overrides: Partial<AuditEngineDeps> & { apifyOpts
     apify: apify.runner,
     hermes: hermes.hermes,
     crm: crm.crm,
-    pdf: pdf.pdf,
+    pdf: chrome.pdf,
+    screenshots: chrome.screenshots,
     notion: notion.notion,
     root,
     publicBase: "https://hq.test",
@@ -198,14 +285,14 @@ export async function auditRig(overrides: Partial<AuditEngineDeps> & { apifyOpts
     now: () => NOW,
     log: (l) => logs.push(l),
     newId: () => `aud_${String(++n).padStart(4, "0")}`,
-    ...overrides,
+    ...deps,
   });
   /** Ticks until nothing is in flight and nothing changes. */
-  const drive = async (rounds = 12) => {
+  const drive = async (rounds = 14) => {
     for (let i = 0; i < rounds; i++) {
       await engine.tick();
       await engine.idle();
     }
   };
-  return { engine, apify, hermes, crm, pdf, notion, store, root, logs, drive };
+  return { engine, apify, hermes, crm, chrome, notion, store, root, logs, drive };
 }

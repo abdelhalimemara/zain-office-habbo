@@ -1,17 +1,21 @@
-import type { AuditStepId, ProspectAudit } from "../../../../shared/audits";
+import type { AuditStepId, ProspectAudit, SearchRun, SeoRead, SocialChannelRow } from "../../../../shared/audits";
 
-/** Tracking tags seen in the crawl (or flagged on the CRM record). */
+/** Tags seen in the crawl's HTML and window globals (or flagged on the CRM record). */
 export interface Trackers {
-  metaPixel: boolean;
-  gtm: boolean;
   ga4: boolean;
+  gtm: boolean;
+  metaPixel: boolean;
   tiktokPixel: boolean;
   snapPixel: boolean;
+  linkedinInsight: boolean;
+  xPixel: boolean;
+  hotjarClarity: boolean;
+  googleAdsConversion: boolean;
 }
 
-export type SocialChannel = "instagram" | "tiktok" | "facebook" | "x" | "linkedin";
+export type SocialChannel = SocialChannelRow["channel"];
 
-/** The crawl, reduced to what scoring, the analyst and the PDF need. */
+/** The crawl, reduced to what scoring, the analyst and the report need. */
 export interface WebsiteData {
   pages: number;
   https: boolean;
@@ -25,53 +29,82 @@ export interface WebsiteData {
   schemaTypes: string[];
   viewport: boolean;
   avgInternalLinks: number;
-  /** Pages whose language is Arabic / English. */
   arabicPages: number;
   englishPages: number;
   trackers: Trackers;
   socialLinks: Partial<Record<SocialChannel, string>>;
+  /** Shopify, Salla, Zid, WordPress/WooCommerce, Wix, Webflow... when the HTML gives it away. */
+  platform?: string;
+  /** Policy/trust pages linked from the site (shipping, returns, privacy, terms). */
+  policyPages: string[];
+  /** Ways to reach the business from the site: WhatsApp, phone, email, a form. */
+  contactPaths: string[];
+  /** The site shows customer reviews/testimonials of its own. */
+  reviewsOnSite: boolean;
   title?: string;
   description?: string;
-  /** H1/H2 texts of the home page and a few others, for search queries and the analyst. */
   headings: string[];
 }
 
-export interface QueryResult {
-  query: string;
-  /** The prospect's best organic position, 1-based, when it shows on page one. */
-  position?: number;
-  topDomains: string[];
-  ads: number;
+/** A business benchmarked against the prospect, chosen from the category searches (or Semrush's organic competitors). */
+export interface Competitor {
+  domain: string;
+  name: string;
+  instagram?: string;
 }
 
 export interface SearchData {
-  queries: QueryResult[];
-  /** Domains that outrank the prospect most often, with how many target searches they show for. */
-  competitors: { domain: string; appearances: number }[];
+  runs: SearchRun[];
 }
 
-export interface ChannelStats {
-  channel: SocialChannel;
-  handle: string;
-  url?: string;
-  followers?: number;
-  /** Posts (or videos) in the last 30 days, per week. */
-  postsPerWeek?: number;
-  /** Average interactions per post divided by followers, 0..1. */
-  engagementRate?: number;
-  /** Paid posts seen in the feed (TikTok marks them). */
-  adsInFeed?: number;
-  note?: string;
+/** Semrush, prospect plus the competitors' overview numbers. */
+export interface SeoData {
+  read: SeoRead;
+  competitors: Record<string, { authorityScore?: number; organicTraffic?: number; organicKeywords?: number }>;
 }
 
 export interface SocialData {
-  channels: ChannelStats[];
+  rows: SocialChannelRow[];
+  /** Instagram followers per competitor domain; absent when no handle was found. */
+  competitorInstagram: Record<string, number | "not-measured">;
 }
 
+export interface GoogleAdsRead {
+  active: number;
+  total: number;
+  formats: string[];
+  /** ISO date of the earliest first-shown ad. */
+  since?: string;
+  advertiser?: string;
+}
+
+export interface TrafficRead {
+  monthlyVisits: number;
+  /** 0..1 */
+  bounceRate?: number;
+  topSource?: string;
+  /** 0..1 */
+  saudiShare?: number;
+  period: string;
+  /** 0..1 share of visits from organic and paid search. */
+  organicShare?: number;
+  paidShare?: number;
+}
+
+export interface MapsRead {
+  title: string;
+  rating?: number;
+  reviews?: number;
+  url?: string;
+  category?: string;
+}
+
+/** Per business, keyed by domain; a missing key means not measured, "none" means measured and nothing found. */
 export interface AdsData {
-  meta?: { activeAds: number; oldestDays?: number; platforms: string[]; pageName?: string };
-  google?: { ads: number; formats: string[]; longestDays?: number; recentlyShown: number };
-  tiktokAdsInFeed?: number;
+  google: Record<string, GoogleAdsRead | "none">;
+  meta: Record<string, { active: number; pageName?: string } | "none">;
+  traffic: Record<string, TrafficRead>;
+  maps?: MapsRead | "none";
 }
 
 /** CRM flags that back up what the crawl finds (the lead object carries them). */
@@ -84,8 +117,12 @@ export interface CrmFlags {
 export interface CollectedData {
   website?: WebsiteData;
   search?: SearchData;
+  seo?: SeoData;
+  competitors?: Competitor[];
   social?: SocialData;
   ads?: AdsData;
+  /** "2 October 2026": the date every source label carries. */
+  asOf?: string;
 }
 
 export interface StoredAudit {

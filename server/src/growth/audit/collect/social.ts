@@ -1,13 +1,14 @@
-import type { AuditProspect } from "../../../../../shared/audits";
+import type { AuditProspect, SocialChannelRow } from "../../../../../shared/audits";
 import { CostCapReached, type Budget } from "../budget";
-import type { ChannelStats, SocialChannel, SocialData, StepResult, WebsiteData } from "../types";
+import type { Competitor, SocialChannel, SocialData, StepResult, WebsiteData } from "../types";
+import { PAGE_FUNCTION, summarizeHome } from "./website";
 
 const DAY = 86_400_000;
 const WINDOW_DAYS = 30;
 
 type Item = Record<string, unknown>;
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
-const when = (v: unknown): number | undefined => {
+export const when = (v: unknown): number | undefined => {
   if (typeof v === "number") return v > 1e12 ? v : v * 1000;
   if (typeof v === "string") {
     const t = Date.parse(v);
@@ -16,10 +17,9 @@ const when = (v: unknown): number | undefined => {
   return undefined;
 };
 
-/** Posts per week over the last 30 days. */
-export function cadence(times: readonly (number | undefined)[], now: number): number {
-  const recent = times.filter((t): t is number => t !== undefined && now - t <= WINDOW_DAYS * DAY).length;
-  return Math.round((recent / (WINDOW_DAYS / 7)) * 10) / 10;
+/** Posts in the last 30 days. */
+export function postsInWindow(times: readonly (number | undefined)[], now: number): number {
+  return times.filter((t): t is number => t !== undefined && now - t <= WINDOW_DAYS * DAY).length;
 }
 
 /** Average interactions per post as a share of followers. */
@@ -28,6 +28,11 @@ export function engagement(interactions: readonly number[], followers: number | 
   const avg = interactions.reduce((a, b) => a + b, 0) / interactions.length;
   return Math.round((avg / followers) * 10_000) / 10_000;
 }
+
+const latest = (times: readonly (number | undefined)[]) => {
+  const t = Math.max(...times.filter((x): x is number => x !== undefined));
+  return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : undefined;
+};
 
 /** A handle without @, URL or trailing slash; null when it does not look like one. */
 export function cleanHandle(value: string | undefined): string | null {
@@ -46,138 +51,160 @@ export function facebookUrl(value: string | undefined): string | null {
 /** Handles from the CRM/request first, then from links on the crawled site. */
 export function socialHandles(prospect: AuditProspect, site?: WebsiteData): Partial<Record<SocialChannel, string>> {
   const links = site?.socialLinks ?? {};
-  const out: Partial<Record<SocialChannel, string>> = {};
+  const out: Partial<Record<SocialChannel, string>> = { ...links };
   const ig = cleanHandle(prospect.instagram) ?? cleanHandle(links.instagram);
   const tt = cleanHandle(prospect.tiktok) ?? cleanHandle(links.tiktok);
   const fb = facebookUrl(prospect.facebook) ?? facebookUrl(links.facebook);
   if (ig) out.instagram = ig;
+  else delete out.instagram;
   if (tt) out.tiktok = tt;
+  else delete out.tiktok;
   if (fb) out.facebook = fb;
-  if (prospect.x ?? links.x) out.x = (prospect.x ?? links.x)!;
-  if (prospect.linkedin ?? links.linkedin) out.linkedin = (prospect.linkedin ?? links.linkedin)!;
+  else delete out.facebook;
+  if (prospect.x) out.x = prospect.x;
+  if (prospect.linkedin) out.linkedin = prospect.linkedin;
   return out;
 }
 
-export function instagramStats(handle: string, items: readonly Item[], now: number): ChannelStats {
-  const p = items[0];
-  if (!p) return { channel: "instagram", handle, note: "Profile not found" };
-  const followers = num(p.followersCount);
-  const posts = (Array.isArray(p.latestPosts) ? p.latestPosts : []) as Item[];
+export function instagramRow(item: Item | undefined, now: number): SocialChannelRow {
+  if (!item || item.private === true) return { channel: "instagram", measured: false };
+  const followers = num(item.followersCount);
+  const posts = (Array.isArray(item.latestPosts) ? item.latestPosts : []) as Item[];
+  const times = posts.map((x) => when(x.timestamp));
   return {
     channel: "instagram",
-    handle,
-    url: `https://www.instagram.com/${handle}/`,
     followers,
-    postsPerWeek: cadence(posts.map((x) => when(x.timestamp)), now),
-    engagementRate: engagement(posts.map((x) => (num(x.likesCount) ?? 0) + (num(x.commentsCount) ?? 0)), followers),
-    ...(p.private === true ? { note: "Private account" } : {}),
+    posts: num(item.postsCount),
+    postsPer30Days: postsInWindow(times, now),
+    engagement: engagement(posts.map((x) => (num(x.likesCount) ?? 0) + (num(x.commentsCount) ?? 0)), followers),
+    lastPost: latest(times),
+    measured: followers !== undefined,
   };
 }
 
-export function tiktokStats(handle: string, items: readonly Item[], now: number): ChannelStats {
+export function tiktokRow(items: readonly Item[], now: number): SocialChannelRow {
   const author = (items.find((i) => i.authorMeta)?.authorMeta ?? {}) as Item;
   const videos = items.filter((i) => i.createTimeISO || i.createTime);
-  if (!items.length) return { channel: "tiktok", handle, note: "Profile not found" };
   const followers = num(author.fans);
+  const times = videos.map((v) => when(v.createTimeISO ?? v.createTime));
   return {
     channel: "tiktok",
-    handle,
-    url: `https://www.tiktok.com/@${handle}`,
     followers,
-    postsPerWeek: cadence(videos.map((v) => when(v.createTimeISO ?? v.createTime)), now),
-    engagementRate: engagement(videos.map((v) => (num(v.diggCount) ?? 0) + (num(v.commentCount) ?? 0) + (num(v.shareCount) ?? 0)), followers),
-    adsInFeed: videos.filter((v) => v.isAd === true).length,
+    posts: num(author.video),
+    postsPer30Days: postsInWindow(times, now),
+    engagement: engagement(videos.map((v) => (num(v.diggCount) ?? 0) + (num(v.commentCount) ?? 0) + (num(v.shareCount) ?? 0)), followers),
+    lastPost: latest(times),
+    measured: followers !== undefined,
   };
 }
 
-export function facebookStats(url: string, page: readonly Item[], posts: readonly Item[], now: number): ChannelStats {
+export function facebookRow(page: readonly Item[], posts: readonly Item[], now: number): SocialChannelRow {
   const p = page[0] ?? {};
   const followers = num(p.followers) ?? num(p.likes);
+  const times = posts.map((x) => when(x.time ?? x.timestamp));
   return {
     channel: "facebook",
-    handle: typeof p.title === "string" ? p.title : url,
-    url,
     followers,
-    postsPerWeek: cadence(posts.map((x) => when(x.time ?? x.timestamp)), now),
-    engagementRate: engagement(posts.map((x) => (num(x.likes) ?? 0) + (num(x.comments) ?? 0) + (num(x.shares) ?? 0)), followers),
-    ...(typeof p.ad_status === "string" ? { note: p.ad_status.slice(0, 120) } : {}),
+    postsPer30Days: posts.length ? postsInWindow(times, now) : undefined,
+    engagement: engagement(posts.map((x) => (num(x.likes) ?? 0) + (num(x.comments) ?? 0) + (num(x.shares) ?? 0)), followers),
+    lastPost: latest(times),
+    measured: followers !== undefined,
   };
 }
 
-/** One channel's scrape; a failure becomes a note on that channel, the cost cap ends the step. */
-async function channel(run: () => Promise<ChannelStats>, fallback: ChannelStats): Promise<ChannelStats> {
-  try {
-    return await run();
-  } catch (err) {
-    if (err instanceof CostCapReached) throw err;
-    return { ...fallback, note: `Could not be read (${err instanceof Error ? err.message.slice(0, 80) : "error"})` };
-  }
+export const MAX_COMPETITORS = 3;
+
+const ROW_ORDER: SocialChannel[] = ["instagram", "tiktok", "facebook", "x", "linkedin", "youtube", "snapchat"];
+
+/** Competitors' home pages, one page each, for their name and Instagram handle. */
+export function competitorHomesInput(domains: readonly string[]): Item {
+  return {
+    startUrls: domains.map((d) => ({ url: `https://${d}/` })),
+    linkSelector: "",
+    maxPagesPerCrawl: domains.length,
+    maxCrawlingDepth: 0,
+    maxConcurrency: 3,
+    waitUntil: "load",
+    pageLoadTimeoutSecs: 30,
+    closeCookieModals: true,
+    downloadMedia: false,
+    pageFunction: PAGE_FUNCTION,
+    proxyConfiguration: { useApifyProxy: true },
+  };
 }
 
+export interface SocialOutcome extends StepResult<SocialData> {
+  competitors?: Competitor[];
+}
+
+/**
+ * Prospect channels (Instagram, TikTok, Facebook measured; X, LinkedIn, YouTube, Snapchat listed), and the
+ * competitors' Instagram followers for the benchmark. One failing channel becomes "not measured"; the cost
+ * cap ends the step with what it has.
+ */
 export async function collectSocial(
   auditId: string,
   prospect: AuditProspect,
   site: WebsiteData | undefined,
+  competitors: readonly Competitor[],
   budget: Budget,
   now = Date.now(),
-): Promise<StepResult<SocialData>> {
+): Promise<SocialOutcome> {
   const handles = socialHandles(prospect, site);
-  const channels: ChannelStats[] = [];
   let costUsd = 0;
-  const spend = async (key: Parameters<Budget["run"]>[1], input: Item) => {
+  let capNote = "";
+  const spend = async (key: Parameters<Budget["run"]>[1], input: Item): Promise<Item[] | null> => {
+    if (capNote) return null;
     try {
       const r = await budget.run(auditId, key, input);
       costUsd += r.costUsd;
       return r.items;
     } catch (err) {
       costUsd += (err as { costUsd?: number }).costUsd ?? 0;
-      throw err;
+      if (err instanceof CostCapReached) capNote = err.message;
+      return null;
     }
   };
-  let capped = false;
-  let capNote = "";
-  const guard = async (run: () => Promise<ChannelStats>, fallback: ChannelStats) => {
-    if (capped) return;
-    try {
-      channels.push(await channel(run, fallback));
-    } catch (err) {
-      if (!(err instanceof CostCapReached)) throw err;
-      capped = true;
-      capNote = err.message;
-    }
-  };
-  if (handles.instagram) {
-    const h = handles.instagram;
-    await guard(async () => instagramStats(h, await spend("instagram", { usernames: [h], includeAboutSection: false }), now), { channel: "instagram", handle: h });
-  }
+  // Candidates whose home page reads as a business come first (.sa domains count as one); three are kept.
+  const candidates = competitors.map((c) => ({ ...c }));
+  const homes = candidates.length ? await spend("competitorHomes", competitorHomesInput(candidates.map((c) => c.domain))) : [];
+  const checked = candidates.map((c, i) => {
+    const home = summarizeHome((homes ?? []).find((h) => String(h.url ?? "").includes(c.domain)));
+    return { c: { ...c, ...(home.name ? { name: home.name } : {}), instagram: c.instagram ?? home.instagram }, rank: (home.business || /\.sa$/.test(c.domain) ? 0 : 10) + i };
+  });
+  const named = homes ? checked.sort((a, b) => a.rank - b.rank).map((x) => x.c).slice(0, MAX_COMPETITORS) : candidates.slice(0, MAX_COMPETITORS);
+  const igHandles = [handles.instagram, ...named.map((c) => c.instagram)].filter((h): h is string => !!h);
+  const ig = igHandles.length ? await spend("instagram", { usernames: igHandles, includeAboutSection: false }) : null;
+  const igFor = (h: string | undefined) => (h && ig ? ig.find((i) => String(i.username ?? "").toLowerCase() === h.toLowerCase()) : undefined);
+  const rows: SocialChannelRow[] = [];
+  if (handles.instagram) rows.push(ig ? instagramRow(igFor(handles.instagram), now) : { channel: "instagram", measured: false });
   if (handles.tiktok) {
-    const h = handles.tiktok;
-    const input = { profiles: [h], profileScrapeSections: ["videos"], profileSorting: "latest", resultsPerPage: 12, excludePinnedPosts: true };
-    await guard(async () => tiktokStats(h, await spend("tiktok", input), now), { channel: "tiktok", handle: h });
+    const items = await spend("tiktok", { profiles: [handles.tiktok], profileScrapeSections: ["videos"], profileSorting: "latest", resultsPerPage: 12, excludePinnedPosts: true });
+    rows.push(items?.length ? tiktokRow(items, now) : { channel: "tiktok", measured: false });
   }
   if (handles.facebook) {
-    const url = handles.facebook;
-    await guard(async () => {
-      const page = await spend("facebookPage", { startUrls: [{ url }] });
-      const posts = await spend("facebookPosts", { startUrls: [{ url }], resultsLimit: 10, onlyPostsNewerThan: "60 days" }).catch((err: unknown) => {
-        if (err instanceof CostCapReached) throw err;
-        return [] as Item[];
-      });
-      return facebookStats(url, page, posts, now);
-    }, { channel: "facebook", handle: url, url });
+    const page = await spend("facebookPage", { startUrls: [{ url: handles.facebook }] });
+    const posts = page?.length ? await spend("facebookPosts", { startUrls: [{ url: handles.facebook }], resultsLimit: 10, onlyPostsNewerThan: "60 days" }) : null;
+    rows.push(page?.length ? facebookRow(page, posts ?? [], now) : { channel: "facebook", measured: false });
   }
-  // X and LinkedIn have no cheap, reliable scrapers; they are listed for the analyst without numbers.
-  if (handles.x) channels.push({ channel: "x", handle: handles.x, note: "Found on the site; not measured" });
-  if (handles.linkedin) channels.push({ channel: "linkedin", handle: handles.linkedin, url: handles.linkedin, note: "Found on the site; not measured" });
-  const measured = channels.filter((c) => c.followers !== undefined);
-  if (channels.length === 0) {
-    return { status: "skipped", costUsd, note: capped ? capNote : "No social profiles found on the CRM record or the website" };
+  for (const channel of ROW_ORDER) if (!rows.some((r) => r.channel === channel) && (channel !== "snapchat" || handles.snapchat)) rows.push({ channel, measured: false });
+  rows.sort((a, b) => ROW_ORDER.indexOf(a.channel) - ROW_ORDER.indexOf(b.channel));
+  const competitorInstagram: SocialData["competitorInstagram"] = {};
+  for (const c of named) {
+    if (!c.instagram) continue;
+    const followers = num(igFor(c.instagram)?.followersCount);
+    competitorInstagram[c.domain] = followers ?? "not-measured";
   }
-  const summary = measured.map((c) => `${c.channel} ${c.followers?.toLocaleString("en-US")}`).join(", ");
+  const measured = rows.filter((r) => r.measured);
+  if (!Object.keys(handles).length && !named.length) {
+    return { status: "skipped", costUsd, note: capNote || "No social profiles found on the CRM record or the website" };
+  }
+  const summary = measured.map((r) => `${r.channel} ${r.followers?.toLocaleString("en-US")}`).join(", ");
   return {
     status: "done",
-    data: { channels },
+    data: { rows, competitorInstagram },
+    competitors: named,
     costUsd,
-    note: `${measured.length} of ${channels.length} profiles measured${summary ? `: ${summary}` : ""}${capped ? " (cost cap reached)" : ""}`,
+    note: `${measured.length} channel${measured.length === 1 ? "" : "s"} measured${summary ? `: ${summary}` : ""}${capNote ? ` (${capNote.toLowerCase()})` : ""}`,
   };
 }

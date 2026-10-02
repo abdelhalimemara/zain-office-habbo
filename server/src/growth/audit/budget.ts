@@ -14,15 +14,24 @@ export interface ActorSpec {
   startUsd: number;
 }
 
+/**
+ * Google Search and Google Maps refuse a maxTotalChargeUsd under $0.50, so they reserve that much and are
+ * held down by maxItems instead (they cost cents).
+ */
 export const ACTORS = {
-  website: { id: "apify/web-scraper", maxItems: 25, maxChargeUsd: 0.3, timeoutSecs: 420, memoryMbytes: 2048, perItemUsd: 0.003, startUsd: 0 },
-  serp: { id: "apify/google-search-scraper", maxItems: 10, maxChargeUsd: 0.1, timeoutSecs: 300, perItemUsd: 0.0045, startUsd: 0.001 },
-  instagram: { id: "apify/instagram-profile-scraper", maxItems: 1, maxChargeUsd: 0.05, timeoutSecs: 180, perItemUsd: 0.0026, startUsd: 0 },
+  website: { id: "apify/playwright-scraper", maxItems: 20, maxChargeUsd: 0.3, timeoutSecs: 360, memoryMbytes: 4096, perItemUsd: 0.003, startUsd: 0 },
+  competitorHomes: { id: "apify/playwright-scraper", maxItems: 5, maxChargeUsd: 0.1, timeoutSecs: 240, memoryMbytes: 2048, perItemUsd: 0.003, startUsd: 0 },
+  serp: { id: "apify/google-search-scraper", maxItems: 10, maxChargeUsd: 0.5, timeoutSecs: 300, perItemUsd: 0.0045, startUsd: 0.001 },
+  semrush: { id: "pro100chok/semrush-scraper", maxItems: 4, maxChargeUsd: 0.05, timeoutSecs: 300, perItemUsd: 0.0045, startUsd: 0 },
+  semrushAudit: { id: "pro100chok/semrush-scraper", maxItems: 1, maxChargeUsd: 0.02, timeoutSecs: 300, perItemUsd: 0.0045, startUsd: 0 },
+  instagram: { id: "apify/instagram-profile-scraper", maxItems: 4, maxChargeUsd: 0.05, timeoutSecs: 240, perItemUsd: 0.0026, startUsd: 0 },
   tiktok: { id: "clockworks/tiktok-profile-scraper", maxItems: 15, maxChargeUsd: 0.08, timeoutSecs: 240, perItemUsd: 0.003, startUsd: 0 },
   facebookPage: { id: "apify/facebook-pages-scraper", maxItems: 1, maxChargeUsd: 0.05, timeoutSecs: 180, perItemUsd: 0.012, startUsd: 0 },
   facebookPosts: { id: "apify/facebook-posts-scraper", maxItems: 10, maxChargeUsd: 0.08, timeoutSecs: 240, perItemUsd: 0.005, startUsd: 0.001 },
-  metaAds: { id: "apify/facebook-ads-scraper", maxItems: 30, maxChargeUsd: 0.25, timeoutSecs: 300, perItemUsd: 0.0058, startUsd: 0 },
-  googleAds: { id: "scrapesage/google-ads-transparency-scraper", maxItems: 30, maxChargeUsd: 0.1, timeoutSecs: 300, perItemUsd: 0.002, startUsd: 0 },
+  metaAds: { id: "apify/facebook-ads-scraper", maxItems: 40, maxChargeUsd: 0.25, timeoutSecs: 300, perItemUsd: 0.0058, startUsd: 0 },
+  googleAds: { id: "scrapesage/google-ads-transparency-scraper", maxItems: 80, maxChargeUsd: 0.2, timeoutSecs: 300, perItemUsd: 0.002, startUsd: 0 },
+  similarweb: { id: "pro100chok/similarweb-scraper", maxItems: 4, maxChargeUsd: 0.05, timeoutSecs: 240, perItemUsd: 0.0019, startUsd: 0 },
+  maps: { id: "compass/crawler-google-places", maxItems: 1, maxChargeUsd: 0.5, timeoutSecs: 240, perItemUsd: 0.0035, startUsd: 0 },
 } as const satisfies Record<string, ActorSpec>;
 
 export type ActorKey = keyof typeof ACTORS;

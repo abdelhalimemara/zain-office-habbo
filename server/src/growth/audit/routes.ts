@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { Hono } from "hono";
 import { AUDITS_API, type StartAuditRequest } from "../../../../shared/audits";
 import { HttpError, badRequest, optionalString, readJsonObject } from "../../http";
-import { CRM_ID } from "./crm";
+import { CRM_ID, type AuditCrm } from "./crm";
 import type { AuditEngine } from "./engine";
 
 const AUDIT_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -45,8 +45,18 @@ export function parseStartAudit(body: Record<string, unknown>): StartAuditReques
   return req;
 }
 
+export const PROSPECTS_API = "/api/growth/prospects";
+const MAX_QUERY = 80;
+
 /** Prospect audits API (shared/audits.ts AUDITS_API); the Growth agents start audits through it with curl. */
-export function auditRoutes(app: Hono, audits: AuditEngine): void {
+export function auditRoutes(app: Hono, audits: AuditEngine, crm: AuditCrm): void {
+  // CRM lookup for the New audit form: read-only, at most ten leads and companies.
+  app.get(PROSPECTS_API, async (c) => {
+    const q = (c.req.query("q") ?? "").trim();
+    if (q.length > MAX_QUERY) throw badRequest(`q must be at most ${MAX_QUERY} characters`);
+    return c.json({ prospects: await crm.search(q) });
+  });
+
   app.get(AUDITS_API.list, async (c) => c.json({ audits: await audits.list() }));
 
   app.post(AUDITS_API.list, async (c) => {
@@ -75,6 +85,18 @@ export function auditRoutes(app: Hono, audits: AuditEngine): void {
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
     });
+  });
+
+  app.get(`${AUDITS_API.list}/:id/screenshot`, async (c) => {
+    const id = auditIdParam(c.req.param("id"));
+    if (!(await audits.get(id)).screenshotPath) throw new HttpError(404, "no mobile capture for this audit");
+    let png: Buffer;
+    try {
+      png = await readFile(audits.screenshotLocation(id));
+    } catch {
+      throw new HttpError(404, "no mobile capture for this audit");
+    }
+    return c.body(new Uint8Array(png), 200, { "Content-Type": "image/png", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" });
   });
 
   app.post(`${AUDITS_API.list}/:id/retry`, async (c) => {

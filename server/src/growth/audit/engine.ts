@@ -6,8 +6,8 @@ import type { ActorRunner } from "./apify";
 import { Budget, round } from "./budget";
 import type { AuditCrm } from "./crm";
 import type { AuditNotionSink } from "./notion";
-import type { PdfRenderer } from "./pdf";
-import { checkAnalysis, pdfFile, runStep, type AuditHermes, type Outcome, type StepContext } from "./steps";
+import type { PdfRenderer, Screenshotter } from "./chrome";
+import { asOfLabel, checkAnalysis, pdfFile, runStep, screenshotFile, type AuditHermes, type Outcome, type StepContext } from "./steps";
 import type { CrmFlags, StoredAudit } from "./types";
 import { dnsResolver, siteHost, validateWebsite, type Resolver } from "./url";
 
@@ -20,6 +20,8 @@ export interface AuditEngineDeps {
   hermes: AuditHermes;
   crm: AuditCrm;
   pdf: PdfRenderer;
+  /** The mobile home-page capture; the report goes without it when omitted. */
+  screenshots?: Screenshotter;
   notion?: AuditNotionSink;
   /** Where .zain/audits/<id>.pdf is written. */
   root: string;
@@ -39,9 +41,10 @@ const OPEN = new Set(["queued", "running"]);
 /** Steps that only need what came before them in this table. */
 const NEEDS: Record<AuditStepId, readonly AuditStepId[]> = {
   website: [],
-  ads: [],
+  ads: ["social"],
   search: ["website"],
-  social: ["website"],
+  // Social checks the candidates the searches found and keeps three; ads benchmarks those.
+  social: ["search"],
   score: ["website", "search", "social", "ads"],
   analysis: ["score"],
   pdf: ["analysis"],
@@ -80,9 +83,19 @@ export class AuditEngine {
     return (await this.load(id)).audit;
   }
 
+  /** The CRM the audits read prospects from (the prospect search route uses it too). */
+  get crm(): AuditCrm {
+    return this.deps.crm;
+  }
+
   /** Where an audit's PDF lives on disk. */
   pdfLocation(id: string): string {
     return pdfFile(this.deps.root, id);
+  }
+
+  /** Where an audit's mobile capture lives on disk. */
+  screenshotLocation(id: string): string {
+    return screenshotFile(this.deps.root, id);
   }
 
   /** Resolves the prospect (from the CRM when ids are given), validates its website and queues the audit. */
@@ -109,7 +122,7 @@ export class AuditEngine {
       updatedAt: at,
     };
     const flags: CrmFlags | undefined = record && Object.values(record.flags).some((v) => v !== undefined) ? record.flags : undefined;
-    await this.deps.store.put({ id: audit.id, audit, data: {}, ...(flags ? { crmFlags: flags } : {}) });
+    await this.deps.store.put({ id: audit.id, audit, data: { asOf: asOfLabel(at) }, ...(flags ? { crmFlags: flags } : {}) });
     void this.tick();
     return audit;
   }
@@ -129,7 +142,10 @@ export class AuditEngine {
         delete st.note;
         delete st.startedAt;
         delete st.finishedAt;
-        if (st.id === "score") delete s.audit.score;
+        if (st.id === "score") {
+          delete s.audit.score;
+          delete s.audit.benchmark;
+        }
         if (st.id === "analysis") {
           delete s.audit.analysis;
           delete s.analysisTask;
@@ -265,13 +281,15 @@ export class AuditEngine {
   }
 
   private context(id: string): StepContext {
-    const { hermes, crm, pdf, notion, root } = this.deps;
+    const { hermes, crm, pdf, screenshots, notion, root, resolve } = this.deps;
     return {
       budget: this.budget,
       hermes,
       crm,
       pdf,
+      screenshots,
       notion,
+      resolve: resolve ?? dnsResolver,
       root,
       publicBase: this.deps.publicBase ?? DEFAULT_PUBLIC_BASE,
       now: this.now,

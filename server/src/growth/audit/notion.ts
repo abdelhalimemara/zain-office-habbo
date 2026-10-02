@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { AuditStatus, ProspectAudit } from "../../../../shared/audits";
+import { AUDIT_AREAS, AUDIT_AREA_LABELS, type AuditArea, type AuditStatus, type ProspectAudit } from "../../../../shared/audits";
 import { PARENT_PAGE_ID } from "../../notion/boardRoom";
 import { NotionClient, RICH_TEXT_MAX, bullet, heading, paragraph, paragraphs, richText } from "../../notion/client";
 
@@ -13,7 +13,15 @@ export interface AuditsNotionIds {
 
 const STATUS: Record<AuditStatus, string> = { queued: "Queued", running: "Running", done: "Done", failed: "Failed", cancelled: "Cancelled" };
 const select = (names: readonly string[]) => ({ select: { options: names.map((name) => ({ name })) } });
-const SECTION_PROPS = { website: "Website score", search: "Search score", social: "Social score", ads: "Ads score", tracking: "Tracking score" } as const;
+const AREA_PROPS: Record<AuditArea, string> = {
+  website: "Website score",
+  brand: "Brand score",
+  search: "Search score",
+  social: "Social score",
+  performance: "Performance score",
+  conversion: "Conversion score",
+  reputation: "Reputation score",
+};
 
 /** The Prospect Audits schema; re-sending it is harmless (Notion merges properties). */
 export function auditsDatabaseProperties(): Record<string, unknown> {
@@ -22,7 +30,8 @@ export function auditsDatabaseProperties(): Record<string, unknown> {
     Website: { url: {} },
     Score: { number: { format: "number" } },
     Grade: select(["A", "B", "C", "D", "E"]),
-    ...Object.fromEntries(Object.values(SECTION_PROPS).map((p) => [p, { number: { format: "number" } }])),
+    ...Object.fromEntries(Object.values(AREA_PROPS).map((p) => [p, { number: { format: "number" } }])),
+    "Areas measured": { number: { format: "number" } },
     Status: select(Object.values(STATUS)),
     "Audit date": { date: {} },
     CRM: { url: {} },
@@ -103,9 +112,8 @@ export function auditProperties(a: ProspectAudit, pdf: { uploadId?: string; url?
     Website: url(a.prospect.website),
     Score: { number: s?.overall ?? null },
     Grade: { select: s ? { name: s.grade } : null },
-    ...Object.fromEntries(
-      (Object.keys(SECTION_PROPS) as (keyof typeof SECTION_PROPS)[]).map((k) => [SECTION_PROPS[k], { number: s && s.sections[k].weight > 0 ? s.sections[k].score : null }]),
-    ),
+    ...Object.fromEntries(AUDIT_AREAS.map((k) => [AREA_PROPS[k], { number: s?.areas.find((x) => x.area === k)?.score ?? null }])),
+    "Areas measured": { number: s?.areasMeasured ?? null },
     Status: { select: { name: STATUS[a.status] } },
     "Audit date": { date: { start: new Date(a.createdAt * 1000).toISOString() } },
     CRM: url(a.crmUrl),
@@ -120,18 +128,29 @@ export function auditProperties(a: ProspectAudit, pdf: { uploadId?: string; url?
 export function auditBlocks(a: ProspectAudit, pdfUrl: string | undefined): Record<string, unknown>[] {
   const s = a.score;
   const an = a.analysis;
-  const blocks: Record<string, unknown>[] = [heading("Summary"), ...paragraphs(an?.executiveSummary ?? "")];
+  const blocks: Record<string, unknown>[] = [heading("Summary")];
+  if (an?.headline) blocks.push(paragraph(an.headline));
+  blocks.push(...paragraphs(an?.executiveSummary ?? ""));
   if (s) {
-    blocks.push(heading("Scorecard"), paragraph(`Overall ${s.overall}/100 · grade ${s.grade}`));
-    for (const [k, v] of Object.entries(s.sections)) {
-      blocks.push(bullet(v.weight > 0 ? `${k}: ${v.score}/100 — ${v.drivers.join("; ")}` : `${k}: not measured`));
+    blocks.push(heading("The seven areas"), paragraph(`Overall ${s.overall}/100 · grade ${s.grade} · ${s.areasMeasured} of 7 areas measured`));
+    for (const x of s.areas) {
+      const status = x.status === "not-measured" ? "not measured" : `${x.status}${x.severity ? ` (${x.severity})` : ""}, ${x.score}/100`;
+      blocks.push(bullet(`${AUDIT_AREA_LABELS[x.area]}: ${status} — ${x.summary}`));
     }
   }
-  if (an?.findings.length) blocks.push(heading("Findings"), ...an.findings.map((f) => bullet(`[${f.severity}] ${f.section} · ${f.title}: ${f.detail}`)));
+  if (an?.findings.length) blocks.push(heading("The gaps"), ...an.findings.map((f) => bullet(`[${f.severity}] ${f.title}: ${f.detail}`)));
+  if (an?.fix.length) blocks.push(heading("The fix"), ...an.fix.map((f) => bullet(`Phase ${f.phase} · ${f.name} — ${f.headline}: ${f.detail}`)), paragraph(`North Star: ${an.northStar}`));
   if (an?.opportunities.length) {
     blocks.push(heading("Opportunities"), ...an.opportunities.map((o) => bullet(`${o.title} — ${o.service} (impact ${o.impact}, effort ${o.effort})`)));
   }
-  if (an?.competitors.length) blocks.push(heading("Competitors"), ...an.competitors.map((c) => bullet(`${c.name}${c.domain ? ` (${c.domain})` : ""}: ${c.note}`)));
+  if (a.benchmark?.length) {
+    blocks.push(heading("Benchmark"));
+    for (const b of a.benchmark) {
+      const visits = typeof b.traffic === "object" ? `~${b.traffic.monthlyVisits.toLocaleString("en-US")} visits/month (est.)` : "traffic not measured";
+      const google = typeof b.googleAds === "object" ? `${b.googleAds.active} Google ads` : b.googleAds === "none" ? "no Google ads" : "Google not measured";
+      blocks.push(bullet(`${b.name}${b.domain ? ` (${b.domain})` : ""}: ${google}, ${visits}${b.authorityScore !== undefined ? `, authority ${b.authorityScore}` : ""}`));
+    }
+  }
   if (an?.pitchAngle) blocks.push(heading("Pitch angle"), ...paragraphs(an.pitchAngle));
   blocks.push(heading("Links"));
   if (pdfUrl) blocks.push(bullet(`PDF report: ${pdfUrl}`));

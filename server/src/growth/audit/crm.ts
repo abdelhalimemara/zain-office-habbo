@@ -20,6 +20,22 @@ export interface CrmProspect {
   flags: CrmFlags;
 }
 
+/** A CRM record the New audit form can start from (src/api/client.ts ProspectHit on the UI side). */
+export interface ProspectHit {
+  id: string;
+  kind: CrmRecordKind;
+  name: string;
+  website?: string;
+  instagram?: string;
+  tiktok?: string;
+  facebook?: string;
+  x?: string;
+  linkedin?: string;
+  city?: string;
+}
+
+export const PROSPECT_SEARCH_LIMIT = 10;
+
 export interface CrmAttachment {
   fileId: string;
   attachmentId: string;
@@ -28,6 +44,8 @@ export interface CrmAttachment {
 /** What the audit needs from the CRM; tests swap in a fake. */
 export interface AuditCrm {
   prospect(kind: CrmRecordKind, id: string): Promise<CrmProspect>;
+  /** Leads and companies whose name contains `q` (most recently updated first); recent ones when `q` is empty. */
+  search(q: string): Promise<ProspectHit[]>;
   uploadPdf(name: string, pdf: Buffer): Promise<string>;
   attach(kind: CrmRecordKind, id: string, name: string, fileId: string): Promise<string>;
   note(kind: CrmRecordKind, id: string, title: string, markdown: string): Promise<string>;
@@ -87,6 +105,46 @@ export class TwentyCrm implements AuditCrm {
       },
       flags: {},
     };
+  }
+
+  async search(q: string): Promise<ProspectHit[]> {
+    // Twenty's filter grammar quotes the value; quotes, backslashes and wildcards in the query are dropped.
+    const term = q.replace(/["\\%_]/g, " ").replace(/\s+/g, " ").trim();
+    const query = (limit: number) =>
+      `limit=${limit}&order_by=${encodeURIComponent("updatedAt[DescNullsLast]")}${term ? `&filter=${encodeURIComponent(`name[ilike]:"%${term}%"`)}` : ""}`;
+    const [leads, companies] = await Promise.all([
+      this.rest<Json>("GET", `/rest/leads?${query(PROSPECT_SEARCH_LIMIT)}`),
+      this.rest<Json>("GET", `/rest/companies?${query(PROSPECT_SEARCH_LIMIT)}`),
+    ]);
+    const rows = (data: Json, key: string) => (((data.data as Json | undefined)?.[key] ?? []) as Json[]).filter((r) => s(r.id) && s(r.name));
+    const fromLead = (r: Json): ProspectHit => ({
+      id: s(r.id)!,
+      kind: "lead",
+      name: s(r.name)!,
+      website: withScheme(link(r.websiteUrl)),
+      instagram: s(r.instagramHandle),
+      tiktok: s(r.tiktokHandle),
+      facebook: s(r.facebookPageUrl),
+      city: s(r.city),
+    });
+    const fromCompany = (r: Json): ProspectHit => ({
+      id: s(r.id)!,
+      kind: "company",
+      name: s(r.name)!,
+      website: withScheme(link(r.domainName)),
+      x: link(r.xLink),
+      linkedin: link(r.linkedinLink),
+      city: s((r.address as Json | undefined)?.addressCity),
+    });
+    const a = rows(leads, "leads").map(fromLead);
+    const b = rows(companies, "companies").map(fromCompany);
+    // Interleaved so neither kind crowds the other out of the ten.
+    const out: ProspectHit[] = [];
+    for (let i = 0; out.length < PROSPECT_SEARCH_LIMIT && (i < a.length || i < b.length); i++) {
+      if (a[i]) out.push(a[i]!);
+      if (b[i] && out.length < PROSPECT_SEARCH_LIMIT) out.push(b[i]!);
+    }
+    return out.map((h) => Object.fromEntries(Object.entries(h).filter(([, v]) => v !== undefined)) as unknown as ProspectHit);
   }
 
   /** Uploads to the attachment file field (GraphQL multipart); returns the file id. */

@@ -1,18 +1,20 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AUDIT_STEPS, type ProspectAudit } from "../../shared/audits";
-import { fallbackAnalysis } from "../../server/src/growth/audit/analysis";
+import { draftAnalysis } from "../../server/src/growth/audit/analysis";
+import { publicView } from "../../server/src/growth/audit/benchmark";
 import { ApifyClient } from "../../server/src/growth/audit/apify";
 import { ATTACHMENT_FILE_FIELD, CRM_NOT_CONNECTED, TwentyCrm } from "../../server/src/growth/audit/crm";
 import { NotionAuditSink, auditsIdsPath, setupProspectAudits } from "../../server/src/growth/audit/notion";
-import { ChromePdfRenderer } from "../../server/src/growth/audit/pdf";
+import { ChromeRenderer } from "../../server/src/growth/audit/chrome";
 import { scoreAudit } from "../../server/src/growth/audit/score";
 import { summarizeWebsite } from "../../server/src/growth/audit/collect/website";
-import { renderReport } from "../../server/src/growth/audit/template/render";
+import { GROWTH_LOGO, brandLogo, renderReport } from "../../server/src/growth/audit/template/render";
 import { NotionClient } from "../../server/src/notion/client";
 import { PARENT_PAGE_ID } from "../../server/src/notion/boardRoom";
-import { LEAD_ID, sampleItems, tempRoot } from "./auditFakes";
+import { LEAD_ID, PNG, page, tempRoot } from "./auditFakes";
 import { json, mockFetch } from "./helpers";
 
 const TOKEN = "apify_api_SECRETSECRETSECRETSECRET1234";
@@ -22,12 +24,12 @@ const run = (status: string, extra: Record<string, unknown> = {}) => ({ data: { 
 describe("Apify client", () => {
   it("starts the run with limits, waits for it, and returns the dataset and its cost", async () => {
     const api = mockFetch({
-      "POST /v2/acts/apify~web-scraper/runs": () => run("RUNNING"),
+      "POST /v2/acts/apify~playwright-scraper/runs": () => run("RUNNING"),
       "GET /v2/actor-runs/r1": (_c, n) => (n === 1 ? run("RUNNING") : run("SUCCEEDED", { usageTotalUsd: 0.07 })),
       "GET /v2/datasets/d1/items": () => [{ url: "https://a.sa/" }],
     });
     const client = new ApifyClient(async () => TOKEN, api.fetchImpl, noSleep);
-    const out = await client.run("apify/web-scraper", { startUrls: [] }, { maxItems: 25, maxTotalChargeUsd: 0.3, timeoutSecs: 420, memoryMbytes: 2048 });
+    const out = await client.run("apify/playwright-scraper", { startUrls: [] }, { maxItems: 25, maxTotalChargeUsd: 0.3, timeoutSecs: 420, memoryMbytes: 2048 });
     expect(out).toEqual({ items: [{ url: "https://a.sa/" }], costUsd: 0.07 });
     const [start] = api.calls;
     expect(start!.auth).toBe(`Bearer ${TOKEN}`);
@@ -35,6 +37,18 @@ describe("Apify client", () => {
     expect(start!.body).toEqual({ startUrls: [] });
     expect(api.called("GET /v2/actor-runs/r1")).toHaveLength(2);
     expect(api.calls.at(-1)!.query.get("limit")).toBe("25");
+  });
+
+  it("retries reads through a transient Apify error, and reports a permission refusal plainly", async () => {
+    const api = mockFetch({
+      "POST /v2/acts/a~b/runs": () => run("SUCCEEDED", { usageTotalUsd: 0.01 }),
+      "GET /v2/datasets/d1/items": (_c, n) => (n === 1 ? json({ error: { message: "busy" } }, 503) : [{ ok: 1 }]),
+    });
+    expect((await new ApifyClient(async () => TOKEN, api.fetchImpl, noSleep).run("a/b", {}, { maxItems: 1, maxTotalChargeUsd: 0.1, timeoutSecs: 10 })).items).toEqual([{ ok: 1 }]);
+    const refused = mockFetch({ "POST /v2/acts/a~b/runs": () => json({ error: { type: "full-permission-actor-not-approved", message: "This Actor requires full access" } }, 403) });
+    await expect(new ApifyClient(async () => TOKEN, refused.fetchImpl, noSleep).run("a/b", {}, { maxItems: 1, maxTotalChargeUsd: 0.1, timeoutSecs: 10 })).rejects.toThrow(
+      "Apify refused the run: This Actor requires full access",
+    );
   });
 
   it("says Apify is not connected without a token, and never calls out", async () => {
@@ -104,6 +118,24 @@ describe("Twenty CRM client", () => {
     expect(crm.recordUrl("lead", LEAD_ID)).toBe(`https://crm.test/object/lead/${LEAD_ID}`);
   });
 
+  it("searches leads and companies by name, interleaved, at most ten", async () => {
+    const leads = Array.from({ length: 8 }, (_, i) => ({ id: `l${i}`, name: `Lead ${i}`, websiteUrl: { primaryLinkUrl: i === 0 ? "studio.sa" : "" }, instagramHandle: i === 0 ? "studio" : "", city: "RIYADH" }));
+    const companies = Array.from({ length: 4 }, (_, i) => ({ id: `c${i}`, name: `Company ${i}`, domainName: { primaryLinkUrl: "" }, address: { addressCity: "Jeddah" }, xLink: { primaryLinkUrl: "" } }));
+    const api = mockFetch({ "GET /rest/leads": () => ({ data: { leads } }), "GET /rest/companies": () => ({ data: { companies } }) });
+    const hits = await new TwentyCrm(async () => "k", api.fetchImpl, "https://crm.test").search('st"u%dio');
+    expect(hits).toHaveLength(10);
+    expect(hits.slice(0, 3)).toEqual([
+      { id: "l0", kind: "lead", name: "Lead 0", website: "https://studio.sa", instagram: "studio", city: "RIYADH" },
+      { id: "c0", kind: "company", name: "Company 0", city: "Jeddah" },
+      { id: "l1", kind: "lead", name: "Lead 1", city: "RIYADH" },
+    ]);
+    const call = api.called("GET /rest/leads")[0]!;
+    expect(call.query.get("filter")).toBe('name[ilike]:"%st u dio%"');
+    expect(call.query.get("limit")).toBe("10");
+    await new TwentyCrm(async () => "k", api.fetchImpl, "https://crm.test").search("");
+    expect(api.called("GET /rest/companies")[1]!.query.get("filter")).toBeNull();
+  });
+
   it("answers clean errors: no key, unknown record, bad id", async () => {
     const api = mockFetch({});
     await expect(new TwentyCrm(async () => null, api.fetchImpl).prospect("lead", LEAD_ID)).rejects.toMatchObject({ status: 502, message: CRM_NOT_CONNECTED });
@@ -112,43 +144,71 @@ describe("Twenty CRM client", () => {
   });
 });
 
-function sampleAudit(): { audit: ProspectAudit; data: Parameters<typeof renderReport>[1] } {
-  const data = { website: summarizeWebsite("https://www.thestudio.sa/", sampleItems()["apify/web-scraper"]!) };
-  const score = scoreAudit(data, "BEAUTY");
+function sampleAudit() {
+  const data = { asOf: "2 Oct 2026", website: summarizeWebsite("https://www.thestudio.sa/", [page("https://www.thestudio.sa/")]) };
   const audit: ProspectAudit = {
     id: "aud_0001",
     prospect: { name: "استوديو <script>alert(1)</script>", website: "https://www.thestudio.sa/", city: "RIYADH", category: "BEAUTY" },
     status: "running",
     steps: AUDIT_STEPS.map((id) => ({ id, status: "done" })),
-    score,
     requestedBy: "hq",
     createdAt: 1_790_000_000,
     updatedAt: 1_790_000_000,
     crmUrl: "https://crm.test/object/lead/1",
   };
-  audit.analysis = fallbackAnalysis(audit, score, data);
+  audit.score = scoreAudit(data, audit.prospect);
+  Object.assign(audit, publicView(audit, data));
+  audit.analysis = draftAnalysis(audit, audit.score, data);
   return { audit, data };
 }
 
 describe("audit report template", () => {
-  it("renders the ten branded pages, escaped, with Arabic-capable fonts and Ahmad's contact", () => {
+  it("renders the fourteen template pages, escaped, in IBM Plex with the logo and honest coverage", () => {
     const { audit, data } = sampleAudit();
-    const html = renderReport(audit, data, new Date("2026-10-01T00:00:00Z"));
-    expect(html.match(/<section class="page/g)).toHaveLength(10);
+    const html = renderReport(audit, data, audit.analysis!, { at: new Date("2026-10-01T09:00:00Z"), logo: "data:image/png;base64,TE9HTw==", screenshot: `data:image/png;base64,${PNG.toString("base64")}` });
+    expect(html.match(/<section class="page/g)).toHaveLength(14);
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;");
     expect(html).toContain('dir="auto"');
     expect(html).toContain("IBM+Plex+Sans+Arabic");
-    expect(html).toContain("--brand: #3dbe7a");
-    expect(html).toContain("ahmad@zain-studio.com");
-    expect(html).toContain(`Overall score ${audit.score!.overall} of 100`);
-    for (const title of ["Executive summary", "Scorecard", "Website &amp; SEO", "Search visibility", "Social media", "Paid ads", "Tracking", "Top opportunities", "Next steps"]) {
+    expect(html).toContain("--mint: #21e6a2");
+    expect(html).toContain("@page { size: 960pt 540pt");
+    expect(html).toContain("CONFIDENTIAL &nbsp;|&nbsp; DIGITAL GAP AUDIT");
+    expect(html).toContain('src="data:image/png;base64,TE9HTw=="');
+    for (const title of [
+      "Executive Summary",
+      "The Seven Areas, At a Glance",
+      "What a Visitor Sees",
+      "Website and Technical",
+      "Search: Brand vs Category",
+      "Paid Media: Google and Meta",
+      "Organic Social",
+      "Traffic (Similarweb Estimates)",
+      "Reputation and Local",
+      "The Competitive Gap",
+      "The Gaps",
+      "The Fix: Foundation Before More Spend",
+      "Thank you",
+    ]) {
       expect(html).toContain(title);
     }
+    expect(html).toContain("Not measured");
+    expect(html).toContain("October 2026 | Confidential");
   });
 
-  it("refuses to render without Chrome", async () => {
-    await expect(new ChromePdfRenderer(() => null).render("<p>x</p>", "/nonexistent/x.pdf")).rejects.toThrow("Chrome is not installed");
+  it("loads the Zain Growth logo from ZAIN_BRAND_DIR, and falls back to a text logo", async () => {
+    const dir = await tempRoot();
+    await mkdir(join(dir, "zain_growth", "01_logo_png"), { recursive: true });
+    await writeFile(join(dir, GROWTH_LOGO), PNG);
+    expect(brandLogo({ ZAIN_BRAND_DIR: dir })).toBe(`data:image/png;base64,${PNG.toString("base64")}`);
+    expect(brandLogo({ ZAIN_BRAND_DIR: join(tmpdir(), "no-such-brand-dir") })).toBeNull();
+    const { audit, data } = sampleAudit();
+    expect(renderReport(audit, data, audit.analysis!, { logo: null })).toContain('class="text-logo"');
+  });
+
+  it("refuses to render or capture without Chrome", async () => {
+    await expect(new ChromeRenderer(() => null).render("<p>x</p>", "/nonexistent/x.pdf")).rejects.toThrow("Chrome is not installed");
+    await expect(new ChromeRenderer(() => null).capture("https://a.sa/", "/nonexistent/x.png")).rejects.toThrow("Chrome is not installed");
   });
 });
 
@@ -169,7 +229,7 @@ describe("Notion Prospect Audits", () => {
     const created = api.called("POST /v1/databases")[0]!.body as { parent: unknown; initial_data_source: { properties: Record<string, unknown> } };
     expect(created.parent).toEqual({ type: "page_id", page_id: PARENT_PAGE_ID });
     expect(Object.keys(created.initial_data_source.properties)).toEqual(
-      expect.arrayContaining(["Prospect", "Website", "Score", "Grade", "Website score", "Tracking score", "Status", "Audit date", "CRM", "PDF", "Top opportunities", "Category", "City"]),
+      expect.arrayContaining(["Prospect", "Website", "Score", "Grade", "Website score", "Brand score", "Performance score", "Reputation score", "Areas measured", "Status", "Audit date", "CRM", "PDF", "Top opportunities", "Category", "City"]),
     );
     await setupProspectAudits({ notion, apply: true, root, log: () => undefined });
     expect(api.called("POST /v1/databases")).toHaveLength(1);
@@ -191,12 +251,13 @@ describe("Notion Prospect Audits", () => {
     const { audit } = sampleAudit();
     const sink = new NotionAuditSink(new NotionClient(async () => "ntn", api.fetchImpl), root);
     expect(await sink.sync(audit, undefined, { bytes: new Uint8Array([37, 80]), url: "https://hq.test/api/growth/audits/aud_0001/pdf" })).toEqual({ pageId: "p1", url: "https://notion.so/p1" });
-    const page = api.called("POST /v1/pages")[0]!.body as { parent: unknown; properties: Record<string, Record<string, unknown>> };
-    expect(page.parent).toEqual({ type: "data_source_id", data_source_id: "ds1" });
-    expect(page.properties.PDF).toEqual({ files: [{ type: "file_upload", file_upload: { id: "fu1" }, name: "aud_0001.pdf" }] });
-    expect(page.properties.Score).toEqual({ number: audit.score!.overall });
-    expect(page.properties.CRM).toEqual({ url: "https://crm.test/object/lead/1" });
-    expect(page.properties["Search score"]).toEqual({ number: null }); // not measured
+    const created = api.called("POST /v1/pages")[0]!.body as { parent: unknown; properties: Record<string, Record<string, unknown>> };
+    expect(created.parent).toEqual({ type: "data_source_id", data_source_id: "ds1" });
+    expect(created.properties.PDF).toEqual({ files: [{ type: "file_upload", file_upload: { id: "fu1" }, name: "aud_0001.pdf" }] });
+    expect(created.properties.Score).toEqual({ number: audit.score!.overall });
+    expect(created.properties.CRM).toEqual({ url: "https://crm.test/object/lead/1" });
+    expect(created.properties["Search score"]).toEqual({ number: null }); // not measured
+    expect(created.properties["Areas measured"]).toEqual({ number: audit.score!.areasMeasured });
     const blocks = JSON.stringify(api.called("PATCH /v1/blocks/p1/children")[0]!.body);
     expect(blocks).toContain("https://hq.test/api/growth/audits/aud_0001/pdf");
   });

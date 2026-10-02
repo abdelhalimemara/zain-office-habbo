@@ -13,7 +13,7 @@ import { ApifyClient, envApifyToken } from "./growth/audit/apify";
 import { TwentyCrm, envCrmKey } from "./growth/audit/crm";
 import { AuditEngine, DEFAULT_PUBLIC_BASE } from "./growth/audit/engine";
 import { NotionAuditSink } from "./growth/audit/notion";
-import { ChromePdfRenderer } from "./growth/audit/pdf";
+import { ChromeRenderer } from "./growth/audit/chrome";
 import { isStoredAudit } from "./growth/audit/types";
 import { NotionClient, envToken } from "./notion/client";
 import { NotionBoardSink } from "./notion/sync";
@@ -85,12 +85,14 @@ const consultations = new ConsultationLog({
   sink,
 });
 const tunnel = loadAccessConfig(root);
+const chrome = new ChromeRenderer();
 const audits = new AuditEngine({
   store: fileRecordStore(join(root, ".zain", "audits.json"), isStoredAudit),
   apify: new ApifyClient(envApifyToken()),
   hermes: clients.hermes,
   crm: new TwentyCrm(envCrmKey()),
-  pdf: new ChromePdfRenderer(),
+  pdf: chrome,
+  screenshots: chrome,
   notion: new NotionAuditSink(notion, root),
   root,
   publicBase: process.env.ZAIN_PUBLIC_URL ?? (tunnel ? `https://${tunnel.host}` : DEFAULT_PUBLIC_BASE),

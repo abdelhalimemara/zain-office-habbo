@@ -1,19 +1,23 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { AUDITS_API, type AuditStepId, type ProspectAudit } from "../../../../shared/audits";
+import { AUDITS_API, AUDIT_AREA_LABELS, type AuditStepId, type ProspectAudit } from "../../../../shared/audits";
 import type { HermesClient } from "../../hermes/client";
-import { ANALYSIS_TITLE_PREFIX, AUDIT_AGENT, FALLBACK_AGENT, analysisTaskBody, fallbackAnalysis, parseAnalysis } from "./analysis";
+import { ANALYSIS_TITLE_PREFIX, AUDIT_AGENT, FALLBACK_AGENT, analysisTaskBody, draftAnalysis, parseAnalysis } from "./analysis";
+import { nameFromDomain, publicView } from "./benchmark";
+import { shortDate } from "./dates";
 import { CostCapReached, type Budget } from "./budget";
+import type { PdfRenderer, Screenshotter } from "./chrome";
 import { collectAds } from "./collect/ads";
-import { collectSearch } from "./collect/search";
-import { collectSocial } from "./collect/social";
-import { collectWebsite } from "./collect/website";
+import { collectSearch, pickCompetitors } from "./collect/search";
+import { semrushAudit, semrushDomains } from "./collect/seo";
+import { MAX_COMPETITORS, collectSocial } from "./collect/social";
+import { collectWebsite, tagRead } from "./collect/website";
 import type { AuditCrm, CrmRecordKind } from "./crm";
 import type { AuditNotionSink } from "./notion";
-import type { PdfRenderer } from "./pdf";
 import { scoreAudit } from "./score";
 import { renderReport } from "./template/render";
-import type { StepResult, StoredAudit } from "./types";
+import { validateWebsite, type Resolver } from "./url";
+import type { StoredAudit } from "./types";
 
 /** Hermes as the audit uses it (a narrow slice, so tests can fake it). */
 export type AuditHermes = Pick<HermesClient, "createTask" | "task" | "listProfiles" | "updateTask">;
@@ -27,7 +31,9 @@ export interface StepContext {
   hermes: AuditHermes;
   crm: AuditCrm;
   pdf: PdfRenderer;
+  screenshots?: Screenshotter;
   notion?: AuditNotionSink;
+  resolve?: Resolver;
   root: string;
   publicBase: string;
   now: () => number;
@@ -45,11 +51,11 @@ export interface Outcome {
 }
 
 export const pdfFile = (root: string, id: string) => join(root, ".zain", "audits", `${id}.pdf`);
+export const screenshotFile = (root: string, id: string) => join(root, ".zain", "audits", `${id}-mobile.png`);
+export const screenshotUrl = (id: string) => `${AUDITS_API.one(id)}/screenshot`;
 export const publicPdfUrl = (base: string, id: string) => `${base.replace(/\/+$/, "")}${AUDITS_API.pdf(id)}`;
-
-function collected<T>(r: StepResult<T>, put: (s: StoredAudit, data: T) => void): Outcome {
-  return { status: r.status, note: r.note, costUsd: r.costUsd, patch: r.data === undefined ? undefined : (s) => put(s, r.data as T) };
-}
+/** "2 Oct 2026": the date every source label carries. */
+export const asOfLabel = (unixSeconds: number) => shortDate(unixSeconds * 1000);
 
 async function capped(run: () => Promise<Outcome>): Promise<Outcome> {
   try {
@@ -60,28 +66,136 @@ async function capped(run: () => Promise<Outcome>): Promise<Outcome> {
   }
 }
 
+/** Crawl and mobile capture together; a failed capture is noted, the crawl decides the step. */
+async function websiteStep(s: StoredAudit, ctx: StepContext): Promise<Outcome> {
+  const website = s.audit.prospect.website;
+  const shot = (async () => {
+    if (!ctx.screenshots) return false;
+    try {
+      // Re-checked here: Chrome on this machine fetches the page, so the host must still resolve publicly.
+      await validateWebsite(website, ctx.resolve);
+      await ctx.screenshots.capture(website, screenshotFile(ctx.root, s.id));
+      return true;
+    } catch (err) {
+      ctx.log(`audits: ${s.id} mobile capture failed (${err instanceof Error ? err.message : "error"})`);
+      return false;
+    }
+  })();
+  const [r, captured] = await Promise.all([collectWebsite(s.id, website, ctx.budget, s.crmFlags), shot]);
+  return {
+    status: r.status,
+    note: `${r.note}${captured ? "; mobile capture taken" : ctx.screenshots ? "; mobile capture failed" : ""}`,
+    costUsd: r.costUsd,
+    patch: (x) => {
+      if (r.data) {
+        x.data.website = r.data;
+        x.audit.tags = tagRead(r.data.trackers);
+      }
+      if (captured) x.audit.screenshotPath = screenshotUrl(s.id);
+    },
+  };
+}
+
+/** The Semrush home-page audit, the brand and category searches, then competitors, then Semrush for all. */
+async function searchStep(s: StoredAudit, ctx: StepContext): Promise<Outcome> {
+  const p = s.audit.prospect;
+  const asOf = s.data.asOf ?? asOfLabel(s.audit.createdAt);
+  let costUsd = 0;
+  const notes: string[] = [];
+  // The Semrush home-page audit first: the keywords the site ranks for become the category searches.
+  const [audit] = await Promise.allSettled([semrushAudit(s.id, p.website, ctx.budget)]);
+  const auditItem = audit.status === "fulfilled" ? audit.value.item : undefined;
+  const semrush = (auditItem?.semrush ?? {}) as { organic_competitors?: { domain?: string }[]; top_organic_keywords?: { keyword?: string; volume?: number }[] };
+  const keywords = (semrush.top_organic_keywords ?? [])
+    .filter((k) => typeof k.keyword === "string")
+    .sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0))
+    .map((k) => k.keyword!);
+  const [serp] = await Promise.allSettled([collectSearch(s.id, p, s.data.website, ctx.budget, p.category ? [] : keywords)]);
+  for (const r of [serp, audit]) {
+    if (r.status === "fulfilled") costUsd += r.value.costUsd;
+    else costUsd += (r.reason as { costUsd?: number }).costUsd ?? 0;
+  }
+  const search = serp.status === "fulfilled" ? serp.value.data : undefined;
+  if (serp.status === "fulfilled") notes.push(serp.value.note);
+  else notes.push(`searches failed (${(serp.reason as Error).message.slice(0, 60)})`);
+  const semrushCompetitors = (semrush.organic_competitors ?? []).map((c) => String(c.domain ?? ""));
+  const domains = pickCompetitors(p, search, semrushCompetitors);
+  let seo: Awaited<ReturnType<typeof semrushDomains>>["seo"] | undefined;
+  try {
+    const r = await semrushDomains(s.id, p.website, domains, auditItem, ctx.budget, asOf);
+    seo = r.seo;
+    costUsd += r.costUsd;
+    notes.push(`Semrush authority ${seo.read.authorityScore ?? "—"}`);
+  } catch (err) {
+    costUsd += (err as { costUsd?: number }).costUsd ?? 0;
+    notes.push(err instanceof CostCapReached ? err.message : `Semrush failed (${(err as Error).message.slice(0, 60)})`);
+  }
+  if (!search && !seo) throw Object.assign(new Error(notes.join("; ")), { costUsd });
+  notes.push(`${domains.length} competitor candidates: ${domains.join(", ") || "none found"}`);
+  return {
+    status: "done",
+    note: notes.join("; "),
+    costUsd,
+    patch: (x) => {
+      if (search) {
+        x.data.search = search;
+        x.audit.searchRuns = search.runs;
+      }
+      if (seo) {
+        x.data.seo = seo;
+        x.audit.seo = seo.read;
+      }
+      x.data.competitors = domains.map((domain) => ({ domain, name: nameFromDomain(domain) }));
+    },
+  };
+}
+
 export async function runStep(step: AuditStepId, s: StoredAudit, ctx: StepContext): Promise<Outcome> {
   const { audit, data } = s;
   const p = audit.prospect;
   switch (step) {
     case "website":
-      return capped(async () => collected(await collectWebsite(s.id, p.website, ctx.budget, s.crmFlags), (x, d) => (x.data.website = d)));
+      return capped(() => websiteStep(s, ctx));
     case "search":
-      return capped(async () => collected(await collectSearch(s.id, p, data.website, ctx.budget), (x, d) => (x.data.search = d)));
+      return capped(() => searchStep(s, ctx));
     case "social":
-      return capped(async () => collected(await collectSocial(s.id, p, data.website, ctx.budget), (x, d) => (x.data.social = d)));
+      return capped(async () => {
+        const r = await collectSocial(s.id, p, data.website, data.competitors ?? [], ctx.budget);
+        return {
+          status: r.status,
+          note: r.note,
+          costUsd: r.costUsd,
+          patch: (x) => {
+            if (r.data) {
+              x.data.social = r.data;
+              x.audit.social = r.data.rows;
+            }
+            if (r.competitors) x.data.competitors = r.competitors;
+          },
+        };
+      });
     case "ads":
-      return capped(async () => collected(await collectAds(s.id, p, ctx.budget, s.crmFlags), (x, d) => (x.data.ads = d)));
+      return capped(async () => {
+        const r = await collectAds(s.id, p, (data.competitors ?? []).slice(0, MAX_COMPETITORS), ctx.budget, s.crmFlags);
+        return { status: r.status, note: r.note, costUsd: r.costUsd, patch: (x) => r.data && (x.data.ads = r.data) };
+      });
     case "score": {
-      const score = scoreAudit(data, p.category);
-      return { status: "done", note: `Overall ${score.overall}/100, grade ${score.grade}`, patch: (x) => (x.audit.score = score) };
+      const score = scoreAudit(data, p, data.asOf ?? asOfLabel(audit.createdAt));
+      const view = publicView(audit, data);
+      return {
+        status: "done",
+        note: `Overall ${score.overall}/100, grade ${score.grade}, ${score.areasMeasured} of 7 areas measured`,
+        patch: (x) => Object.assign(x.audit, view, { score }),
+      };
     }
     case "analysis":
       return startAnalysis(s, ctx);
     case "pdf": {
-      const html = renderReport(audit, data, new Date(audit.createdAt * 1000));
+      const shot = audit.screenshotPath ? await readFile(screenshotFile(ctx.root, s.id)).catch(() => null) : null;
+      const analysis = audit.analysis ?? draftAnalysis(audit, audit.score!, data);
+      const html = renderReport(audit, data, analysis, { screenshot: shot ? `data:image/png;base64,${shot.toString("base64")}` : null });
       await ctx.pdf.render(html, pdfFile(ctx.root, s.id));
-      return { status: "done", note: "Branded PDF rendered", patch: (x) => (x.audit.pdfPath = AUDITS_API.pdf(s.id)) };
+      return { status: "done", note: "Branded Digital Gap Audit rendered (14 pages)", patch: (x) => (x.audit.pdfPath = AUDITS_API.pdf(s.id)) };
     }
     case "crm":
       return fileInCrm(s, ctx);
@@ -124,7 +238,7 @@ async function startAnalysis(s: StoredAudit, ctx: StepContext): Promise<Outcome>
     };
   } catch (err) {
     ctx.log(`audits: ${s.id} analysis task could not be created (${err instanceof Error ? err.message : "error"})`);
-    const analysis = fallbackAnalysis(s.audit, score, s.data);
+    const analysis = draftAnalysis(s.audit, score, s.data);
     return { status: "done", note: "Hermes was unavailable; analysis written from the scores", patch: (x) => (x.audit.analysis = analysis) };
   }
 }
@@ -133,14 +247,11 @@ async function startAnalysis(s: StoredAudit, ctx: StepContext): Promise<Outcome>
 export async function checkAnalysis(s: StoredAudit, ctx: StepContext): Promise<Outcome | null> {
   const t = s.analysisTask;
   if (!t?.taskId) return null;
-  const score = s.audit.score!;
-  const fallback = (note: string): Outcome => {
-    const analysis = fallbackAnalysis(s.audit, score, s.data);
-    return { status: "done", note, patch: (x) => (x.audit.analysis = analysis) };
-  };
+  const draft = draftAnalysis(s.audit, s.audit.score!, s.data);
+  const fallback = (note: string): Outcome => ({ status: "done", note, patch: (x) => (x.audit.analysis = draft) });
   const { task } = await ctx.hermes.task(t.taskId);
   if (task.status === "done") {
-    const parsed = parseAnalysis(task.result ?? task.latest_summary ?? "");
+    const parsed = parseAnalysis(task.result ?? task.latest_summary ?? "", draft);
     if (parsed) return { status: "done", note: `Written by ${t.assignee}`, patch: (x) => (x.audit.analysis = parsed) };
     return fallback(`${t.assignee}'s answer was not valid JSON; analysis written from the scores`);
   }
@@ -154,15 +265,12 @@ export async function checkAnalysis(s: StoredAudit, ctx: StepContext): Promise<O
 
 export function crmNote(a: ProspectAudit, pdfUrl: string): string {
   const s = a.score!;
-  const sections = Object.entries(s.sections)
-    .filter(([, v]) => v.weight > 0)
-    .map(([k, v]) => `${k} ${v.score}`)
-    .join(" · ");
+  const areas = s.areas.map((x) => `- ${AUDIT_AREA_LABELS[x.area]}: ${x.status === "not-measured" ? "not measured" : `${x.status}${x.severity ? ` (${x.severity})` : ""}, ${x.score}/100`}`);
   const top = (a.analysis?.opportunities ?? []).slice(0, 3).map((o, i) => `${i + 1}. ${o.title} (${o.service})`);
   return [
-    `**Zain Growth prospect audit**: ${s.overall}/100, grade ${s.grade}`,
+    `**Zain Growth Digital Gap Audit**: ${s.overall}/100, grade ${s.grade}, ${s.areasMeasured} of 7 areas measured`,
     "",
-    sections,
+    ...areas,
     "",
     a.analysis?.executiveSummary ?? "",
     "",
@@ -179,7 +287,7 @@ async function fileInCrm(s: StoredAudit, ctx: StepContext): Promise<Outcome> {
   if (!target) return { status: "skipped", note: "Not linked to a CRM record (started from a website)" };
   const [kind, id] = target;
   const url = publicPdfUrl(ctx.publicBase, s.id);
-  const name = `Zain Growth audit - ${s.audit.prospect.name}.pdf`;
+  const name = `Zain Growth Digital Gap Audit - ${s.audit.prospect.name}.pdf`;
   let progress = s.crm ?? {};
   let attached = !!progress.attachmentId;
   if (!attached) {
@@ -197,13 +305,13 @@ async function fileInCrm(s: StoredAudit, ctx: StepContext): Promise<Outcome> {
     }
   }
   if (!progress.noteId) {
-    const noteId = await ctx.crm.note(kind, id, `Prospect audit: ${s.audit.score?.overall ?? "?"}/100 (${s.audit.score?.grade ?? "?"})`, crmNote(s.audit, url));
+    const noteId = await ctx.crm.note(kind, id, `Digital Gap Audit: ${s.audit.score?.overall ?? "?"}/100 (${s.audit.score?.grade ?? "?"})`, crmNote(s.audit, url));
     await ctx.save((x) => (x.crm = { ...x.crm, noteId }));
   }
   const crmUrl = ctx.crm.recordUrl(kind, id);
   return {
     status: "done",
-    note: attached ? `PDF attached to the ${kind} with a summary note` : `Summary note added with a link to the PDF (attachment failed)`,
+    note: attached ? `PDF attached to the ${kind} with a summary note` : "Summary note added with a link to the PDF (attachment failed)",
     patch: (x) => {
       x.audit.crmUrl = crmUrl;
       if (x.crm?.attachmentId) x.audit.crmAttachmentId = x.crm.attachmentId;

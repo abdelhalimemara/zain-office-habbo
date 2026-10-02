@@ -1,17 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { AUDITS_API, type AuditResponse, type AuditsResponse } from "../../shared/audits";
 import type { AuditEngine } from "../../server/src/growth/audit/engine";
-import { REQUESTED_BY_HEADER } from "../../server/src/growth/audit/routes";
-import { LEAD_ID, auditRig } from "./auditFakes";
+import { PROSPECTS_API, REQUESTED_BY_HEADER } from "../../server/src/growth/audit/routes";
+import { HITS, LEAD_ID, PNG, auditRig } from "./auditFakes";
 import { setup } from "./helpers";
-
-const analysis = {
-  executiveSummary: "Good base, weak search.",
-  findings: [{ section: "search", title: "Invisible", detail: "Not on page one.", severity: "high" }],
-  opportunities: [{ title: "Win searches", service: "Zain Growth · SEO & AI Search", impact: "high", effort: "M" }],
-  competitors: [],
-  pitchAngle: "Lead with search.",
-};
 
 async function api() {
   const rig = await auditRig();
@@ -68,7 +60,7 @@ describe("audits API", () => {
     expect((await send("GET", AUDITS_API.pdf(audit.id))).status).toBe(404);
     expect((await send("POST", AUDITS_API.retry(audit.id), {})).status).toBe(409);
     await rig.drive();
-    rig.hermes.complete(`\`\`\`json\n${JSON.stringify(analysis)}\n\`\`\``);
+    rig.hermes.complete("not JSON: the drafted analysis is used");
     await rig.drive();
     const pdf = await send("GET", AUDITS_API.pdf(audit.id));
     expect(pdf.status).toBe(200);
@@ -86,6 +78,34 @@ describe("audits API", () => {
     expect(retried.status).toBe(200);
     expect(((await retried.json()) as AuditResponse).audit.status).toBe("queued");
     await engine.idle();
+  });
+
+  it("searches CRM prospects for the New audit form", async () => {
+    const { send, rig } = await api();
+    const res = await send("GET", `${PROSPECTS_API}?q=studio`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ prospects: HITS });
+    expect(((await (await send("GET", PROSPECTS_API)).json()) as { prospects: unknown[] }).prospects).toHaveLength(1);
+    expect(rig.crm.calls).toEqual(["search studio", "search "]);
+    const long = await send("GET", `${PROSPECTS_API}?q=${"x".repeat(81)}`);
+    expect(long.status).toBe(400);
+    expect(await long.json()).toEqual({ error: "q must be at most 80 characters" });
+  });
+
+  it("lists no audits as an empty array", async () => {
+    const { send } = await api();
+    expect(await (await send("GET", AUDITS_API.list)).json()).toEqual({ audits: [] });
+  });
+
+  it("serves the mobile capture once taken", async () => {
+    const { send, rig } = await api();
+    const { audit } = (await (await send("POST", AUDITS_API.list, { website: "thestudio.sa" })).json()) as AuditResponse;
+    expect((await send("GET", `${AUDITS_API.one(audit.id)}/screenshot`)).status).toBe(404);
+    await rig.drive();
+    const png = await send("GET", `${AUDITS_API.one(audit.id)}/screenshot`);
+    expect(png.status).toBe(200);
+    expect(png.headers.get("content-type")).toBe("image/png");
+    expect(Buffer.from(await png.arrayBuffer())).toEqual(PNG);
   });
 
   it("validates ids and keeps the guard on audit routes", async () => {

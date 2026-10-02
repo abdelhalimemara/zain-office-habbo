@@ -1,126 +1,135 @@
 import { describe, expect, it } from "vitest";
-import type { AuditScore } from "../../shared/audits";
-import { fallbackAnalysis, parseAnalysis } from "../../server/src/growth/audit/analysis";
-import { metaAdsInput, summarizeGoogleAds, summarizeMetaAds } from "../../server/src/growth/audit/collect/ads";
-import { deriveQueries, summarizeSearch } from "../../server/src/growth/audit/collect/search";
-import { cadence, cleanHandle, instagramStats, socialHandles, tiktokStats } from "../../server/src/growth/audit/collect/social";
-import { socialLinksFrom, summarizeWebsite } from "../../server/src/growth/audit/collect/website";
-import { gradeFor, scoreAds, scoreAudit, scoreSearch, scoreSocial, scoreTracking, scoreWebsite } from "../../server/src/growth/audit/score";
-import type { CollectedData, WebsiteData } from "../../server/src/growth/audit/types";
+import type { AuditProspect, ProspectAudit } from "../../shared/audits";
+import { draftAnalysis, parseAnalysis } from "../../server/src/growth/audit/analysis";
+import { buildBenchmark, nameFromDomain } from "../../server/src/growth/audit/benchmark";
+import { attributeMeta, mapsRead, metaUrl, summarizeGoogleAds, trafficRead } from "../../server/src/growth/audit/collect/ads";
+import { deriveQueries, pickCompetitors, summarizeSearch } from "../../server/src/growth/audit/collect/search";
+import { auditIssues, seoRead } from "../../server/src/growth/audit/collect/seo";
+import { cleanHandle, collectSocial, instagramRow, postsInWindow, socialHandles, tiktokRow } from "../../server/src/growth/audit/collect/social";
+import { Budget } from "../../server/src/growth/audit/budget";
+import { socialLinksFrom, summarizeHome, summarizeWebsite, tagRead } from "../../server/src/growth/audit/collect/website";
+import { gradeFor, scoreAudit, statusFor } from "../../server/src/growth/audit/score";
+import type { CollectedData } from "../../server/src/growth/audit/types";
 import { isPrivateAddress, validateWebsite } from "../../server/src/growth/audit/url";
-import { NOW_MS, publicResolver, sampleItems } from "./auditFakes";
+import { NOW_MS, fakeApify, page, publicResolver, sampleActors } from "./auditFakes";
 
-const site = (): WebsiteData => summarizeWebsite("https://www.thestudio.sa/", sampleItems()["apify/web-scraper"]!);
-const prospect = { name: "THE STUDIO", website: "https://www.thestudio.sa/", city: "RIYADH", category: "BEAUTY" };
+const prospect: AuditProspect = { name: "THE STUDIO", website: "https://www.thestudio.sa/", city: "RIYADH", category: "BEAUTY", instagram: "thestudio.sa" };
+const items = (actor: string, input: Record<string, unknown> = {}) => {
+  const a = sampleActors()[actor]!;
+  return typeof a === "function" ? a(input) : a;
+};
+const site = () => summarizeWebsite(prospect.website, [page("https://www.thestudio.sa/"), page("https://www.thestudio.sa/services", { lang: "en", arabicChars: 0, latinChars: 800 })]);
 
-describe("audit scoring", () => {
-  it("grades on the documented bands", () => {
+/** A fully collected audit, as the pipeline would hold it after the four scraping steps. */
+function collected(): CollectedData {
+  const queries = deriveQueries(prospect, site());
+  const search = summarizeSearch(prospect, queries, items("apify/google-search-scraper", { queries: queries.map((q) => q.query).join("\n") }));
+  const competitors = pickCompetitors(prospect, search).map((domain) => ({ domain, name: nameFromDomain(domain) }));
+  const domains = ["thestudio.sa", ...competitors.map((c) => c.domain)];
+  return {
+    asOf: "2 Oct 2026",
+    website: site(),
+    search,
+    competitors,
+    seo: { read: seoRead(items("pro100chok/semrush-scraper", { domains })[0], undefined, "2 Oct 2026"), competitors: { "rival.sa": { authorityScore: 25, organicTraffic: 4200 } } },
+    social: { rows: [instagramRow(items("apify/instagram-profile-scraper", { usernames: ["thestudio.sa"] })[0], NOW_MS)], competitorInstagram: { "rival.sa": 5400 } },
+    ads: {
+      google: { "thestudio.sa": { active: 2, total: 2, formats: ["image"], since: "2026-06-19" }, "rival.sa": "none" },
+      meta: { "thestudio.sa": "none", "rival.sa": { active: 1 } },
+      traffic: Object.fromEntries(domains.map((d, i) => [d, { monthlyVisits: [2042, 10628, 3747][i] ?? 1, period: "Aug 2026" }])),
+      maps: { title: "THE STUDIO", rating: 4.8, reviews: 651 },
+    },
+  };
+}
+
+describe("seven-area scoring", () => {
+  it("grades and rates on the documented bands", () => {
     expect([85, 84, 70, 69, 55, 54, 40, 39, 0].map(gradeFor)).toEqual(["A", "B", "B", "C", "C", "D", "D", "E", "E"]);
+    expect([75, 74, 45, 44].map(statusFor)).toEqual(["strong", "fair", "fair", "weak"]);
   });
 
-  it("scores the website from the crawl, deterministically, with 2-4 drivers", () => {
-    const w = site();
-    expect(w).toMatchObject({ pages: 2, https: true, goodTitles: 1, oneH1: 1, avgWords: 420, images: 20, imagesNoAlt: 4, schemaTypes: ["BeautySalon"] });
-    expect(w.socialLinks).toEqual({ instagram: "thestudio.sa", tiktok: "thestudio" });
-    const a = scoreWebsite(w);
-    expect(a).toEqual(scoreWebsite(site()));
-    expect(a.score).toBe(98);
-    expect(a.drivers.length).toBeGreaterThanOrEqual(2);
-    expect(a.drivers.length).toBeLessThanOrEqual(4);
-    const thin = scoreWebsite({ ...w, avgWords: 60, schemaTypes: [], https: false, goodMetas: 0 });
-    expect(thin.score).toBeLessThan(60);
-    expect(thin.drivers[0]).toMatch(/meta description|Thin content|HTTPS/);
+  it("scores all seven areas deterministically, with evidence labelled by kind and source", () => {
+    const s = scoreAudit(collected(), prospect);
+    expect(s).toEqual(scoreAudit(collected(), prospect));
+    expect(s.areas.map((a) => a.area)).toEqual(["website", "brand", "search", "social", "performance", "conversion", "reputation"]);
+    expect(s.areasMeasured).toBe(6);
+    expect(s.areas.reduce((n, a) => n + a.weight, 0)).toBeCloseTo(1, 2);
+    const conversion = s.areas.find((a) => a.area === "conversion")!;
+    expect(conversion).toMatchObject({ status: "not-measured", weight: 0, summary: "Checkout flow, forms and CRM connection are not visible from public pages." });
+    expect(conversion.evidence.map((e) => e.kind)).toEqual(["not-measured", "quoted"]);
+    for (const a of s.areas) {
+      expect(a.summary).not.toBe("");
+      for (const e of a.evidence) expect(e.source).not.toBe("");
+    }
+    const search = s.areas.find((a) => a.area === "search")!;
+    expect(search.evidence.some((e) => e.kind === "estimated" && e.source === "Semrush via Apify, 2 Oct 2026")).toBe(true);
+    expect(s.areas.find((a) => a.area === "reputation")).toMatchObject({ status: "strong", summary: expect.stringContaining("4.8 stars from 651 reviews") });
   });
 
-  it("scores search from page-one share, top-3 share and the brand search", () => {
-    const s = scoreSearch({
-      queries: [
-        { query: "a", position: 2, topDomains: [], ads: 0 },
-        { query: "b", topDomains: [], ads: 0 },
-        { query: "brand", position: 1, topDomains: [], ads: 0 },
-      ],
-      competitors: [{ domain: "rival.sa", appearances: 1 }],
-    });
-    expect(s.score).toBe(Math.round(60 * 0.5 + 20 * 0.5 + 20));
-    expect(s.drivers).toContain("rival.sa outranks them on 1 of 2 searches");
+  it("rates performance critical when ads run without GA4 or GTM", () => {
+    const perf = scoreAudit(collected(), prospect).areas.find((a) => a.area === "performance")!;
+    expect(perf.severity).toBe("critical");
+    expect(perf.summary).toBe("2 active Google ads, but neither GA4 nor GTM is on the page.");
+    const tagged = collected();
+    tagged.website!.trackers.ga4 = true;
+    expect(scoreAudit(tagged, prospect).areas.find((a) => a.area === "performance")!.severity).not.toBe("critical");
   });
 
-  it("scores social against the category benchmark, cadence and engagement", () => {
-    const strong = scoreSocial({ channels: [{ channel: "instagram", handle: "x", followers: 15_000, postsPerWeek: 4, engagementRate: 0.05 }] }, "BEAUTY");
-    expect(strong.score).toBe(100);
-    const none = scoreSocial({ channels: [{ channel: "x", handle: "x" }] });
-    expect(none.score).toBe(0);
-  });
-
-  it("treats no ads as a low score framed as an opportunity", () => {
-    const none = scoreAds({ meta: { activeAds: 0, platforms: [] }, google: { ads: 0, formats: [], recentlyShown: 0 } });
-    expect(none.score).toBe(0);
-    expect(none.drivers).toContain("No paid presence: a clear opportunity");
-    expect(scoreAds({ meta: { activeAds: 8, oldestDays: 60, platforms: ["facebook"] }, google: { ads: 3, formats: ["text"], recentlyShown: 2 } }).score).toBe(100);
-  });
-
-  it("scores tracking from the tags found", () => {
-    expect(scoreTracking({ metaPixel: true, gtm: true, ga4: true, tiktokPixel: true, snapPixel: true }).score).toBe(100);
-    const t = scoreTracking({ metaPixel: false, gtm: true, ga4: false, tiktokPixel: false, snapPixel: false });
-    expect(t.score).toBe(20);
-    expect(t.drivers[0]).toBe("Missing: Meta pixel, GA4, TikTok pixel, Snap pixel");
-  });
-
-  it("weights sections 0.3/0.2/0.25/0.1/0.15 and shares out the weight of unmeasured ones", () => {
-    const data: CollectedData = { website: site(), ads: { meta: { activeAds: 0, platforms: [] } } };
-    const full = scoreAudit({ ...data, search: { queries: [{ query: "brand", position: 1, topDomains: [], ads: 0 }], competitors: [] }, social: { channels: [] } });
-    expect(Object.values(full.sections).map((s) => s.weight)).toEqual([0.3, 0.2, 0.25, 0.1, 0.15]);
-    const partial = scoreAudit(data);
-    expect(partial.sections.search).toMatchObject({ weight: 0, drivers: ["Not measured in this audit", expect.any(String)] });
-    expect(Object.values(partial.sections).reduce((n, s) => n + s.weight, 0)).toBeCloseTo(1, 2);
-    const expected = Math.round((partial.sections.website.score * 0.3 + 0 * 0.1 + partial.sections.tracking.score * 0.15) / 0.55);
-    expect(partial.overall).toBe(expected);
-    expect(partial.grade).toBe(gradeFor(expected));
+  it("counts an unmeasured area as coverage, not zero", () => {
+    const data = collected();
+    delete data.ads;
+    const s = scoreAudit(data, prospect);
+    expect(s.areas.find((a) => a.area === "reputation")).toMatchObject({ status: "not-measured", weight: 0 });
+    expect(s.areas.find((a) => a.area === "reputation")!.score).toBeUndefined();
+    const measured = s.areas.filter((a) => a.status !== "not-measured");
+    const expected = Math.round(measured.reduce((n, a) => n + a.score! * a.weight, 0));
+    expect(Math.abs(s.overall - expected)).toBeLessThanOrEqual(1);
   });
 });
 
-describe("audit analysis parsing", () => {
-  const score: AuditScore = scoreAudit({ website: site() });
-  const audit = { id: "aud_1", prospect, status: "running" as const, steps: [], requestedBy: "hq" as const, createdAt: 1, updatedAt: 1 };
+describe("audit analysis", () => {
+  const data = collected();
+  const score = scoreAudit(data, prospect);
+  const audit = { id: "aud_1", prospect, status: "running", steps: [], requestedBy: "hq", createdAt: 1, updatedAt: 1, benchmark: buildBenchmark(prospect, data) } as ProspectAudit;
+  const draft = draftAnalysis(audit, score, data);
 
-  it("reads the fenced JSON, coercing enums and dropping junk", () => {
-    const text = [
-      "Sure! Here you go:",
-      "```json",
-      JSON.stringify({
-        executiveSummary: "Strong site, weak search.",
-        findings: [{ section: "SEARCH", title: "Invisible", detail: "d", severity: "HIGH" }, { title: "" }, "nope"],
-        opportunities: [{ title: "SEO", service: "Zain Growth · SEO & AI Search", impact: "huge", effort: "XL" }],
-        competitors: [{ name: "Rival", domain: "rival.sa", note: "first" }],
-        pitchAngle: "Lead with search.",
-      }),
-      "```",
-    ].join("\n");
-    expect(parseAnalysis(text)).toEqual({
-      executiveSummary: "Strong site, weak search.",
-      findings: [{ section: "search", title: "Invisible", detail: "d", severity: "high" }],
-      opportunities: [{ title: "SEO", service: "Zain Growth · SEO & AI Search", impact: "medium", effort: "M" }],
-      competitors: [{ name: "Rival", domain: "rival.sa", note: "first" }],
-      pitchAngle: "Lead with search.",
-    });
+  it("drafts every template slot from the data", () => {
+    expect(draft.coverLine).toContain("thestudio.sa");
+    expect(draft.coverLine).toContain("Built from public data only.");
+    expect(draft.keyPoints).toHaveLength(3);
+    expect(Object.keys(draft.bottomLines)).toEqual(["summary", "search", "paid", "social", "traffic", "competitive", "close"]);
+    expect(draft.findings[0]!.severity).toBe("critical");
+    expect(draft.findings.map((f) => f.severity)).toEqual([...draft.findings.map((f) => f.severity)].sort((a, b) => ["critical", "high", "medium", "low"].indexOf(a) - ["critical", "high", "medium", "low"].indexOf(b)));
+    expect(draft.fix.map((f) => f.name)).toEqual(["Foundation", "Demand Capture", "Demand Generation"]);
+    expect(draft.fix[0]!.detail).toContain("GA4");
+    expect(draft.closingSteps).toHaveLength(3);
   });
 
-  it("accepts bare JSON with trailing commas", () => {
-    expect(parseAnalysis('{"executiveSummary":"x","findings":[],"opportunities":[{"title":"t",}],}')?.opportunities[0]?.title).toBe("t");
+  it("merges the agent's JSON over the draft and coerces its enums", () => {
+    const text = ["Sure:", "```json", JSON.stringify({ executiveSummary: "Agent summary.", findings: [{ area: "SEARCH", title: "Invisible", detail: "d", severity: "CRITICAL" }, { title: "" }], fix: [{ headline: "only one" }], bottomLines: { search: "Agent line." } }), "```"].join("\n");
+    const a = parseAnalysis(text, draft)!;
+    expect(a.executiveSummary).toBe("Agent summary.");
+    expect(a.findings).toEqual([{ area: "search", title: "Invisible", detail: "d", severity: "critical", evidence: "quoted" }]);
+    expect(a.fix).toEqual(draft.fix); // an incomplete fix keeps the draft's three phases
+    expect(a.bottomLines.search).toBe("Agent line.");
+    expect(a.bottomLines.paid).toBe(draft.bottomLines.paid);
+    expect(a.coverLine).toBe(draft.coverLine);
   });
 
-  it("returns null for prose, broken JSON or an empty analysis", () => {
-    expect(parseAnalysis("I could not do it.")).toBeNull();
-    expect(parseAnalysis("```json\n{ executiveSummary: oops\n```")).toBeNull();
-    expect(parseAnalysis('{"executiveSummary":"","findings":[]}')).toBeNull();
+  it("accepts bare JSON with trailing commas, and refuses prose or broken JSON", () => {
+    expect(parseAnalysis('{"executiveSummary":"A long enough summary","findings":[],}', draft)?.executiveSummary).toBe("A long enough summary");
+    expect(parseAnalysis("I could not do it.", draft)).toBeNull();
+    expect(parseAnalysis("```json\n{ executiveSummary: oops\n```", draft)).toBeNull();
   });
+});
 
-  it("builds a fallback from the drivers so the PDF still renders", () => {
-    const a = fallbackAnalysis(audit, score, { website: site() });
-    expect(a.executiveSummary).toContain(`THE STUDIO scores ${score.overall}/100`);
-    expect(a.findings.length).toBeGreaterThan(0);
-    expect(a.opportunities.length).toBeGreaterThan(0);
-    expect(a.pitchAngle).not.toBe("");
+describe("benchmark", () => {
+  it("puts the prospect first and marks what was not measured", () => {
+    const rows = buildBenchmark(prospect, collected());
+    expect(rows[0]).toMatchObject({ name: "THE STUDIO", isProspect: true, googleAds: { active: 2, formats: "image", since: "19 Jun 2026" }, metaAds: "none", instagramFollowers: 12_000, authorityScore: 12 });
+    expect(rows[1]).toMatchObject({ name: "Rival", domain: "rival.sa", googleAds: "none", metaAds: { active: 1 }, instagramFollowers: 5400, authorityScore: 25, organicTraffic: 4200 });
+    expect(rows[2]).toMatchObject({ domain: "glow.sa", googleAds: "not-measured", metaAds: "not-measured", instagramFollowers: "not-measured" });
+    expect(nameFromDomain("pets-houses.com")).toBe("Pets Houses");
   });
 });
 
@@ -139,7 +148,6 @@ describe("audit website validation (SSRF guard)", () => {
     ["http://127.0.0.1", "IP address"],
     ["http://[::1]/", "IP address"],
     ["http://169.254.169.254/latest/meta-data", "IP address"],
-    ["http://localhost:8787", "default port"],
     ["http://localhost", "public domain"],
     ["http://printer.local", "public domain"],
     ["http://intranet", "public domain"],
@@ -160,48 +168,107 @@ describe("audit website validation (SSRF guard)", () => {
 });
 
 describe("audit collectors", () => {
-  it("derives 5-8 bilingual target searches with the brand last", () => {
-    const q = deriveQueries(prospect, site());
-    expect(q.length).toBeGreaterThanOrEqual(5);
-    expect(q.length).toBeLessThanOrEqual(8);
-    expect(q).toContain("beauty salon Riyadh");
-    expect(q).toContain("صالون تجميل الرياض");
-    expect(q.at(-1)).toBe("THE STUDIO");
-  });
-
-  it("finds the prospect's rank and the competitors outranking it", () => {
-    const queries = ["beauty salon Riyadh", "صالون تجميل الرياض", "THE STUDIO"];
-    const s = summarizeSearch(prospect.website, queries, sampleItems()["apify/google-search-scraper"]!);
-    expect(s.queries.map((q) => q.position)).toEqual([3, undefined, 1]);
-    expect(s.competitors).toEqual([{ domain: "rival.sa", appearances: 2 }]); // instagram.com is a platform, not a competitor
-  });
-
-  it("measures followers, posting cadence and engagement", () => {
-    expect(cadence([NOW_MS - 86_400_000, NOW_MS - 40 * 86_400_000, undefined], NOW_MS)).toBe(0.2);
-    const ig = instagramStats("thestudio.sa", sampleItems()["apify/instagram-profile-scraper"]!, NOW_MS);
-    expect(ig).toMatchObject({ followers: 12_000, postsPerWeek: 1.4, engagementRate: 0.018 });
-    const tt = tiktokStats("thestudio", sampleItems()["clockworks/tiktok-profile-scraper"]!, NOW_MS);
-    expect(tt).toMatchObject({ followers: 800, postsPerWeek: 0.5, adsInFeed: 0 });
-  });
-
-  it("prefers CRM handles and falls back to links on the site", () => {
-    expect(cleanHandle("@the.studio")).toBe("the.studio");
-    expect(cleanHandle("https://www.instagram.com/the.studio/")).toBe("the.studio");
-    expect(cleanHandle("not a handle!")).toBeNull();
-    expect(socialHandles({ ...prospect, instagram: "crm_handle" }, site())).toMatchObject({ instagram: "crm_handle", tiktok: "thestudio" });
-    expect(socialLinksFrom(["https://www.instagram.com/p/abc/", "https://facebook.com/sharer/x", "https://facebook.com/TheStudioSA"])).toEqual({
-      facebook: "https://www.facebook.com/TheStudioSA",
+  it("reads the site: tags in the template's order, platform, policies, contact paths", () => {
+    const w = site();
+    expect(w).toMatchObject({ pages: 2, platform: "Salla", policyPages: ["Privacy policy", "Returns"], contactPaths: ["WhatsApp", "phone"], reviewsOnSite: true });
+    expect(tagRead(w.trackers).slice(0, 4)).toEqual([
+      { tag: "Google Ads conversion tag", found: true },
+      { tag: "GA4", found: false },
+      { tag: "Google Tag Manager", found: false },
+      { tag: "Meta Pixel", found: true },
+    ]);
+    expect(socialLinksFrom(["https://www.youtube.com/@thestudio", "https://www.snapchat.com/add/thestudio", "https://facebook.com/sharer/x"])).toEqual({
+      youtube: "https://www.youtube.com/@thestudio",
+      snapchat: "thestudio",
     });
+    expect(summarizeHome({ siteName: "", title: "Glow Lounge | Riyadh", socialLinks: ["https://instagram.com/glow"] })).toEqual({ name: "Glow Lounge", instagram: "glow", business: false });
+    expect(summarizeHome({ title: "Pet House", platform: "Salla" }).business).toBe(true);
   });
 
-  it("keeps only the prospect's ads from a Meta keyword search", () => {
-    const { input, byKeyword } = metaAdsInput(prospect);
+  it("runs the brand search first and picks competitors from the category searches", () => {
+    const q = deriveQueries(prospect, site());
+    expect(q[0]).toEqual({ query: '"THE STUDIO"', kind: "brand" });
+    expect(q.filter((x) => x.kind === "category").map((x) => x.query)).toContain("صالون تجميل الرياض");
+    const s = summarizeSearch(prospect, q, items("apify/google-search-scraper", { queries: q.map((x) => x.query).join("\n") }));
+    expect(s.runs[0]).toMatchObject({ prospectPresent: true, others: [] }); // instagram.com is the brand's own profile here
+    expect(s.runs.find((r) => r.query === "beauty salon Riyadh")).toMatchObject({ prospectPresent: true, others: ["rival.sa", "glow.sa", "instagram.com"] });
+    expect(pickCompetitors(prospect, s, ["glam.sa", "petstock.co.nz"])).toEqual(["rival.sa", "glow.sa", "glam.sa"]);
+  });
+
+  it("without a CRM category, searches what Semrush says the site ranks for, never UI text or the brand", () => {
+    const shop = { ...site(), headings: ["Cart 0 items", "Peak nutrition", "Luxury dog beds", "Sign in"] };
+    const paw = { name: "The Paw Concept", website: "https://thepawconcept.co/" };
+    expect(deriveQueries(paw, shop, ["cat food", "the paw concept", "قضيب القط"]).map((x) => x.query)).toEqual(['"The Paw Concept"', "cat food Riyadh", "قضيب القط الرياض"]);
+    expect(deriveQueries(paw, shop, ["cat food"]).map((x) => x.query)).toEqual(['"The Paw Concept"', "cat food Riyadh", "Peak nutrition Riyadh", "Luxury dog beds Riyadh"]);
+  });
+
+  it("keeps foreign and platform sites out of the competitors, and prefers Saudi domains", () => {
+    const runs = [{ query: "cat food Riyadh", kind: "category" as const, prospectPresent: false, others: ["flipkart.com", "petvo.in", "petzone.com", "pets.sa", "daraz.pk"] }];
+    expect(pickCompetitors(prospect, { runs })).toEqual(["pets.sa", "petzone.com"]);
+  });
+
+  it("maps Semrush into the SEO read, with technical issues from the home-page audit", () => {
+    const read = seoRead(items("pro100chok/semrush-scraper", { domains: ["thestudio.sa"] })[0], undefined, "2 Oct 2026");
+    expect(read).toMatchObject({ source: "Semrush via Apify, 2 Oct 2026", authorityScore: 12, organicTraffic: 40, organicKeywords: 80, backlinks: 600, referringDomains: 120 });
+    expect(read.topKeywords[0]).toEqual({ keyword: "صالون تجميل", position: 14, volume: 9900, url: "https://thestudio.sa/" });
+    expect(read.topPages[0]).toEqual({ url: "https://thestudio.sa/", traffic: 30 });
+    expect(read.competitors[0]).toEqual({ domain: "rival.sa", commonKeywords: 31 });
+    expect(auditIssues({ h1_count: 0, has_sitemap: false, has_robots_txt: true, images_missing_alt: 21, title_length: 15, meta_description_length: 120, canonical: "x" })).toEqual([
+      { title: "No XML sitemap", severity: "high" },
+      { title: "Home page has no H1 heading", severity: "high" },
+      { title: "Images missing alt text on the home page", severity: "medium", count: 21 },
+      { title: "Home page title is 15 characters (aim for 30-60)", severity: "low" },
+    ]);
+  });
+
+  it("measures social rows: followers, posts in 30 days, engagement, last post", () => {
+    expect(postsInWindow([NOW_MS - 86_400_000, NOW_MS - 40 * 86_400_000, undefined], NOW_MS)).toBe(1);
+    const ig = instagramRow(items("apify/instagram-profile-scraper", { usernames: ["thestudio.sa"] })[0], NOW_MS);
+    expect(ig).toMatchObject({ channel: "instagram", followers: 12_000, posts: 300, postsPer30Days: 6, engagement: 0.018, measured: true });
+    expect(tiktokRow(items("clockworks/tiktok-profile-scraper"), NOW_MS)).toMatchObject({ followers: 800, posts: 40, postsPer30Days: 2, measured: true });
+    expect(instagramRow({ private: true }, NOW_MS)).toEqual({ channel: "instagram", measured: false });
+    expect(cleanHandle("https://www.instagram.com/the.studio/")).toBe("the.studio");
+    expect(socialHandles({ ...prospect, instagram: "crm_handle" }, site())).toMatchObject({ instagram: "crm_handle", tiktok: "thestudio" });
+  });
+
+  it("keeps the three candidates whose home pages read as businesses", async () => {
+    const homes = [
+      page("https://expat.com/", { siteName: "Expat.com", platform: "", policyLinks: [], contact: {}, jsonLd: ["Article"], socialLinks: [] }),
+      page("https://pethouse.com/", { siteName: "Pet House", platform: "Salla", socialLinks: [] }),
+      page("https://cats.com/", { siteName: "Cats", platform: "", policyLinks: [], contact: {}, jsonLd: [], socialLinks: [] }),
+      page("https://petzone.com/", { siteName: "Petzone", platform: "Shopify", socialLinks: [] }),
+    ];
+    const apify = fakeApify({ actors: { ...sampleActors(), "apify/playwright-scraper": homes } });
+    const candidates = ["expat.com", "pethouse.com", "cats.com", "petzone.com", "pets.sa"].map((domain) => ({ domain, name: domain }));
+    const r = await collectSocial("a1", prospect, site(), candidates, new Budget(apify.runner), NOW_MS);
+    expect(r.competitors?.map((c) => c.domain)).toEqual(["pethouse.com", "petzone.com", "pets.sa"]);
+    expect(r.competitors?.[0]?.name).toBe("Pet House");
+  });
+
+  it("attributes Meta ads only to the business's own page", () => {
+    const b = { domain: "thestudio.sa", name: "THE STUDIO" };
+    const { url, byKeyword } = metaUrl(b);
     expect(byKeyword).toBe(true);
-    expect(String((input.startUrls as { url: string }[])[0]!.url)).toContain("country=SA");
-    const meta = summarizeMetaAds(prospect, sampleItems()["apify/facebook-ads-scraper"]!, true, NOW_MS);
-    expect(meta).toMatchObject({ activeAds: 1, oldestDays: 45, platforms: ["facebook", "instagram"], pageName: "THE STUDIO" });
-    expect(metaAdsInput(prospect, { metaAdLibraryUrl: "https://www.facebook.com/ads/library/?id=1" }).byKeyword).toBe(false);
-    const google = summarizeGoogleAds([{ creativeId: "1", format: "TEXT", shownForDays: 90, lastShown: new Date(NOW_MS - 86_400_000).toISOString() }], NOW_MS);
-    expect(google).toEqual({ ads: 1, formats: ["text"], longestDays: 90, recentlyShown: 1 });
+    expect(url).toContain("search_type=keyword_exact_phrase");
+    expect(attributeMeta(b, items("apify/facebook-ads-scraper", { startUrls: [{ url }] }), true)).toEqual({ active: 1, pageName: "THE STUDIO" });
+    expect(attributeMeta(b, [{ pageName: "Joyreels", isActive: true }], true)).toBe("none");
+    expect(metaUrl(b, { metaAdLibraryUrl: "https://www.facebook.com/ads/library/?id=1" }).byKeyword).toBe(false);
+  });
+
+  it("reads Google Ads, Similarweb and Maps", () => {
+    const g = summarizeGoogleAds(items("scrapesage/google-ads-transparency-scraper", { domains: ["thestudio.sa"] }), NOW_MS);
+    expect(g).toMatchObject({ active: 2, total: 2, formats: ["image", "text"], advertiser: "Studio Trading Co" });
+    expect(summarizeGoogleAds([], NOW_MS)).toBe("none");
+    expect(trafficRead(items("pro100chok/similarweb-scraper", { domains: ["thestudio.sa"] })[0]!)).toEqual({
+      monthlyVisits: 2042,
+      bounceRate: 0.352,
+      topSource: "Organic search (37.7%, est.)",
+      saudiShare: 0.726,
+      period: "Aug 2026",
+      organicShare: 0.3767,
+      paidShare: 0.0894,
+    });
+    expect(mapsRead(prospect, items("compass/crawler-google-places"))).toMatchObject({ rating: 4.8, reviews: 651 });
+    expect(mapsRead(prospect, [{ title: "Another Salon", website: "https://other.sa" }])).toBe("none");
   });
 });

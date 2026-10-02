@@ -10,6 +10,17 @@ export interface PdfRenderer {
   render(html: string, outPath: string): Promise<void>;
 }
 
+/** Captures a page as a phone would show it, to a PNG file. */
+export interface Screenshotter {
+  capture(url: string, outPath: string): Promise<void>;
+}
+
+/** iPhone-sized viewport; the capture keeps the first few screens of the home page. */
+const MOBILE = { width: 390, height: 844, deviceScaleFactor: 2, mobile: true };
+const CAPTURE_HEIGHT = 2400;
+const MOBILE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
+
 const MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const STEP_TIMEOUT_MS = 45_000;
 
@@ -83,38 +94,21 @@ async function devToolsUrl(profile: string, proc: ChildProcess): Promise<string>
   throw new Error("Chrome did not start its DevTools endpoint");
 }
 
+type Session = { cdp: Cdp; sessionId: string };
+
 /**
- * Headless Chrome, one browser per report: loads the HTML from a temp file, waits for the web fonts
- * (Inter, IBM Plex Sans Arabic) so Arabic text is shaped correctly, then Page.printToPDF on A4.
+ * Headless Chrome, one browser per job. render(): loads the HTML from a temp file, waits for the web fonts
+ * (IBM Plex Sans Arabic) so Arabic text is shaped correctly, then Page.printToPDF at the CSS page size.
+ * capture(): the prospect's home page on a phone viewport, as a PNG.
  */
-export class ChromePdfRenderer implements PdfRenderer {
+export class ChromeRenderer implements PdfRenderer, Screenshotter {
   constructor(private readonly binary: () => string | null = () => chromePath()) {}
 
   async render(html: string, outPath: string): Promise<void> {
-    const bin = this.binary();
-    if (!bin) throw new Error("Chrome is not installed (set CHROME_PATH)");
-    const profile = await mkdtemp(join(tmpdir(), "zain-audit-pdf-"));
-    const page = join(profile, "report.html");
-    await writeFile(page, html, "utf8");
-    const proc = spawn(
-      bin,
-      ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--mute-audio", "about:blank"],
-      { stdio: "ignore" },
-    );
-    let ws: WebSocket | undefined;
-    try {
-      ws = new WebSocket(await devToolsUrl(profile, proc));
-      await new Promise<void>((resolve, reject) => {
-        ws!.addEventListener("open", () => resolve());
-        ws!.addEventListener("error", () => reject(new Error("Chrome DevTools connection failed")));
-      });
-      const cdp = new Cdp(ws);
-      const { targetId } = await cdp.send<{ targetId: string }>("Target.createTarget", { url: "about:blank" });
-      const { sessionId } = await cdp.send<{ sessionId: string }>("Target.attachToTarget", { targetId, flatten: true });
-      await cdp.send("Page.enable", {}, sessionId);
-      const loaded = cdp.once("Page.loadEventFired", sessionId);
-      await cdp.send("Page.navigate", { url: pathToFileURL(page).href }, sessionId);
-      await loaded;
+    await this.withPage(async ({ cdp, sessionId }, profile) => {
+      const page = join(profile, "report.html");
+      await writeFile(page, html, "utf8");
+      await navigate(cdp, sessionId, pathToFileURL(page).href);
       // Fonts that never arrive (offline) fall back to system fonts after 10 s rather than failing the PDF.
       await cdp.send(
         "Runtime.evaluate",
@@ -128,6 +122,54 @@ export class ChromePdfRenderer implements PdfRenderer {
       );
       await mkdir(dirname(outPath), { recursive: true });
       await writeFile(outPath, Buffer.from(data, "base64"));
+    });
+  }
+
+  async capture(url: string, outPath: string): Promise<void> {
+    await this.withPage(async ({ cdp, sessionId }) => {
+      await cdp.send("Emulation.setDeviceMetricsOverride", MOBILE, sessionId);
+      await cdp.send("Emulation.setUserAgentOverride", { userAgent: MOBILE_UA }, sessionId);
+      await navigate(cdp, sessionId, url);
+      // Scroll through the first screens so lazy-loaded images render, then back to the top.
+      await cdp.send(
+        "Runtime.evaluate",
+        {
+          expression: `(async () => { for (let y = 0; y <= ${CAPTURE_HEIGHT}; y += 400) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 250)); } window.scrollTo(0, 0); await new Promise((r) => setTimeout(r, 1500)); return true; })()`,
+          awaitPromise: true,
+        },
+        sessionId,
+      );
+      const { data } = await cdp.send<{ data: string }>(
+        "Page.captureScreenshot",
+        { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width: MOBILE.width, height: CAPTURE_HEIGHT, scale: 1 } },
+        sessionId,
+      );
+      await mkdir(dirname(outPath), { recursive: true });
+      await writeFile(outPath, Buffer.from(data, "base64"));
+    });
+  }
+
+  private async withPage(work: (s: Session, profile: string) => Promise<void>): Promise<void> {
+    const bin = this.binary();
+    if (!bin) throw new Error("Chrome is not installed (set CHROME_PATH)");
+    const profile = await mkdtemp(join(tmpdir(), "zain-audit-chrome-"));
+    const proc = spawn(
+      bin,
+      ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--mute-audio", "--hide-scrollbars", "about:blank"],
+      { stdio: "ignore" },
+    );
+    let ws: WebSocket | undefined;
+    try {
+      ws = new WebSocket(await devToolsUrl(profile, proc));
+      await new Promise<void>((resolve, reject) => {
+        ws!.addEventListener("open", () => resolve());
+        ws!.addEventListener("error", () => reject(new Error("Chrome DevTools connection failed")));
+      });
+      const cdp = new Cdp(ws);
+      const { targetId } = await cdp.send<{ targetId: string }>("Target.createTarget", { url: "about:blank" });
+      const { sessionId } = await cdp.send<{ sessionId: string }>("Target.attachToTarget", { targetId, flatten: true });
+      await cdp.send("Page.enable", {}, sessionId);
+      await work({ cdp, sessionId }, profile);
     } finally {
       try {
         ws?.close();
@@ -139,4 +181,10 @@ export class ChromePdfRenderer implements PdfRenderer {
       await rm(profile, { recursive: true, force: true }).catch(() => undefined);
     }
   }
+}
+
+async function navigate(cdp: Cdp, sessionId: string, url: string): Promise<void> {
+  const loaded = cdp.once("Page.loadEventFired", sessionId);
+  await cdp.send("Page.navigate", { url }, sessionId);
+  await loaded;
 }

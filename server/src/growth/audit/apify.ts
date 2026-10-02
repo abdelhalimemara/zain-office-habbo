@@ -82,6 +82,11 @@ export class ApifyClient implements ActorRunner {
       await this.sleep(1000);
       run = await this.call<ApifyRun>(token, "GET", `/actor-runs/${run.id}?waitForFinish=${WAIT_SECONDS}`);
     }
+    if (!run.usageTotalUsd) {
+      // Apify fills usageTotalUsd a few seconds after the run ends.
+      await this.sleep(3000);
+      run = await this.call<ApifyRun>(token, "GET", `/actor-runs/${run.id}`).catch(() => run);
+    }
     const costUsd = run.usageTotalUsd ?? 0;
     // A timed-out run still keeps what it scraped; failures and aborts are errors.
     if (run.status !== "SUCCEEDED" && run.status !== "TIMED-OUT") {
@@ -92,16 +97,26 @@ export class ApifyClient implements ActorRunner {
   }
 
   private async call<T>(token: string, method: string, path: string, body?: unknown): Promise<T> {
-    let res: Response;
-    try {
-      res = await this.fetchImpl(`${BASE}${path}`, {
-        method,
-        headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-    } catch (err) {
-      throw new ApifyError(`Apify unreachable (${err instanceof Error ? err.name : "error"})`);
+    // Reads are retried on network errors and 5xx/429; starting a run is not (it could start twice).
+    const attempts = method === "GET" ? 3 : 1;
+    let res: Response | undefined;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        res = await this.fetchImpl(`${BASE}${path}`, {
+          method,
+          headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+        if ((res.status >= 500 || res.status === 429) && attempt < attempts) {
+          await this.sleep(2000 * attempt);
+          continue;
+        }
+        break;
+      } catch (err) {
+        if (attempt >= attempts) throw new ApifyError(`Apify unreachable (${err instanceof Error ? err.name : "error"})`);
+        await this.sleep(2000 * attempt);
+      }
     }
     const text = await res.text();
     let data: unknown;
@@ -110,9 +125,11 @@ export class ApifyClient implements ActorRunner {
     } catch {
       throw new ApifyError(`Apify answered HTTP ${res.status} with a non-JSON body`);
     }
-    if (res.status === 401 || res.status === 403) throw new ApifyError("Apify rejected the token");
+    const message = (data as { error?: { message?: string } }).error?.message ?? res.statusText;
+    if (res.status === 401) throw new ApifyError("Apify rejected the token");
+    // e.g. an actor that needs its permissions approved once in the Apify console.
+    if (res.status === 403) throw new ApifyError(`Apify refused the run: ${redact(message, [token])}`);
     if (!res.ok) {
-      const message = (data as { error?: { message?: string } }).error?.message ?? res.statusText;
       throw new ApifyError(`Apify ${res.status}: ${redact(message, [token])}`);
     }
     // Run endpoints wrap the run in { data }; dataset items are a bare array.
