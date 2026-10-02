@@ -6,8 +6,10 @@ export interface SeatCandidate {
   rank: Rank;
   /** Zain Tech repo team id. */
   team?: string;
-  /** Used to order a pod's two leads (Head Engineer before Project Manager). */
+  /** Used to order a pod's two leads (Head Engineer before Project Manager) when `teamRole` is missing. */
   title?: string;
+  /** Zain Tech role inside a team (shared/techRoster.ts). */
+  teamRole?: string;
 }
 
 export interface SeatAssignment {
@@ -85,7 +87,16 @@ export function podsForTeams(floor: Pick<FloorPlan, "pods">, teamIds: Iterable<s
   return out;
 }
 
-const leadOrder = (a: SeatCandidate) => (/head/i.test(a.title ?? "") ? 0 : 1);
+/** Head engineers and project managers lead a pod; teamRole wins, then rank and title for rosters without it. */
+export function isPodLead(a: SeatCandidate): boolean {
+  if (a.teamRole) return a.teamRole === "head-engineer" || a.teamRole === "project-manager";
+  return a.rank === "lead" || /head engineer|project manager/i.test(a.title ?? "");
+}
+
+function leadOrder(a: SeatCandidate): number {
+  if (a.teamRole) return a.teamRole === "head-engineer" ? 0 : 1;
+  return /head/i.test(a.title ?? "") ? 0 : 1;
+}
 
 function seatPods(
   floor: FloorPlan,
@@ -96,15 +107,16 @@ function seatPods(
 ): void {
   const pods = podsForTeams(floor, agents.flatMap((a) => (a.team ? [a.team] : [])));
   const used = new Set([...pods.values()].map((p) => p.index));
-  const leads = agents.filter((a) => a.team && a.rank === "lead").sort((a, b) => leadOrder(a) - leadOrder(b));
+  const leads = agents.filter((a) => a.team && isPodLead(a)).sort((a, b) => leadOrder(a) - leadOrder(b));
   const unplaced: SeatCandidate[] = [];
-  for (const a of [...leads, ...agents.filter((x) => !(x.team && x.rank === "lead"))]) {
+  for (const a of [...leads, ...agents.filter((x) => !(x.team && isPodLead(x)))]) {
     if (a.team) {
       const pod = pods.get(a.team);
+      const lead = isPodLead(a);
       const inPod = (s: PlanSeat) => !s.role && pod !== undefined && s.pod === pod.index;
-      const placed = pod && (a.rank === "lead" ? take(free((s) => inPod(s) && !!s.lead), a.profile) : false);
+      const placed = pod && (lead ? take(free((s) => inPod(s) && !!s.lead), a.profile) : false);
       if (placed || (pod && take(free((s) => inPod(s) && !s.lead), a.profile))) continue;
-      if (pod && a.rank === "lead" && take(free(inPod), a.profile)) continue;
+      if (pod && lead && take(free(inPod), a.profile)) continue;
     } else if (take(free((s) => !s.role && s.team === "platform"), a.profile)) {
       continue;
     }

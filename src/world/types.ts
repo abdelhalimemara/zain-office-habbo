@@ -14,6 +14,8 @@ export interface WorldAgent {
   hired: boolean;
   /** Zain Tech repo team id (shared/techTeams.ts or a team the VP added at runtime). */
   team?: string;
+  /** Role inside a Tech team: "head-engineer", "project-manager" or "specialist". */
+  teamRole?: string;
 }
 
 export interface WorldCallbacks {

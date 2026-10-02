@@ -109,6 +109,24 @@ describe("Tech seating by team", () => {
     for (const [, s] of spill) expect(s.pod, "overflow goes to a spare pod").toBe(spare[0]!.index);
   });
 
+  it("seats leads by teamRole when present, even with a specialist rank or a vague title", () => {
+    const people: SeatCandidate[] = [
+      { profile: "zain-tech-bookme-pm2", rank: "specialist", team: "bookme", title: "Delivery", teamRole: "project-manager" },
+      { profile: "zain-tech-bookme-he2", rank: "specialist", team: "bookme", title: "Builder", teamRole: "head-engineer" },
+      { profile: "zain-tech-bookme-a", rank: "lead", team: "bookme", title: "Engineer", teamRole: "specialist" },
+    ];
+    const { seats } = assignSeats(tech, people);
+    const head = seats.get("zain-tech-bookme-he2")!;
+    const pm = seats.get("zain-tech-bookme-pm2")!;
+    expect(head.lead && pm.lead).toBe(true);
+    expect(head.x).toBeLessThan(pm.x);
+    expect(seats.get("zain-tech-bookme-a")!.lead).toBeUndefined();
+  });
+
+  it("has room for the full Tech roster (38 agents) plus four hires outside the board", () => {
+    expect(tech.seats.filter((s) => s.role !== "board").length).toBeGreaterThanOrEqual(42);
+  });
+
   it("is deterministic", () => {
     const a = assignSeats(tech, roster(["ai-lab"]));
     const b = assignSeats(tech, [...roster(["ai-lab"])].reverse());
