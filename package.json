@@ -20,7 +20,8 @@
     "ahmad:gmail": "tsx server/src/scripts/ahmadGmail.ts",
     "ahmad:whatsapp": "tsx server/src/scripts/ahmadWhatsapp.ts",
     "board:notion": "tsx server/src/scripts/boardNotion.ts",
-    "roster:skills": "tsx server/src/scripts/rosterSkills.ts"
+    "roster:skills": "tsx server/src/scripts/rosterSkills.ts",
+    "growth:notion": "tsx server/src/scripts/growthNotion.ts"
   },
   "dependencies": {
     "@elevenlabs/client": "^1.26.0",
