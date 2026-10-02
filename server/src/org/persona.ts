@@ -1,10 +1,21 @@
 import { getDivision, type Division } from "../../../shared/divisions";
 import { CEO_PROFILE, agentsInDivision, findAgent, type RosterAgent } from "../../../shared/roster";
 import { findBoardMember } from "../../../shared/board";
-import { humanize } from "../headcount/skillFile";
+import { TECH_TEAMS, type TechTeam } from "../../../shared/techTeams";
+import { skillLabel } from "../headcount/skillFile";
 import { boardDescription, boardSoul } from "./boardPersona";
 import { clientCommsSection } from "./clientPersona";
 import type { BriefReader } from "./privateBriefs";
+import {
+  gitRules,
+  headEngineerSections,
+  platformSections,
+  projectManagerSections,
+  specialistSections,
+  teamOf,
+  techVpFanOut,
+  techVpSections,
+} from "./techPersona";
 
 function bossLabel(agent: RosterAgent, roster: readonly RosterAgent[]): string {
   if (!agent.reportsTo) return "nobody";
@@ -14,7 +25,7 @@ function bossLabel(agent: RosterAgent, roster: readonly RosterAgent[]): string {
 }
 
 function skillNames(agent: RosterAgent): string {
-  return agent.skills.map((id) => humanize(id.split(":")[1] ?? id).toLowerCase()).join(", ");
+  return agent.skills.map(skillLabel).join(", ");
 }
 
 /** Short routing signal for Hermes' decomposer: who this is and what they are good at. */
@@ -24,7 +35,8 @@ export function profileDescription(agent: RosterAgent): string {
   const division = getDivision(agent.division);
   const who = agent.name ? `${agent.name}, ${agent.title}` : agent.title;
   const channels = agent.clientChannels?.length ? ` Handles client communication on ${agent.clientChannels.join(" and ")}.` : "";
-  const text = `${division.name} · ${who} (${agent.rank}). ${division.tagline}.${channels} Skills: ${skillNames(agent)}.`;
+  const focus = agent.focus ? ` ${agent.focus}` : "";
+  const text = `${division.name} · ${who} (${agent.rank}). ${division.tagline}.${channels}${focus} Skills: ${skillNames(agent)}.`;
   return text.length <= 400 ? text : `${text.slice(0, 399)}…`;
 }
 
@@ -51,13 +63,29 @@ function fanOutProtocol(division: Division, team: readonly string[]): string[] {
 }
 
 /** soulFor, plus a board member's private brief read from disk when its seat has one. */
-export async function soulText(agent: RosterAgent, roster: readonly RosterAgent[], briefs: BriefReader): Promise<string> {
+export async function soulText(
+  agent: RosterAgent,
+  roster: readonly RosterAgent[],
+  briefs: BriefReader,
+  teams: readonly TechTeam[] = TECH_TEAMS,
+): Promise<string> {
   const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
   if (member?.privateBrief) return boardSoul(member, await briefs(member.profile));
-  return soulFor(agent, roster);
+  return soulFor(agent, roster, teams);
 }
 
-export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): string {
+/** Zain Tech roles: the VP runs repo teams, whose leads and specialists each get their own protocol. */
+function techSections(agent: RosterAgent, roster: readonly RosterAgent[], teams: readonly TechTeam[]): string[] | null {
+  if (agent.division !== "tech") return null;
+  if (agent.rank === "vp") return techVpSections(teams, roster);
+  const team = teamOf(agent, teams);
+  if (!team) return agent.rank === "specialist" ? null : [];
+  if (agent.teamRole === "head-engineer") return headEngineerSections(agent, team, roster);
+  if (agent.teamRole === "project-manager") return projectManagerSections(agent, team, roster);
+  return specialistSections(agent, team, roster);
+}
+
+export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[], teams: readonly TechTeam[] = TECH_TEAMS): string {
   const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
   if (member) return boardSoul(member);
   const division = getDivision(agent.division);
@@ -74,7 +102,10 @@ export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): str
     "- When every subtask is done, the manager rolls the results up and requests review, which means awaiting HQ approval.",
     "- HQ approves (the mandate becomes done) or requests changes with a comment and sends it back to the manager.",
   ];
-  if (agent.rank === "vp") {
+  const tech = techSections(agent, roster, teams);
+  if (tech?.length) {
+    lines.push("", ...tech);
+  } else if (agent.rank === "vp") {
     lines.push("", "## Handling a mandate (you are the division manager)", "", ...fanOutProtocol(division, teamLines(agent, roster)));
   } else {
     lines.push(
@@ -87,6 +118,10 @@ export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): str
         : "- Do not request review from HQ and do not create work for other divisions; HQ only reviews your manager's mandates.",
       "- If you are genuinely stuck, block with the exact reason so your manager can help.",
     );
+  }
+  if (agent.division === "tech") {
+    if (!agent.team && agent.rank === "specialist") lines.push("", ...platformSections());
+    lines.push("", ...gitRules());
   }
   const clientComms = clientCommsSection(agent);
   if (clientComms.length) lines.push("", ...clientComms);
@@ -103,7 +138,12 @@ export function soulFor(agent: RosterAgent, roster: readonly RosterAgent[]): str
 }
 
 /** The mandate body: HQ's brief followed by the fan-out protocol for the division manager. */
-export function mandateBody(brief: string, manager: RosterAgent, roster: readonly RosterAgent[]): string {
+export function mandateBody(
+  brief: string,
+  manager: RosterAgent,
+  roster: readonly RosterAgent[],
+  teams: readonly TechTeam[] = TECH_TEAMS,
+): string {
   const division = getDivision(manager.division);
   return [
     brief || "(No further brief provided.)",
@@ -113,6 +153,6 @@ export function mandateBody(brief: string, manager: RosterAgent, roster: readonl
     "",
     `This is an HQ mandate for ${division.name}. You own it end to end:`,
     "",
-    ...fanOutProtocol(division, teamLines(manager, roster)),
+    ...(division.id === "tech" ? techVpFanOut(teams, roster) : fanOutProtocol(division, teamLines(manager, roster))),
   ].join("\n");
 }

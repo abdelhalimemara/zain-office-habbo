@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "vitest run --config tests/e2e/vitest.config.ts",
     "seed:roster": "tsx server/src/scripts/seedRoster.ts",
+    "tech:setup": "tsx server/src/scripts/techSetup.ts",
     "ceo:approvals": "tsx server/src/scripts/ceoApprovals.ts",
     "ahmad:gmail": "tsx server/src/scripts/ahmadGmail.ts",
     "ahmad:whatsapp": "tsx server/src/scripts/ahmadWhatsapp.ts"

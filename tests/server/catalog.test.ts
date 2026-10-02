@@ -1,6 +1,7 @@
 import { HEADCOUNT_REF, HeadcountSource, parseTree, rosterFallback, sourceDepartments } from "../../server/src/headcount/catalog";
 import { hermesSkillName, toHermesSkill } from "../../server/src/headcount/skillFile";
 import { ROSTER } from "../../shared/roster";
+import { SKILL_SOURCES, sourceSkillIds } from "../../shared/skillSources";
 import { githubFetch, json, mockFetch, setup } from "./helpers";
 
 describe("headcount catalog", () => {
@@ -39,7 +40,8 @@ describe("headcount catalog", () => {
     const { departments } = await (await send("GET", "/api/headcount/catalog")).json();
     expect(departments).toEqual([...rosterFallback(), ...sourceDepartments()]);
     const all = departments.flatMap((d: { id: string; skills: string[] }) => d.skills.map((s) => `${d.id}:${s}`));
-    expect(new Set(all)).toEqual(new Set(ROSTER.flatMap((a) => a.skills)));
+    const sourceIds = SKILL_SOURCES.flatMap(sourceSkillIds);
+    expect(new Set(all)).toEqual(new Set([...ROSTER.flatMap((a) => a.skills), ...sourceIds]));
     expect(rosterFallback().some((d) => d.id === "hormozi")).toBe(false);
   });
 

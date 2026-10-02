@@ -7,7 +7,7 @@ import type { FetchLike } from "../hermes/client";
 export const HEADCOUNT_REF = "98d1c17d480f606060102a781f9a8601690685f7";
 const REPO = "cbrock84/headcount";
 const SKILL_PATH = /^plugins\/([a-z0-9-]+)\/skills\/([a-z0-9-]+)\/SKILL\.md$/;
-const SKILL_ID = /^([a-z0-9-]+):([a-z0-9-]+)$/;
+const SKILL_ID = /^([a-z0-9-]+):((?:[a-z0-9-]+\/)?[a-z0-9-]+)$/;
 const CACHE_MS = 60 * 60 * 1000;
 const TIMEOUT_MS = 10_000;
 
@@ -106,6 +106,7 @@ export class HeadcountSource {
     if (!parsed) return false;
     const source = skillSourceFor(id);
     if (source) return source.skills.includes(parsed.skill);
+    if (parsed.skill.includes("/")) return false;
     const departments = await this.headcountDepartments();
     return departments.some((d) => d.id === parsed.department && d.skills.includes(parsed.skill));
   }
@@ -115,6 +116,7 @@ export class HeadcountSource {
     if (!parsed) throw new Error(`invalid skill id ${id}`);
     const source = skillSourceFor(id);
     if (source && !source.skills.includes(parsed.skill)) throw new Error(`${id} is not a reviewed ${source.id} skill`);
+    if (!source && parsed.skill.includes("/")) throw new Error(`invalid skill id ${id}`);
     const url = source
       ? rawSourceUrl(source, parsed.skill)
       : `https://raw.githubusercontent.com/${REPO}/${this.ref}/plugins/${parsed.department}/skills/${parsed.skill}/SKILL.md`;

@@ -8,6 +8,7 @@
 import type { DivisionId } from "./divisions";
 import type { KanbanBoard, KanbanComment, KanbanTask, TaskStatus } from "./hermes";
 import type { RosterAgent } from "./roster";
+import type { TeamRole, TechTeam } from "./techTeams";
 
 export const API = {
   health: "/api/health",
@@ -24,6 +25,7 @@ export const API = {
   hire: "/api/hire",
   headcountCatalog: "/api/headcount/catalog",
   connections: "/api/connections",
+  techTeams: "/api/tech/teams",
 } as const;
 
 export interface HealthResponse {
@@ -169,7 +171,17 @@ export interface RosterResponse {
   agents: RosterEntry[];
 }
 
-export type HireRequest = Omit<RosterAgent, "reviewer"> & { reviewer?: boolean };
+/**
+ * Zain Tech hires may name a repo `team` (a known team id) with a `teamRole`: head-engineer and
+ * project-manager are rank `lead` reporting to the VP Tech (one of each per team); specialists are
+ * rank `specialist` reporting to the team's Head Engineer. `focus` is ≤ 200 chars.
+ */
+export type HireRequest = Omit<RosterAgent, "reviewer" | "team" | "teamRole" | "focus"> & {
+  reviewer?: boolean;
+  team?: string;
+  teamRole?: TeamRole;
+  focus?: string;
+};
 
 export interface HireStep {
   step: "create-profile" | "write-soul" | "describe" | "install-skill";
@@ -183,6 +195,34 @@ export interface HireResponse {
   ok: boolean;
   profile: string;
   steps: HireStep[];
+}
+
+export interface TechTeamView extends TechTeam {
+  /** True for teams the VP added at runtime (stored in .zain/teams.json). */
+  runtime: boolean;
+  members: RosterEntry[];
+}
+
+/** GET techTeams: built-in teams then runtime teams, each with its roster. */
+export interface TechTeamsResponse {
+  teams: TechTeamView[];
+}
+
+/**
+ * POST techTeams → 201 { team }: id matches TEAM_ID_PATTERN and is new, name 1..40, repo is an
+ * `owner/name` that `gh repo view` can see and no other team owns, summary 1..300, stack ≤ 300.
+ * 400 invalid, 409 duplicate id or repo.
+ */
+export interface CreateTechTeamRequest {
+  id: string;
+  name: string;
+  repo: string;
+  summary: string;
+  stack?: string;
+}
+
+export interface CreateTechTeamResponse {
+  team: TechTeam;
 }
 
 export interface HeadcountDepartment {

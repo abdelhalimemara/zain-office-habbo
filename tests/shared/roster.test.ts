@@ -33,8 +33,8 @@ describe("roster", () => {
     }
   });
 
-  it("formats skills as department:skill", () => {
-    for (const a of ROSTER) for (const s of a.skills) expect(s).toMatch(/^[a-z-]+:[a-z-]+$/);
+  it("formats skills as department:skill, or source:dir/skill for agency playbooks", () => {
+    for (const a of ROSTER) for (const s of a.skills) expect(s).toMatch(/^[a-z-]+:[a-z-]+$|^agency:[a-z-]+\/[a-z0-9-]+$/);
   });
 
   it("covers every division with a distinct tenant", () => {

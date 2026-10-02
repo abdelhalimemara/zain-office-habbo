@@ -1,5 +1,8 @@
+import { AGENCY_SKILLS } from "./agencySkills";
+
 /**
- * Skill repositories besides headcount. A skill id is `<source>:<skill>`; ids whose prefix is not a
+ * Skill repositories besides headcount. A skill id is `<source>:<skill>`, where a source skill may
+ * sit in one subdirectory (`agency:engineering/engineering-sre`); ids whose prefix is not a
  * registered source are headcount `department:skill`. Every source is pinned to a reviewed commit.
  */
 export interface SkillSource {
@@ -15,6 +18,8 @@ export interface SkillSource {
   license: string;
   /** Reviewed skills that agents may install; anything else in the repo is ignored. */
   skills: readonly string[];
+  /** `persona`: each file is an agent persona (frontmatter + body) installed as a role playbook. */
+  format?: "skill" | "persona";
 }
 
 export const SKILL_SOURCES: readonly SkillSource[] = [
@@ -45,6 +50,17 @@ export const SKILL_SOURCES: readonly SkillSource[] = [
       "value-accelerator",
       "value-perception",
     ],
+  },
+  {
+    id: "agency",
+    repo: "msitarzewski/agency-agents",
+    ref: "d3f71c4bb8922d3eea7576237a870dd59b3cdd52",
+    skillPath: (skill) => `${skill}.md`,
+    hermesPrefix: "ag",
+    category: "zain-tech-agency",
+    license: "MIT",
+    skills: AGENCY_SKILLS,
+    format: "persona",
   },
 ];
 

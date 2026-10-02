@@ -3,6 +3,7 @@ import { DIVISION_IDS, divisionForTenant, getDivision, type DivisionId } from ".
 import { AWAITING_APPROVAL, isClientReply, isMandate } from "../../../shared/flow";
 import type { KanbanTask } from "../../../shared/hermes";
 import { managerOf, type RosterAgent } from "../../../shared/roster";
+import { TECH_TEAMS, type TechTeam } from "../../../shared/techTeams";
 import { HermesError, type HermesClient } from "../hermes/client";
 import { HttpError, badRequest, optionalString, requiredString } from "../http";
 import type { CeoWake } from "../telegram/ceoWake";
@@ -31,12 +32,13 @@ export async function createMandate(
   hermes: HermesClient,
   hires: HireStore,
   ceoWake: CeoWake,
+  teams: readonly TechTeam[] = TECH_TEAMS,
 ): Promise<CreateMandateResponse> {
   const roster = await fullRoster(hires);
   const manager = managerOf(req.division, roster);
   const task = await hermes.createTask({
     title: req.title,
-    body: mandateBody(req.body ?? "", manager, roster),
+    body: mandateBody(req.body ?? "", manager, roster, teams),
     assignee: manager.profile,
     tenant: getDivision(req.division).tenant,
     priority: req.priority ?? 0,

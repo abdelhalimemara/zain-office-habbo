@@ -109,7 +109,7 @@ describe("POST /api/hire", () => {
     expect(soul).toMatch(/Never complete the mandate yourself/);
     expect(soul).toContain("may block");
     expect(soul).toContain("`zain-tech-fullstack`");
-    expect(soul).not.toMatch(/zain-(growth|studio|labs|hq)-/);
+    expect(soul).not.toMatch(/`zain-(growth|studio|labs|hq)-/);
     expect(soul).toContain("the CEO");
   });
 

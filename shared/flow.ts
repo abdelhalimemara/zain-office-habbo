@@ -9,6 +9,9 @@ import { findAgent } from "./roster";
  *     then blocks the mandate on the dependency; it resumes when every subtask is done.
  *  3. The VP rolls up the result and requests review = awaiting HQ approval.
  *  4. HQ approves (→ done) or rejects (comment + back to the manager).
+ * Zain Tech nests this: the VP fans a mandate out to team leads, a Head Engineer fans their task out
+ * to specialists, and each lead asks their own manager for review. Those *internal reviews* belong
+ * to that manager, never to HQ.
  */
 
 export type AgentActivity = "working" | "blocked" | "awaiting-approval" | "queued" | "idle";
@@ -23,10 +26,41 @@ export function tasksForTenant(board: KanbanBoard, tenant: string): KanbanTask[]
   return allTasks(board).filter((t) => t.tenant === tenant);
 }
 
+const WORKER_RANKS = new Set(["vp", "lead", "specialist"]);
+
+/**
+ * True when an agent of the assignee's own division created the task: work a division makes for
+ * itself (subtasks, or a lead's roll-up parked with its VP for review), as opposed to HQ's mandates
+ * (created in Zain HQ, by the CEO or by HQ for another division).
+ */
+function createdInDivision(task: KanbanTask, assignee: RosterAgent, roster?: readonly RosterAgent[]): boolean {
+  const creator = task.created_by ? findAgent(task.created_by, roster) : undefined;
+  return !!creator && WORKER_RANKS.has(creator.rank) && creator.division === assignee.division;
+}
+
 export function isMandate(task: KanbanTask, roster?: readonly RosterAgent[]): boolean {
   if (!task.assignee) return false;
   const agent = findAgent(task.assignee, roster);
-  return agent?.rank === "vp";
+  return agent?.rank === "vp" && !createdInDivision(task, agent, roster);
+}
+
+/**
+ * A division's own review: a task parked in `review` with a manager (a VP or a team lead) that
+ * the division created itself, e.g. a Head Engineer's roll-up reviewed by the VP Tech. Its reviewer
+ * is the assignee; HQ never decides it.
+ */
+export function isInternalReview(task: KanbanTask, roster?: readonly RosterAgent[]): boolean {
+  if (task.status !== AWAITING_APPROVAL || !task.assignee) return false;
+  const agent = findAgent(task.assignee, roster);
+  if (!agent || (agent.rank !== "vp" && agent.rank !== "lead")) return false;
+  return createdInDivision(task, agent, roster) && !isClientReply(task, roster);
+}
+
+/** Internal reviews waiting on one reviewer (a VP or a team lead), oldest first. */
+export function internalReviewsFor(board: KanbanBoard, reviewer: string, roster?: readonly RosterAgent[]): KanbanTask[] {
+  return allTasks(board)
+    .filter((t) => t.assignee === reviewer && isInternalReview(t, roster))
+    .sort((a, b) => a.created_at - b.created_at);
 }
 
 /** Tasks for board advisors (consultations). Never mandates and never HQ approvals. */
@@ -72,9 +106,14 @@ export function hqDecisionCount(board: KanbanBoard, roster?: readonly RosterAgen
   return pendingApprovals(board, roster).length + pendingClientReplies(board, roster).length;
 }
 
-/** Specialists' tasks parked in `review`: no HQ approval is due, but a human must unstick them. */
+/**
+ * Specialists' tasks parked in `review`: no HQ approval is due, but a human must unstick them.
+ * Internal reviews are excluded; their reviewer handles them.
+ */
 export function waitingSubtaskReviews(board: KanbanBoard, roster?: readonly RosterAgent[]): KanbanTask[] {
-  return allTasks(board).filter((t) => t.status === AWAITING_APPROVAL && !isMandate(t, roster) && !isClientReply(t, roster));
+  return allTasks(board).filter(
+    (t) => t.status === AWAITING_APPROVAL && !isMandate(t, roster) && !isClientReply(t, roster) && !isInternalReview(t, roster),
+  );
 }
 
 export const NO_BRIEF = "(No further brief provided.)";

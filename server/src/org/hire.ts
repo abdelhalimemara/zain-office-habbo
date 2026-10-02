@@ -2,7 +2,8 @@ import type { HireResponse, HireStep } from "../../../shared/api";
 import { DIVISION_IDS, type DivisionId } from "../../../shared/divisions";
 import { hireFieldErrors } from "../../../shared/hireRules";
 import { findBoardMember } from "../../../shared/board";
-import { CEO_PROFILE, ROSTER, type RosterAgent } from "../../../shared/roster";
+import { CEO_PROFILE, ROSTER, managerOf, type RosterAgent } from "../../../shared/roster";
+import { TEAM_ROLES, type TeamRole } from "../../../shared/techTeams";
 import type { HermesClient } from "../hermes/client";
 import { HermesError } from "../hermes/client";
 import type { HeadcountSource } from "../headcount/catalog";
@@ -11,6 +12,7 @@ import { badRequest, optionalString } from "../http";
 import { fullRoster, type HireStore } from "./hireStore";
 import { profileDescription, soulText } from "./persona";
 import type { BriefReader } from "./privateBriefs";
+import { allTeams, type TeamStore } from "./teamStore";
 
 const RANKS = ["board", "vp", "lead", "specialist"] as const;
 const BOARD_PROFILE = /^zain-board-[a-z0-9-]+$/;
@@ -20,6 +22,7 @@ export interface HireDeps {
   headcount: HeadcountSource;
   hires: HireStore;
   briefs: BriefReader;
+  teams: TeamStore;
 }
 
 function stringField(body: Record<string, unknown>, field: string): string {
@@ -32,7 +35,7 @@ function stringField(body: Record<string, unknown>, field: string): string {
 function assertMatchesRoster(agent: RosterAgent): void {
   const canonical = ROSTER.find((a) => a.profile === agent.profile);
   if (!canonical) return;
-  const mismatched = (["title", "division", "rank", "reportsTo"] as const).filter((k) => canonical[k] !== agent[k]);
+  const mismatched = (["title", "division", "rank", "reportsTo", "team", "teamRole"] as const).filter((k) => canonical[k] !== agent[k]);
   if (mismatched.length) {
     throw badRequest(`${agent.profile} is a roster position; ${mismatched.join(", ")} must match the roster`);
   }
@@ -56,9 +59,46 @@ async function managerReportsTo(profile: string, body: Record<string, unknown>, 
   return reportsTo;
 }
 
+/**
+ * Repo team placement: leads (Head Engineer, Project Manager) report to the VP Tech, one of each
+ * per team; specialists report to their team's Head Engineer.
+ */
+async function teamPlacement(
+  agent: RosterAgent,
+  body: Record<string, unknown>,
+  deps: Pick<HireDeps, "hires" | "teams">,
+): Promise<Pick<RosterAgent, "team" | "teamRole">> {
+  if (body.team === undefined || body.team === null) {
+    if (body.teamRole !== undefined && body.teamRole !== null) throw badRequest("teamRole needs a team");
+    return {};
+  }
+  if (typeof body.team !== "string") throw badRequest("team must be a string");
+  if (agent.division !== "tech") throw badRequest("only Zain Tech hires join a repo team");
+  const team = (await allTeams(deps.teams)).find((t) => t.id === body.team);
+  if (!team) throw badRequest(`team ${body.team} is not a Zain Tech team`);
+  const teamRole = body.teamRole ?? (agent.rank === "specialist" ? "specialist" : undefined);
+  if (!TEAM_ROLES.includes(teamRole as TeamRole)) throw badRequest("teamRole must be head-engineer, project-manager or specialist");
+  const roster = await fullRoster(deps.hires);
+  const members = roster.filter((a) => a.team === team.id && a.profile !== agent.profile);
+  if (teamRole === "specialist") {
+    if (agent.rank !== "specialist") throw badRequest("team specialists have rank specialist");
+    const head = members.find((a) => a.teamRole === "head-engineer");
+    if (!head || agent.reportsTo !== head.profile) {
+      throw badRequest(`team specialists report to the ${team.name} Head Engineer${head ? ` (${head.profile})` : ", hire one first"}`);
+    }
+  } else {
+    if (agent.rank !== "lead") throw badRequest("Head Engineers and Project Managers have rank lead");
+    const vp = managerOf("tech", roster).profile;
+    if (agent.reportsTo !== vp) throw badRequest(`team leads report to the VP Tech (${vp})`);
+    const holder = members.find((a) => a.teamRole === teamRole);
+    if (holder) throw badRequest(`${team.name} already has a ${teamRole}: ${holder.profile}`);
+  }
+  return { team: team.id, teamRole: teamRole as TeamRole };
+}
+
 export async function parseHireRequest(
   body: Record<string, unknown>,
-  deps: Pick<HireDeps, "headcount" | "hires">,
+  deps: Pick<HireDeps, "headcount" | "hires" | "teams">,
 ): Promise<RosterAgent> {
   const profile = stringField(body, "profile");
   const title = stringField(body, "title").trim();
@@ -74,6 +114,7 @@ export async function parseHireRequest(
   if (!RANKS.includes(rank as (typeof RANKS)[number])) throw badRequest("rank must be board, vp, lead or specialist");
   const reportsTo = rank === "board" ? boardReportsTo(profile, body) : await managerReportsTo(profile, body, deps.hires);
   if (body.reviewer !== undefined && typeof body.reviewer !== "boolean") throw badRequest("reviewer must be a boolean");
+  const focus = optionalString(body, "focus", 200);
   const agent: RosterAgent = {
     profile,
     title,
@@ -82,7 +123,9 @@ export async function parseHireRequest(
     reportsTo,
     skills: [...new Set(skills as string[])],
     ...(body.reviewer ? { reviewer: true } : {}),
+    ...(focus ? { focus } : {}),
   };
+  Object.assign(agent, await teamPlacement(agent, body, deps));
   assertMatchesRoster(agent);
   for (const id of agent.skills) {
     if (!(await deps.headcount.hasSkill(id))) throw badRequest(`unknown skill ${id}`);
@@ -128,7 +171,8 @@ async function installSkill(deps: HireDeps, profile: string, id: string): Promis
 export async function hire(agent: RosterAgent, deps: HireDeps): Promise<HireResponse> {
   const steps: HireStep[] = [];
   const description = profileDescription(agent);
-  const exists = (await deps.hermes.listProfiles()).some((p) => p.name === agent.profile);
+  const profiles = new Set((await deps.hermes.listProfiles()).map((p) => p.name));
+  const exists = profiles.has(agent.profile);
   if (exists) {
     steps.push({ step: "create-profile", target: agent.profile, ok: true });
   } else {
@@ -140,12 +184,26 @@ export async function hire(agent: RosterAgent, deps: HireDeps): Promise<HireResp
 
   await deps.hires.save(agent);
   const roster = await fullRoster(deps.hires);
+  const teams = await allTeams(deps.teams);
   await step(steps, "write-soul", agent.profile, async () =>
-    deps.hermes.writeSoul(agent.profile, await soulText(agent, roster, deps.briefs)),
+    deps.hermes.writeSoul(agent.profile, await soulText(agent, roster, deps.briefs, teams)),
   );
   await step(steps, "describe", agent.profile, () => deps.hermes.setDescription(agent.profile, description));
   for (const id of agent.skills) {
     await step(steps, "install-skill", id, () => installSkill(deps, agent.profile, id));
   }
+  for (const manager of managersToBrief(agent, roster).filter((m) => profiles.has(m.profile))) {
+    await step(steps, "write-soul", manager.profile, async () =>
+      deps.hermes.writeSoul(manager.profile, await soulText(manager, roster, deps.briefs, teams)),
+    );
+  }
   return { ok: steps.every((s) => s.ok), profile: agent.profile, steps };
+}
+
+/** A runtime team hire changes who its leads and the VP Tech can assign work to, so their SOULs are rewritten. */
+function managersToBrief(agent: RosterAgent, roster: readonly RosterAgent[]): RosterAgent[] {
+  if (!agent.team || ROSTER.some((a) => a.profile === agent.profile)) return [];
+  const vp = managerOf("tech", roster);
+  const leads = roster.filter((a) => a.team === agent.team && a.rank === "lead" && a.profile !== agent.profile);
+  return [...leads, vp];
 }

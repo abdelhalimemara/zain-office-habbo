@@ -1,5 +1,7 @@
 import { BOARD_MEMBERS } from "./board";
 import type { DivisionId } from "./divisions";
+import { TECH_TEAM_ROSTER } from "./techRoster";
+import type { TeamRole } from "./techTeams";
 
 export type Rank = "board" | "ceo" | "vp" | "lead" | "specialist";
 
@@ -21,6 +23,10 @@ export interface RosterAgent {
   clientChannels?: readonly ("email" | "whatsapp")[];
   /** Zain Tech repo team id (see shared/techTeams.ts). */
   team?: string;
+  /** Role within `team`: the Head Engineer and Project Manager lead it; specialists report to the Head Engineer. */
+  teamRole?: TeamRole;
+  /** One line on what this agent works on (for repo teams: the part of the stack they own). */
+  focus?: string;
 }
 
 export const CEO_PROFILE = "default";
@@ -117,7 +123,7 @@ const board: RosterAgent[] = BOARD_MEMBERS.map((m) => ({
   skills: m.skills,
 }));
 
-export const ROSTER: readonly RosterAgent[] = [...hq, ...board, ...studio, ...growth, ...labs, ...tech];
+export const ROSTER: readonly RosterAgent[] = [...hq, ...board, ...studio, ...growth, ...labs, ...tech, ...TECH_TEAM_ROSTER];
 
 export function boardMembers(roster: readonly RosterAgent[] = ROSTER): RosterAgent[] {
   return roster.filter((a) => a.rank === "board");
