@@ -112,6 +112,7 @@ export interface CronJob {
   next_run_at?: string | null;
   last_run_at?: string | null;
   last_status?: string | null;
+  last_error?: string | null;
 }
 
 /** hermes_cli/web_server_messaging.py `_whatsapp_onboarding_payload`. */

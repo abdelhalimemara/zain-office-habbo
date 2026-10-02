@@ -79,7 +79,8 @@ describe("Gmail · Ahmad", () => {
     [valid, { ...JOB, state: "paused" }, "warn", "paused"],
     [valid, { ...JOB, last_run_at: null }, "ok", "first run"],
     [valid, JOB, "ok", "Last inbox check 3 min ago"],
-    [valid, { ...JOB, last_status: "error" }, "warn", "error"],
+    [valid, { ...JOB, last_status: "error", last_error: "Run this script in the Hermes environment; token ya29.abcdefghijk" }, "error", "failed: Run this script in the Hermes environment; token [redacted]"],
+    [valid, { ...JOB, last_status: "delivery_failed" }, "warn", "delivery_failed"],
     [valid, { ...JOB, last_run_at: new Date((NOW - 3600) * 1000).toISOString() }, "warn", "overdue"],
   ])("%# token/job → %s", (token, job, status, text) => {
     const entry = gmailEntry(token, job as CronJob | undefined, NOW);
