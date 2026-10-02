@@ -40,6 +40,8 @@ export const COO_PROFILE = "zain-hq-coo";
 const hq: RosterAgent[] = [
   { profile: CEO_PROFILE, name: "Susu", title: "CEO · Main Hermes", division: "hq", rank: "ceo", reportsTo: null,
     skills: ["executive:chief-executive", "executive:ceo-advisor", "executive:agent-hierarchy"] },
+  { profile: "zain-hq-musfir", name: "Musfir", title: "Partner's Assistant (Abdullah)", division: "hq", rank: "lead", reportsTo: CEO_PROFILE,
+    skills: ["executive:ceo-advisor", "operations:operating-cadence"] },
   { profile: COO_PROFILE, name: "Faisal Al-Harbi", title: "COO", division: "hq", rank: "vp", reportsTo: CEO_PROFILE,
     skills: ["operations:chief-operating-officer", "operations:operating-cadence", "operations:process-design", "pmo:portfolio-governance"] },
   { profile: "zain-hq-ops", title: "Ops / PMO Lead", division: "hq", rank: "lead", reportsTo: COO_PROFILE,
