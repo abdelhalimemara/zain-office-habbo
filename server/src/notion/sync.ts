@@ -9,6 +9,7 @@ import { NotionClient, RICH_TEXT_MAX, bullet, callout, heading, paragraphs, rich
 type Json = Record<string, unknown>;
 
 const STATUS: Record<MeetingStatus, string> = {
+  live: "Live",
   "in-round": "In round",
   "awaiting-founder": "Awaiting founder",
   voting: "Voting",

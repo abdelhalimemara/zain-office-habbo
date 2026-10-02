@@ -3,13 +3,17 @@
  * ending in a vote and minutes written by the chair (the CEO). Mirrored to Notion.
  */
 
-export type MeetingStatus = "in-round" | "awaiting-founder" | "voting" | "minutes" | "concluded" | "cancelled";
+/** "live": a voice meeting in the live room; it skips the written rounds and goes to the vote when the founder ends it. */
+export type MeetingStatus = "live" | "in-round" | "awaiting-founder" | "voting" | "minutes" | "concluded" | "cancelled";
 
 export type RoundKind = "opening" | "discussion" | "vote";
 
 export type Vote = "approve" | "approve-with-conditions" | "reject" | "abstain";
 
-/** "chat": text only. "voice": every turn is also spoken in the member's ElevenLabs voice and the founder can speak back. */
+/**
+ * "chat": written rounds. "voice": a live room on one ElevenLabs agent that plays every member in their own voice,
+ * with the founder's mic always on; ending it hands the transcript to the real board for the vote and minutes.
+ */
 export type MeetingMode = "chat" | "voice";
 
 export type Decision = "approved" | "approved-with-conditions" | "rejected" | "no-decision";
@@ -56,6 +60,8 @@ export interface BoardMeeting {
   /** The last Notion sync failure, cleared by the next successful sync. */
   notionSyncError?: string;
   relatedTaskId?: string;
+  /** ElevenLabs conversation ids of the live sessions held for this meeting (a reconnect starts a new one). */
+  liveConversationIds?: string[];
 }
 
 export interface StartMeetingRequest {
