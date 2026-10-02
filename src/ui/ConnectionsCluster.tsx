@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { Connection, ConnectionKind, ConnectionStatus } from "@shared/api";
 import { useConnections } from "../api/hooks";
-import { checkedAgo, describeCounts, groupConnections, STATUS_META, worstStatus, type ConnectionGroup } from "./connections";
+import { checkedAgo, CONNECTION_GROUPS, describeCounts, groupConnections, STATUS_META, worstStatus, type ConnectionGroup } from "./connections";
 
 export function StatusMark({ status }: { status: ConnectionStatus }) {
   return (
@@ -116,73 +116,140 @@ function SheetPortal({ anchor, children }: { anchor: RefObject<HTMLElement>; chi
   return root ? createPortal(children, root) : <>{children}</>;
 }
 
-/** Channel / MCP / CLI health at a glance; each pill opens the full list for its group. */
-export function ConnectionsCluster({ compact }: { compact: boolean }) {
+/** Phones: one mark for the worst status; it opens every connection as a bottom sheet. */
+export function ConnectionsSummary() {
   const { data, error, isPending } = useConnections();
-  const [open, setOpen] = useState<ConnectionKind | "all" | null>(null);
+  const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [refs] = useState(() => [ref, popRef]);
   const titleId = useId();
   const close = useCallback(() => {
-    setOpen(null);
+    setOpen(false);
     triggerRef.current?.focus();
   }, []);
-  useDismiss(open !== null, close, refs);
+  useDismiss(open, close, refs);
 
   if (error) return null;
-  const groups = groupConnections(data?.connections ?? []);
-  const toggle = (kind: ConnectionKind | "all", el: HTMLButtonElement) => {
+  const all = data?.connections ?? [];
+  const groups = groupConnections(all);
+  const status = worstStatus(all);
+  const counts = groups.reduce(
+    (acc, g) => ({ ok: acc.ok + g.counts.ok, warn: acc.warn + g.counts.warn, error: acc.error + g.counts.error, off: acc.off + g.counts.off }),
+    { ok: 0, warn: 0, error: 0, off: 0 },
+  );
+  return (
+    <div className="zui-conns zui-conns--compact" ref={ref}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="zui-conn-pill"
+        aria-label={isPending ? "Connections: checking" : `Connections: ${STATUS_META[status].label}, ${describeCounts(counts)}`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(!open)}
+      >
+        <StatusMark status={isPending ? "off" : status} />
+      </button>
+      {open && (
+        <SheetPortal anchor={ref}>
+          <div className="zui-conn-scrim" aria-hidden="true" />
+          <ConnectionsPopover groups={groups} active="all" onSelect={() => undefined} sheet titleId={titleId} popRef={popRef} />
+        </SheetPortal>
+      )}
+    </div>
+  );
+}
+
+function useScrollFades(ref: RefObject<HTMLElement>, deps: unknown): string {
+  const [fades, setFades] = useState("");
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setFades(`${left ? " zui-conn-row__scroll--fade-left" : ""}${right ? " zui-conn-row__scroll--fade-right" : ""}`);
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [ref, deps]);
+  return fades;
+}
+
+const POPOVER_WIDTH = 320;
+
+/** Every connection as its own pill, channels → MCP → CLI, in a slim scrolling row under the HUD bar. */
+export function ConnectionsRow() {
+  const { data, error } = useConnections();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [left, setLeft] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [refs] = useState(() => [wrapRef]);
+  const close = useCallback(() => {
+    setOpenId(null);
+    triggerRef.current?.focus();
+  }, []);
+  useDismiss(openId !== null, close, refs);
+  const fades = useScrollFades(scrollRef, data);
+  useEffect(() => {
+    if (openId) popRef.current?.focus();
+  }, [openId]);
+
+  const connections = data?.connections ?? [];
+  if (error || connections.length === 0) return null;
+  const kinds = CONNECTION_GROUPS.map((g) => connections.filter((c) => c.kind === g.kind)).filter((list) => list.length > 0);
+  const open = connections.find((c) => c.id === openId);
+
+  const toggle = (c: Connection, el: HTMLButtonElement) => {
+    if (openId === c.id) return close();
     triggerRef.current = el;
-    setOpen(open === kind ? null : kind);
+    const wrap = wrapRef.current!.getBoundingClientRect();
+    const pill = el.getBoundingClientRect();
+    setLeft(Math.max(0, Math.min(pill.left - wrap.left, wrap.width - POPOVER_WIDTH)));
+    setOpenId(c.id);
   };
 
-  if (compact) {
-    const all = data?.connections ?? [];
-    const status = worstStatus(all);
-    const counts = groups.reduce((acc, g) => ({ ok: acc.ok + g.counts.ok, warn: acc.warn + g.counts.warn, error: acc.error + g.counts.error, off: acc.off + g.counts.off }), { ok: 0, warn: 0, error: 0, off: 0 });
-    return (
-      <div className="zui-conns zui-conns--compact" ref={ref}>
-        <button
-          type="button"
-          className="zui-conn-pill"
-          aria-label={isPending ? "Connections: checking" : `Connections: ${STATUS_META[status].label}, ${describeCounts(counts)}`}
-          aria-expanded={open !== null}
-          aria-haspopup="dialog"
-          onClick={(e) => toggle("all", e.currentTarget)}
-        >
-          <StatusMark status={isPending ? "off" : status} />
-        </button>
-        {open && (
-          <SheetPortal anchor={ref}>
-            <div className="zui-conn-scrim" aria-hidden="true" />
-            <ConnectionsPopover groups={groups} active="all" onSelect={() => undefined} sheet titleId={titleId} popRef={popRef} />
-          </SheetPortal>
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="zui-conns" role="group" aria-label="Connections" ref={ref}>
-      {groups.map((g) => (
-        <button
-          key={g.kind}
-          type="button"
-          className={`zui-conn-pill zui-conn-pill--${g.status}`}
-          aria-label={isPending ? `${g.label}: checking` : `${g.label}: ${STATUS_META[g.status].label}, ${describeCounts(g.counts)}`}
-          title={isPending ? undefined : describeCounts(g.counts)}
-          aria-expanded={open === g.kind}
-          aria-haspopup="dialog"
-          onClick={(e) => toggle(g.kind, e.currentTarget)}
-        >
-          <span className="zui-conn-pill__label">{g.label}</span>
-          <StatusMark status={isPending ? "off" : g.status} />
-          <span className="zui-conn-pill__count">{isPending ? "…" : g.connections.length}</span>
-        </button>
-      ))}
-      {open && <ConnectionsPopover groups={groups} active={open} onSelect={(k) => setOpen(k)} sheet={false} titleId={titleId} popRef={popRef} />}
+    <div className="zui-conn-row" ref={wrapRef}>
+      <div ref={scrollRef} className={`zui-conn-row__scroll${fades}`} role="group" aria-label="Connections">
+        {kinds.map((list, i) => (
+          <Fragment key={list[0]!.kind}>
+            {i > 0 && <span className="zui-conn-row__divider" aria-hidden="true" />}
+            {list.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`zui-conn-pill zui-conn-pill--${c.status}`}
+                aria-label={`${c.name}: ${STATUS_META[c.status].label}`}
+                title={c.detail}
+                aria-expanded={openId === c.id}
+                aria-haspopup="dialog"
+                onClick={(e) => toggle(c, e.currentTarget)}
+              >
+                <StatusMark status={c.status} />
+                <span className="zui-conn-pill__label">{c.name}</span>
+              </button>
+            ))}
+          </Fragment>
+        ))}
+      </div>
+      {open && (
+        <div ref={popRef} className="zui-conn-pop zui-conn-pop--one" role="dialog" aria-label={`${open.name} connection`} tabIndex={-1} style={{ left }}>
+          <ul className="zui-conn-list">
+            <ConnectionRow c={open} now={Date.now() / 1000} />
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

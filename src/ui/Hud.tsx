@@ -5,7 +5,7 @@ import { hqDecisionCount } from "@shared/flow";
 import { useBoard, useConnections, useHealth } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { useRosterAgents } from "./common";
-import { ConnectionsCluster } from "./ConnectionsCluster";
+import { ConnectionsRow, ConnectionsSummary } from "./ConnectionsCluster";
 import { PHONE_QUERY } from "./KanbanPanel";
 import { useMediaQuery } from "./useMediaQuery";
 import { usePublishHudBottom } from "./useHudBottom";
@@ -121,7 +121,7 @@ export function Hud() {
           visible={hermes !== "reachable" && !health.isPending}
         />
         <StatusDot label="Telegram" state={telegram ? TELEGRAM_DOT[telegram] : "unknown"} detail={telegram ?? "unknown"} visible={connectionsDown && !phone} />
-        <ConnectionsCluster compact={phone} />
+        {phone && <ConnectionsSummary />}
       </div>
       {phone && <MoreMenu onBoard={openBoard} />}
       <div className="zui-hud__actions">
@@ -150,6 +150,7 @@ export function Hud() {
           Hire
         </button>
       </div>
+      {!phone && <ConnectionsRow />}
       {health.data?.reviewDispatch === "on" && (
         <p className="zui-banner zui-banner--warn" role="alert">
           Hermes review agent is on: it can approve mandates before HQ sees them.

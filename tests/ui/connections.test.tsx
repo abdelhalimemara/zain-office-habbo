@@ -81,42 +81,50 @@ describe("Connections in the HUD", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("shows one pill per group with its worst status and count", async () => {
+  it("shows every connection as its own pill, channels then MCP then CLI, with a divider between kinds", async () => {
     open();
-    const cluster = await screen.findByRole("group", { name: "Connections" });
-    expect(await within(cluster).findByRole("button", { name: "Channels: Needs attention, 1 needs attention, 2 OK, 1 off" })).toHaveTextContent("Channels!4");
-    expect(within(cluster).getByRole("button", { name: "MCP: Error, 1 error, 1 OK" })).toHaveTextContent("MCP✕2");
-    expect(within(cluster).getByRole("button", { name: "CLI: Off, 1 off" })).toHaveTextContent("CLI–1");
+    const row = await screen.findByRole("group", { name: "Connections" });
+    const pills = await within(row).findAllByRole("button");
+    expect(pills.map((p) => p.getAttribute("aria-label"))).toEqual([
+      "Telegram: OK",
+      "WhatsApp · Ahmad: Needs attention",
+      "Email · Ahmad: OK",
+      "Slack: Off",
+      "Adspirer: Error",
+      "Notion: OK",
+      "Notion CLI: Off",
+    ]);
+    expect(pills[1]).toHaveTextContent("!WhatsApp · Ahmad");
+    expect(pills[4]).toHaveTextContent("✕Adspirer");
+    expect(pills[1]).toHaveAttribute("title", "Session expires in 2 days");
+    expect(row.querySelectorAll(".zui-conn-row__divider")).toHaveLength(2);
   });
 
-  it("opens a popover listing the group with status, profile, detail and check time, as plain text", async () => {
+  it("opens a popover with that connection's detail, profile and check time, as plain text", async () => {
     open();
-    const channels = await screen.findByRole("button", { name: /^Channels: Needs attention/ });
-    await userEvent.click(channels);
-    expect(channels).toHaveAttribute("aria-expanded", "true");
-    const dialog = screen.getByRole("dialog", { name: "Connections" });
-    const list = within(dialog).getByRole("list", { name: "Channels connections" });
-    const rows = within(list).getAllByRole("listitem");
-    expect(rows).toHaveLength(4);
-    expect(rows[0]).toHaveTextContent("WhatsApp · Ahmad");
-    expect(rows[0]).toHaveTextContent("zain-hq-accounts");
-    expect(rows[0]).toHaveTextContent("Session expires in 2 days");
-    expect(rows[0]).toHaveTextContent(/checked 2\ds ago/);
-    expect(within(rows[0]!).getByText(": Needs attention")).toHaveClass("zui-sr-only");
-    await userEvent.click(within(dialog).getByRole("tab", { name: /MCP/ }));
-    const mcp = within(dialog).getByRole("list", { name: "MCP connections" });
-    expect(within(mcp).getByText('<img src=x onerror="window.__pwnedConn=1">token rejected')).toBeInTheDocument();
-    expect(dialog.querySelector("img")).toBeNull();
+    const whatsapp = await screen.findByRole("button", { name: "WhatsApp · Ahmad: Needs attention" });
+    await userEvent.click(whatsapp);
+    expect(whatsapp).toHaveAttribute("aria-expanded", "true");
+    const pop = screen.getByRole("dialog", { name: "WhatsApp · Ahmad connection" });
+    expect(pop).toHaveTextContent("zain-hq-accounts");
+    expect(pop).toHaveTextContent("Session expires in 2 days");
+    expect(pop).toHaveTextContent(/checked 2\ds ago/);
+    expect(within(pop).getByText(": Needs attention")).toHaveClass("zui-sr-only");
+    await userEvent.click(screen.getByRole("button", { name: "Adspirer: Error" }));
+    const adspirer = screen.getByRole("dialog", { name: "Adspirer connection" });
+    expect(within(adspirer).getByText('<img src=x onerror="window.__pwnedConn=1">token rejected')).toBeInTheDocument();
+    expect(adspirer.querySelector("img")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "WhatsApp · Ahmad connection" })).not.toBeInTheDocument();
   });
 
   it("closes on Escape and returns focus to the pill", async () => {
     open();
-    const mcp = await screen.findByRole("button", { name: /^MCP: Error/ });
-    await userEvent.click(mcp);
-    expect(screen.getByRole("dialog", { name: "Connections" })).toHaveFocus();
+    const pill = await screen.findByRole("button", { name: "Adspirer: Error" });
+    await userEvent.click(pill);
+    expect(screen.getByRole("dialog", { name: "Adspirer connection" })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(mcp).toHaveFocus();
+    expect(pill).toHaveFocus();
   });
 
   it("keeps the Hermes and Telegram status hooks, showing the Hermes dot only when it is not reachable", async () => {
@@ -139,7 +147,7 @@ describe("Connections in the HUD", () => {
   it("does not poll in tests", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetch = open();
-    await screen.findByRole("button", { name: /^MCP: Error/ });
+    await screen.findByRole("button", { name: "Adspirer: Error" });
     const calls = () => fetch.fn.mock.calls.filter(([u]) => String(u) === API.connections).length;
     expect(calls()).toBe(1);
     await act(async () => {
