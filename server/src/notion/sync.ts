@@ -10,6 +10,9 @@ type Json = Record<string, unknown>;
 
 const STATUS: Record<MeetingStatus, string> = {
   live: "Live",
+  drafting: "Drafting tasks",
+  review: "Review tasks",
+  assigned: "Assigned",
   "in-round": "In round",
   "awaiting-founder": "Awaiting founder",
   voting: "Voting",

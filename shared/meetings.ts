@@ -1,10 +1,11 @@
+import type { LeadershipOutcome } from "./leadership";
 /**
  * Board meetings: a multi-round discussion among board advisors (optionally with the founder),
  * ending in a vote and minutes taken by the CEO's office (the CEO Hermes, a neutral note-taker). Mirrored to Notion.
  */
 
 /** "live": a voice meeting in the live room; it skips the written rounds and goes to the vote when the founder ends it. */
-export type MeetingStatus = "live" | "in-round" | "awaiting-founder" | "voting" | "minutes" | "concluded" | "cancelled";
+export type MeetingStatus = "live" | "drafting" | "review" | "assigned" | "in-round" | "awaiting-founder" | "voting" | "minutes" | "concluded" | "cancelled";
 
 export type RoundKind = "opening" | "discussion" | "vote";
 
@@ -36,8 +37,13 @@ export interface MeetingVote {
   conditions?: string;
 }
 
+/** "board": advisors, ends in a vote. "leadership": the CEO agent, COO and VPs, ends in assigned action items (shared/leadership.ts). */
+export type MeetingKind = "board" | "leadership";
+
 export interface BoardMeeting {
   id: string;
+  /** Absent on meetings created before leadership meetings existed: treat as "board". */
+  kind?: MeetingKind;
   topic: string;
   brief: string;
   members: string[];
@@ -62,6 +68,8 @@ export interface BoardMeeting {
   relatedTaskId?: string;
   /** ElevenLabs conversation ids of the live sessions held for this meeting (a reconnect starts a new one). */
   liveConversationIds?: string[];
+  /** Leadership meetings: the agreed priorities and action items. */
+  outcome?: LeadershipOutcome;
 }
 
 export interface StartMeetingRequest {

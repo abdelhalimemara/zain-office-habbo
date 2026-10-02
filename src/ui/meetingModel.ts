@@ -7,6 +7,9 @@ export const CHAIR = CEO_PROFILE;
 
 export const STATUS_LABEL: Record<MeetingStatus, string> = {
   live: "Live",
+  drafting: "Drafting tasks",
+  review: "Review tasks",
+  assigned: "Assigned",
   "in-round": "In session",
   "awaiting-founder": "Your turn",
   voting: "Voting",
