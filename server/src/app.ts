@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { ReconcilerStatus } from "../../shared/api";
+import type { ConsultationLog } from "./board/consultLog";
+import type { MeetingEngine } from "./board/meetings/engine";
+import { meetingRoutes } from "./board/meetings/routes";
 import type { ConnectionsService } from "./connections/service";
 import { localOnly, parseOriginList, type GuardOptions } from "./guard";
 import { HermesClient } from "./hermes/client";
@@ -24,6 +27,8 @@ export interface AppDeps {
   hires: HireStore;
   ceoWake: CeoWake;
   connections: ConnectionsService;
+  meetings: MeetingEngine;
+  consultations: ConsultationLog;
   /** Board members' private briefs, read only when writing their SOUL. */
   briefs: BriefReader;
   guard?: GuardOptions;
@@ -104,8 +109,12 @@ export function createApp(deps: AppDeps): Hono {
 
   app.post("/api/board/consult", async (c) => {
     const req = parseConsult(await readJsonObject(c));
-    return c.json(await consultBoard(req, { hermes, hires, ceoWake }), 201);
+    const res = await consultBoard(req, { hermes, hires, ceoWake });
+    await deps.consultations.record(req, res).catch((err: unknown) => console.warn(`consultations: could not log (${err instanceof Error ? err.message : "error"})`));
+    return c.json(res, 201);
   });
+
+  meetingRoutes(app, deps.meetings);
 
   app.get("/api/roster", async (c) => {
     const [roster, profiles] = await Promise.all([fullRoster(hires), hermes.listProfiles()]);

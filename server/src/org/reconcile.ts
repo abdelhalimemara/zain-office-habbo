@@ -122,6 +122,8 @@ export interface ReconcilerOptions {
   hires: HireStore;
   /** When set, each run also makes sure every open mandate wakes the CEO on Telegram. */
   ceoWake?: CeoWake;
+  /** Further work for each run (board meetings, consultations); each one reports its own errors. */
+  steps?: readonly (() => Promise<void>)[];
   log?: Log;
   now?: () => number;
   intervalMs?: number;
@@ -167,11 +169,19 @@ export class Reconciler {
       log(`reconcile: run failed (${reason(err)})`);
       return;
     }
-    if (!ceoWake) return;
-    try {
-      await ceoWake.backfill(await hermes.board(), roster);
-    } catch (err) {
-      log(`ceo-wake: backfill failed (${reason(err)})`);
+    if (ceoWake) {
+      try {
+        await ceoWake.backfill(await hermes.board(), roster);
+      } catch (err) {
+        log(`ceo-wake: backfill failed (${reason(err)})`);
+      }
+    }
+    for (const step of this.options.steps ?? []) {
+      try {
+        await step();
+      } catch (err) {
+        log(`reconcile: step failed (${reason(err)})`);
+      }
     }
   }
 }

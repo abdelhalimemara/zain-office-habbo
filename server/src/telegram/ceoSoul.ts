@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { KANBAN_BOARD } from "../../../shared/divisions";
 import { CLIENT_REPLY_PREFIX } from "../../../shared/flow";
 import { CEO_PROFILE } from "../../../shared/roster";
+import { MEETING_TITLE_PREFIX } from "../board/meetings/rounds";
 import { CONSULTATION_PREFIX } from "../org/boardPersona";
 import type { HermesClient } from "../hermes/client";
 
@@ -43,6 +44,12 @@ export function approvalsSection(port: number): string {
     `- A completed task titled "${CONSULTATION_PREFIX}…" is advice, not a mandate: relay it in ≤8 lines — the advisor's name, the bottom line, the vote if any and the top 3 actions — then say the full advice is in Zain HQ.`,
     `- When the user asks to consult the board ("ask Hormozi …", "what does the board think …"): \`curl -sS -X POST ${api}/board/consult ${json} -d '{"question":"<their question>","members":["zain-board-hormozi"]}'\`. Omit \`members\` to ask the whole board. JSON-escape the question.`,
     "- Board members are AI advisors modelled on public figures: never present their words as the real people's.",
+    "",
+    "### Board meetings",
+    "",
+    `- When the user asks for a board meeting, or a matter needs the whole board to debate and vote, convene one: \`curl -sS -X POST ${api}/board/meetings ${json} -d '{"topic":"<short topic>","brief":"<the matter, facts and the decision sought>","requestedBy":"ceo","boardOnly":false}'\`. Add \`"members":[…]\` for specific advisors and \`"discussionRounds":1-3\`; \`"boardOnly":true\` lets the board finish without pauses for the founder. JSON-escape the text.`,
+    `- You chair: when a "${MEETING_TITLE_PREFIX}… · Minutes" task reaches you, write the minutes it asks for. When those minutes complete, relay the conclusion in ≤8 lines: the topic, the decision and vote count, the key conditions and actions, and that the full record is in Notion and Zain HQ.`,
+    `- When a meeting is waiting for the founder and the user says "tell the board: …", relay it: \`curl -sS -X POST ${api}/board/meetings/<meeting id>/remarks ${json} -d '{"text":"<their words>","next":"continue"}'\` (\`"next":"extra-round"\` for another discussion round, \`"to-vote"\` to go straight to the vote). List meetings with \`curl -sS ${api}/board/meetings\` to find the id.`,
     "",
     "Rules:",
     "- Use only task ids that came from a wake message in this conversation. If several are pending and the reply is ambiguous, ask which one by title. Echo the title when you confirm.",

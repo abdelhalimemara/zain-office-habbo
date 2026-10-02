@@ -1,4 +1,7 @@
 import { createApp } from "../../server/src/app";
+import { ConsultationLog, type ConsultationRecord, type ConsultationSink } from "../../server/src/board/consultLog";
+import { MeetingEngine, type MeetingSink, type StoredMeeting } from "../../server/src/board/meetings/engine";
+import { memoryRecordStore, type RecordStore } from "../../server/src/board/recordStore";
 import type { GuardOptions } from "../../server/src/guard";
 import { fileBriefs, type BriefReader } from "../../server/src/org/privateBriefs";
 import { ConnectionsService, type ConnectionsOptions } from "../../server/src/connections/service";
@@ -148,6 +151,15 @@ export function stubConnections(hermes: HermesClient, ceoWake: CeoWake, override
   });
 }
 
+/** Meetings and consultations kept in memory, with no Notion sink. */
+export function stubBoardRoom(hermes: HermesClient) {
+  const ceoWake = new CeoWake({ hermes, execFile: mockExec().execFile, log: () => undefined });
+  return {
+    meetings: new MeetingEngine({ hermes, hires: memoryHireStore(), ceoWake, store: memoryRecordStore<StoredMeeting>(), log: () => undefined }),
+    consultations: new ConsultationLog({ hermes, store: memoryRecordStore<ConsultationRecord>(), log: () => undefined }),
+  };
+}
+
 /** Tests never read the real `.zain/board` briefs: this root has none. */
 export const NO_BRIEFS = fileBriefs("/nonexistent/zain-test-root");
 
@@ -164,6 +176,10 @@ export function setup(
     connections?: (hermes: HermesClient, ceoWake: CeoWake) => ConnectionsService;
     teams?: TeamStore;
     gh?: GhCheck;
+    meetingStore?: RecordStore<StoredMeeting>;
+    consultationStore?: RecordStore<ConsultationRecord>;
+    sink?: MeetingSink & ConsultationSink;
+    now?: () => number;
   } = {},
 ) {
   const hermesFetch = mockFetch({ ...hermesBase, ...routes });
@@ -177,7 +193,24 @@ export function setup(
   const connections = options.connections?.(hermes, ceoWake) ?? stubConnections(hermes, ceoWake);
   const teams = options.teams ?? memoryTeamStore();
   const gh = options.gh ?? { execFile: mockExec(() => true).execFile, ghBin: "/opt/gh" };
-  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh });
+  const meetingStore = options.meetingStore ?? memoryRecordStore<StoredMeeting>();
+  const consultationStore = options.consultationStore ?? memoryRecordStore<ConsultationRecord>();
+  const quiet = () => undefined;
+  const meetings = new MeetingEngine({
+    hermes,
+    hires,
+    ceoWake,
+    store: meetingStore,
+    sink: options.sink,
+    now: options.now,
+    log: quiet,
+    newId: (() => {
+      let n = 0;
+      return () => `mtg_${String(++n).padStart(10, "0")}`;
+    })(),
+  });
+  const consultations = new ConsultationLog({ hermes, store: consultationStore, sink: options.sink, now: options.now, log: quiet });
+  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
@@ -188,5 +221,22 @@ export function setup(
       },
       body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
     });
-  return { app, send, hermes, headcount, hires, hermesFetch, gh: githubCalls, exec, ceoWake, briefs, connections, teams };
+  return {
+    app,
+    send,
+    hermes,
+    headcount,
+    hires,
+    hermesFetch,
+    gh: githubCalls,
+    exec,
+    ceoWake,
+    briefs,
+    connections,
+    teams,
+    meetings,
+    meetingStore,
+    consultations,
+    consultationStore,
+  };
 }

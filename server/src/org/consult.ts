@@ -37,20 +37,32 @@ export function consultationBody({ question, relatedTaskId }: BoardConsultReques
   return [question, ...(relatedTaskId ? ["", `Related task: ${relatedTaskId}`] : []), "", "Answer per your board charter."].join("\n");
 }
 
+/**
+ * The board seats to address: the requested ones (each must be a hired seat), or every hired
+ * seat in board order. Hermes runs profiles, so a vacant seat cannot be asked.
+ */
+export async function hiredBoardMembers(
+  requested: readonly string[] | undefined,
+  deps: { hermes: HermesClient; hires: HireStore },
+): Promise<string[]> {
+  const [roster, profiles] = await Promise.all([fullRoster(deps.hires), deps.hermes.listProfiles()]);
+  const seats = boardMembers(roster).map((a) => a.profile);
+  const hired = new Set(profiles.map((p) => p.name));
+  const unknown = (requested ?? []).filter((m) => !seats.includes(m));
+  if (unknown.length) throw badRequest(`not board members: ${unknown.join(", ")}`);
+  const members = requested ? [...requested] : seats.filter((p) => hired.has(p));
+  const vacant = members.filter((m) => !hired.has(m));
+  if (vacant.length) throw new HttpError(409, `not hired yet: ${vacant.join(", ")}`);
+  if (members.length === 0) throw new HttpError(409, "no board members are hired yet");
+  return members;
+}
+
 /** One consultation task per advisor; only hired advisors can be asked, since Hermes runs profiles. */
 export async function consultBoard(
   req: BoardConsultRequest,
   deps: { hermes: HermesClient; hires: HireStore; ceoWake: CeoWake },
 ): Promise<BoardConsultResponse> {
-  const [roster, profiles] = await Promise.all([fullRoster(deps.hires), deps.hermes.listProfiles()]);
-  const seats = boardMembers(roster).map((a) => a.profile);
-  const hired = new Set(profiles.map((p) => p.name));
-  const unknown = (req.members ?? []).filter((m) => !seats.includes(m));
-  if (unknown.length) throw badRequest(`not board members: ${unknown.join(", ")}`);
-  const members = req.members ?? seats.filter((p) => hired.has(p));
-  const vacant = members.filter((m) => !hired.has(m));
-  if (vacant.length) throw new HttpError(409, `not hired yet: ${vacant.join(", ")}`);
-  if (members.length === 0) throw new HttpError(409, "no board members are hired yet");
+  const members = await hiredBoardMembers(req.members, deps);
 
   const title = consultationTitle(req.question);
   const body = consultationBody(req);
