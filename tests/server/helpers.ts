@@ -12,8 +12,12 @@ import { memoryHireStore, type HireStore } from "../../server/src/org/hireStore"
 import { memoryTeamStore, type TeamStore } from "../../server/src/org/teamStore";
 import type { GhCheck } from "../../server/src/org/techTeams";
 import type { KanbanTask } from "../../shared/hermes";
+import type { BoardMeeting } from "../../shared/meetings";
 import { ROSTER } from "../../shared/roster";
 import { SKILL_SOURCES, skillSourceFor } from "../../shared/skillSources";
+import { memoryVoiceStore } from "../../server/src/voice/assignments";
+import { ElevenLabsClient } from "../../server/src/voice/elevenlabs";
+import { VoiceService } from "../../server/src/voice/service";
 
 export const TOKEN = "tok-secret-123";
 export const KANBAN = "/api/plugins/kanban";
@@ -151,12 +155,21 @@ export function stubConnections(hermes: HermesClient, ceoWake: CeoWake, override
   });
 }
 
+/** Voices with no ElevenLabs key and no network; nothing is read from or written to a real home. */
+export function stubVoice(): VoiceService {
+  const client = new ElevenLabsClient(async () => null, async () => {
+    throw new TypeError("no network in tests");
+  });
+  return new VoiceService({ root: "/nonexistent/zain-test-root", client, store: memoryVoiceStore(), log: () => undefined });
+}
+
 /** Meetings and consultations kept in memory, with no Notion sink. */
 export function stubBoardRoom(hermes: HermesClient) {
   const ceoWake = new CeoWake({ hermes, execFile: mockExec().execFile, log: () => undefined });
   return {
     meetings: new MeetingEngine({ hermes, hires: memoryHireStore(), ceoWake, store: memoryRecordStore<StoredMeeting>(), log: () => undefined }),
     consultations: new ConsultationLog({ hermes, store: memoryRecordStore<ConsultationRecord>(), log: () => undefined }),
+    voice: stubVoice(),
   };
 }
 
@@ -180,6 +193,8 @@ export function setup(
     consultationStore?: RecordStore<ConsultationRecord>;
     sink?: MeetingSink & ConsultationSink;
     now?: () => number;
+    voice?: VoiceService;
+    onTurns?: (meeting: BoardMeeting, from: number) => void;
   } = {},
 ) {
   const hermesFetch = mockFetch({ ...hermesBase, ...routes });
@@ -204,13 +219,15 @@ export function setup(
     sink: options.sink,
     now: options.now,
     log: quiet,
+    onTurns: options.onTurns,
     newId: (() => {
       let n = 0;
       return () => `mtg_${String(++n).padStart(10, "0")}`;
     })(),
   });
   const consultations = new ConsultationLog({ hermes, store: consultationStore, sink: options.sink, now: options.now, log: quiet });
-  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations });
+  const voice = options.voice ?? stubVoice();
+  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations, voice });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
@@ -238,5 +255,6 @@ export function setup(
     meetingStore,
     consultations,
     consultationStore,
+    voice,
   };
 }

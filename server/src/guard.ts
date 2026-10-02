@@ -1,8 +1,12 @@
 import type { MiddlewareHandler } from "hono";
+import { VOICE_API } from "../../shared/voice";
 import { HttpError } from "./http";
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
 const JSON_TYPE = /^application\/json\s*(;.*)?$/i;
+const AUDIO_TYPE = /^audio\/[a-z0-9.+-]+\s*(;.*)?$/i;
+/** Writes that take a raw recording instead of JSON; audio/* is not a CORS-simple type either. */
+const AUDIO_PATHS: ReadonlySet<string> = new Set([VOICE_API.transcribe]);
 export const VITE_PORT = 5173;
 
 export interface GuardOptions {
@@ -42,7 +46,10 @@ export function localOnly(options: GuardOptions): MiddlewareHandler {
   return async (c, next) => {
     if (!LOCAL_HOSTS.has(hostname(c.req.header("host") ?? ""))) throw new HttpError(403, "forbidden host");
     if (c.req.method !== "GET" && c.req.method !== "HEAD") {
-      if (!JSON_TYPE.test(c.req.header("content-type") ?? "")) {
+      const contentType = c.req.header("content-type") ?? "";
+      if (AUDIO_PATHS.has(c.req.path)) {
+        if (!AUDIO_TYPE.test(contentType)) throw new HttpError(415, "Content-Type must be an audio/* type");
+      } else if (!JSON_TYPE.test(contentType)) {
         throw new HttpError(415, "Content-Type must be application/json");
       }
       const origin = c.req.header("origin");
