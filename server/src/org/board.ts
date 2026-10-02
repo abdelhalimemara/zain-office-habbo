@@ -53,12 +53,22 @@ export async function boardWithProgress(hermes: HermesClient, hires: HireStore):
   };
 }
 
-export async function mandateSubtasks(
+/**
+ * The board is only read when the detail needs it: a mandate's subtasks, or linked subtasks the
+ * detail's own link rows no longer name (unlinked or archived since).
+ */
+export async function detailContext(
   detail: HermesTaskDetail,
   roster: readonly RosterAgent[],
   hermes: HermesClient,
-): Promise<Subtask[]> {
-  if (!isMandate(detail.task, roster) || !(detail.links?.parents ?? []).length) return [];
-  const boardTasks = await hermes.board().then(allTasks, () => []);
-  return subtasksOf(detail, boardTasks);
+): Promise<{ subtasks: Subtask[]; titles: Map<string, string> }> {
+  const mandate = isMandate(detail.task, roster) && (detail.links?.parents ?? []).length > 0;
+  const named = new Set((detail.link_tasks ?? []).map((t) => t.id));
+  const unnamed = (detail.events ?? []).some((e) => e.kind === "linked" && !named.has(String(e.payload?.parent ?? "")));
+  if (!mandate && !unnamed) return { subtasks: [], titles: new Map() };
+  const boardTasks = await hermes.board().then(allTasks, () => [] as KanbanTask[]);
+  return {
+    subtasks: mandate ? subtasksOf(detail, boardTasks) : [],
+    titles: new Map(boardTasks.map((t) => [t.id, t.title])),
+  };
 }

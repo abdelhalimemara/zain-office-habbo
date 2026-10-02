@@ -37,6 +37,17 @@ export interface HermesTaskDetail {
   links: { parents: string[]; children: string[] };
   /** One row per linked task (parents and children); archived/foreign rows may be missing. */
   link_tasks?: { id: string; title: string; status: TaskStatus }[];
+  /** The task's event log (kanban_db.list_events), oldest first. */
+  events?: HermesEvent[];
+}
+
+export interface HermesEvent {
+  id: number;
+  task_id: string;
+  kind: string;
+  payload: Record<string, unknown> | null;
+  created_at: number;
+  run_id: number | null;
 }
 
 export interface HermesConfig {
