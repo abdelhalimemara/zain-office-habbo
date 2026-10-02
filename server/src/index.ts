@@ -39,7 +39,7 @@ const meetings = new MeetingEngine({
   sink,
   onTurns: (meeting, from) => voice.prefetch(meeting, from),
 });
-const live = new LiveService({ client: labs, agent: new BoardRoomAgent(labs, fileAgentStore(root)), voice, meetings, souls: fileSouls() });
+const live = new LiveService({ client: labs, agent: new BoardRoomAgent(labs, fileAgentStore(root)), voice, meetings, souls: fileSouls(), briefs: fileBriefs(root) });
 const consultations = new ConsultationLog({
   hermes: clients.hermes,
   store: fileRecordStore(join(root, ".zain", "consultations.json"), isConsultationRecord),

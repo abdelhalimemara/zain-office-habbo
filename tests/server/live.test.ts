@@ -13,6 +13,7 @@ import { ElevenLabsClient } from "../../server/src/voice/elevenlabs";
 import { LiveService } from "../../server/src/voice/live";
 import { BoardRoomAgent, fileAgentStore, speakerTag } from "../../server/src/voice/liveAgent";
 import { condenseSoul, fileSouls, hasAgenda } from "../../server/src/voice/livePrompt";
+import { fileBriefs } from "../../server/src/org/privateBriefs";
 import { VoiceService } from "../../server/src/voice/service";
 import { fakeKanban } from "./fakeKanban";
 import { KANBAN, json, setup } from "./helpers";
@@ -24,7 +25,7 @@ const OWN_VOICE = "OwnVoice0123456789ab";
 const AGENT = "agent_boardroom00001";
 const CONV = "conv_first0000000001";
 const SIGNED = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=agent_boardroom00001&conversation_signature=sig";
-const PRIVATE_BRIEF = "Hormozi brief: push for price rises and guarantee-led offers.";
+const PRIVATE_BRIEF = "BRIEFMARKER-ALPHA: a confidential line from the private brief.";
 
 interface LabsCall {
   method: string;
@@ -112,7 +113,7 @@ function liveRoom(opts: { key?: string | null } = {}) {
   const s = setup(kanban.routes, {
     voice,
     now: () => 1_790_000_000,
-    live: (meetings, v) => new LiveService({ client, agent, voice: v, meetings, souls: fileSouls(home), sleep: async (ms) => void sleeps.push(ms) }),
+    live: (meetings, v) => new LiveService({ client, agent, voice: v, meetings, souls: fileSouls(home), briefs: fileBriefs(root), sleep: async (ms) => void sleeps.push(ms) }),
   });
   const start = async (body: Record<string, unknown> = {}) => {
     const res = await s.send("POST", "/api/board/meetings", { topic: "Cairo office", brief: "Should we open one in 2027?", mode: "voice", ...body });
@@ -190,9 +191,10 @@ describe("a live session", () => {
     expect(overrides.agent.firstMessage).toBe("Welcome, Abdelhalim. We're here on Cairo office. The floor is open: who wants to start?");
     expect(prompt).toContain("Cairo office");
     expect(prompt).toContain("Should we open one in 2027?");
-    expect(prompt).toContain(PRIVATE_BRIEF);
-    expect(prompt).toContain("<Hormozi>: Alex Hormozi.");
-    expect(prompt).toContain("<Buffett>: Warren Buffett. Business finance");
+    expect(prompt).not.toContain("BRIEFMARKER");
+    expect(prompt).toContain("<Hormozi>: Alex Hormozi. Seat: Offers, pricing");
+    expect(prompt).toContain("Grand Slam Offers");
+    expect(prompt).toContain("<Buffett>: Warren Buffett. Seat: Business finance");
     expect(prompt).toContain("open-floor discussion");
     expect(prompt).toMatch(/Wrap every line in its speaker's tag/);
     expect(prompt).toMatch(/no stage directions/);
@@ -363,13 +365,47 @@ describe("live prompt parts", () => {
     expect(hasAgenda("جدول الأعمال: الميزانية")).toBe(true);
   });
 
-  it("condenses a SOUL to the persona, without the kanban procedure, within the cap", () => {
+  it("condenses a SOUL to the seat and lens, without the brief or the kanban procedure, within the cap", () => {
     const buffett = BOARD_MEMBERS.find((m) => m.profile === BUFFETT)!;
-    const text = condenseSoul(boardSoul(buffett, `Brief.\n\n## Tone\nFolksy. ${"Long words. ".repeat(400)}`));
+    const text = condenseSoul(boardSoul(buffett, `BRIEFMARKER-BETA.\n\n## Tone\nBRIEFMARKER-GAMMA ${"long words ".repeat(400)}`));
     expect(text.startsWith("Seat: Business finance")).toBe(true);
-    expect(text).toContain("Tone: Folksy.");
-    expect(text).not.toMatch(/kanban|Hermes profile|Hard limits|You are Warren/);
-    expect(text.length).toBeLessThanOrEqual(1800);
+    expect(text).toContain("Pricing power and moats.");
+    expect(text).not.toMatch(/BRIEFMARKER|kanban|Hermes profile|Hard limits|You are Warren|long words/);
+    expect(condenseSoul(boardSoul(BOARD_MEMBERS[0]!), null, 200).length).toBeLessThanOrEqual(200);
+  });
+
+  it("drops any persona line that repeats the private brief file, even outside the brief section", () => {
+    const leaked = "Our private margin target on Cairo retainers is forty two percent.";
+    const soul = [
+      "# Board · Test",
+      "Seat: Offers. Your Hermes profile is `zain-board-hormozi`.",
+      "## Your brief",
+      "BRIEFMARKER-DELTA",
+      "### Private notes",
+      "BRIEFMARKER-EPSILON",
+      "## Your lens",
+      "- Value equation first.",
+      `- ${leaked.toUpperCase()}`,
+      "- Part of it: *our private margin target* on cairo retainers is forty two percent, as noted.",
+    ].join("\n");
+    const brief = `Intro BRIEFMARKER-DELTA.\n\n${leaked}\n\n## Private notes\nBRIEFMARKER-EPSILON`;
+    const text = condenseSoul(soul, brief);
+    expect(text).toBe("Seat: Offers. Value equation first.");
+  });
+
+  it("keeps the private brief file's text out of a real session prompt", async () => {
+    const leaked = "BRIEFMARKER-ZETA a paragraph only the private brief file should hold.";
+    const hormozi = BOARD_MEMBERS.find((m) => m.profile === HORMOZI)!;
+    const soul = boardSoul({ ...hormozi, lens: [...hormozi.lens, leaked] }, `## Notes\n${PRIVATE_BRIEF}`);
+    await writeFile(join(home, "profiles", HORMOZI, "SOUL.md"), soul);
+    await mkdir(join(root, ".zain", "board"), { recursive: true });
+    await writeFile(join(root, ".zain", "board", `${HORMOZI}.md`), `${PRIVATE_BRIEF}\n\n${leaked}\n`);
+    const r = liveRoom();
+    const { meeting } = await r.start();
+    const res = await r.session(meeting.id);
+    const sent = JSON.stringify(await res.json()) + JSON.stringify(r.labs.calls.map((c) => c.json ?? null));
+    expect(sent).not.toContain("BRIEFMARKER");
+    expect(sent).toContain("Grand Slam Offers");
   });
 
   it("reads no SOUL for a profile that is not a plain name", async () => {

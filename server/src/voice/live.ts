@@ -3,6 +3,7 @@ import { splitBySpeaker, type LiveSessionResponse, type LiveSpeaker } from "../.
 import type { MeetingEngine } from "../board/meetings/engine";
 import { FOUNDER } from "../board/meetings/rounds";
 import { HttpError, badRequest } from "../http";
+import type { BriefReader } from "../org/privateBriefs";
 import type { ElevenLabsClient, LabsConversation } from "./elevenlabs";
 import type { BoardRoomAgent } from "./liveAgent";
 import { liveFirstMessage, livePrompt, liveSpeakers, type SoulReader } from "./livePrompt";
@@ -57,6 +58,8 @@ export interface LiveServiceOptions {
   voice: VoiceService;
   meetings: MeetingEngine;
   souls: SoulReader;
+  /** Members' private briefs, read only so that none of their text reaches the prompt. */
+  briefs: BriefReader;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -81,10 +84,12 @@ export class LiveService {
     const agentId = await this.options.agent.ensure(voices);
     const signedUrl = await this.options.client.signedUrl(agentId);
     const speakers = liveSpeakers(meeting);
-    const souls = Object.fromEntries(await Promise.all(meeting.members.map(async (p) => [p, await this.options.souls(p)] as const)));
+    const read = (reader: (p: string) => Promise<string | null>) =>
+      Promise.all(meeting.members.map(async (p) => [p, await reader(p).catch(() => null)] as const)).then(Object.fromEntries);
+    const [souls, briefs] = await Promise.all([read(this.options.souls), read(this.options.briefs)]);
     return {
       signedUrl,
-      overrides: { agent: { prompt: { prompt: livePrompt({ meeting, speakers, souls }) }, firstMessage: liveFirstMessage(meeting), language: "en" } },
+      overrides: { agent: { prompt: { prompt: livePrompt({ meeting, speakers, souls, briefs }) }, firstMessage: liveFirstMessage(meeting), language: "en" } },
       speakers,
     };
   }

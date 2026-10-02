@@ -5,7 +5,6 @@ import type { BoardMeeting, MeetingTurn } from "../../../shared/meetings";
 import { CHAIR_PROFILE, type LiveSpeaker } from "../../../shared/voice";
 import { hermesHome } from "../clientChannels/hermesPaths";
 import { FOUNDER, speakerName } from "../board/meetings/rounds";
-import { BRIEF_PRECEDENCE } from "../org/boardPersona";
 import { speakerTag } from "./liveAgent";
 import { speechText } from "./speech";
 
@@ -38,30 +37,54 @@ export function liveSpeakers(meeting: Pick<BoardMeeting, "members">): LiveSpeake
     .filter((s) => s.tag);
 }
 
-/** Standard SOUL sections about kanban procedure and conduct rather than who the member is (boardSoul). */
-const PROCEDURE_SECTIONS = /^(zain group|how work reaches you|how to answer|conduct|board meetings|hard limits|persona integrity)\b/i;
-
-/** A SOUL condensed to the member's seat, brief and lens, as plain text of a few hundred words. */
-export function condenseSoul(soul: string, max = PERSONA_MAX_CHARS): string {
-  const kept: string[] = [];
-  let keep = true;
-  for (const line of soul.replace(/\r/g, "").split("\n")) {
-    const heading = /^##\s+(.*)$/.exec(line);
-    if (heading) {
-      keep = !PROCEDURE_SECTIONS.test(heading[1]!.trim());
-      if (keep && !/^your (brief|lens)$/i.test(heading[1]!.trim())) kept.push(`${heading[1]!.trim()}:`);
-      continue;
-    }
-    // The title, the identity line and the brief-precedence note repeat what the prompt already says.
-    if (/^#\s/.test(line) || /^You are .* on the Zain Group board/.test(line) || line.trim() === BRIEF_PRECEDENCE) continue;
-    if (keep) kept.push(line.replace(/\s*Your Hermes profile is `[^`]*`\.?/, ""));
-  }
-  return speechText(kept.join("\n"), max).replace(/\s*\n\s*/g, " ");
+/** Text compared for the private-brief guard: no markdown, punctuation, case or spacing differences. */
+function normalized(text: string): string {
+  return speechText(text, Number.MAX_SAFE_INTEGER).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-function fallbackPersona(profile: string): string {
+/** Paragraphs and lines of a private brief, normalized; parts too short to identify anything are left out. */
+function briefParts(brief: string): string[] {
+  const parts = brief.replace(/\r/g, "").split(/\n\s*\n|\n/).map(normalized);
+  return parts.filter((p) => p.length >= 20);
+}
+
+/** True when a persona line repeats the private brief, in either direction. */
+function fromBrief(line: string, whole: string, parts: readonly string[]): boolean {
+  const n = normalized(line);
+  if (!n) return false;
+  return (n.length >= 8 && whole.includes(n)) || parts.some((p) => n.includes(p));
+}
+
+/**
+ * A SOUL condensed to the member's public persona: the seat line and the lens section, nothing else.
+ * The private brief that boardSoul embeds (and everything else) is left out, and as a second guard any line
+ * that repeats `brief` (the member's `.zain/board/<profile>.md`, when present) is dropped. No brief text is ever sent.
+ */
+export function condenseSoul(soul: string, brief: string | null = null, max = PERSONA_MAX_CHARS): string {
+  const kept: string[] = [];
+  let section: string | null = null;
+  for (const line of soul.replace(/\r/g, "").split("\n")) {
+    const heading = /^#{2,6}\s+(.*)$/.exec(line);
+    if (heading) {
+      section = heading[1]!.trim().toLowerCase();
+      continue;
+    }
+    if (section === null && /^Seat:/.test(line)) kept.push(line.replace(/\s*Your Hermes profile is `[^`]*`\.?/, ""));
+    else if (section === "your lens") kept.push(line);
+  }
+  return guarded(kept, brief, max);
+}
+
+function guarded(lines: readonly string[], brief: string | null, max: number): string {
+  const whole = brief ? normalized(brief) : "";
+  const parts = brief ? briefParts(brief) : [];
+  const safe = brief ? lines.filter((l) => !fromBrief(l, whole, parts)) : lines;
+  return speechText(safe.join("\n"), max).replace(/\s*\n\s*/g, " ");
+}
+
+function fallbackPersona(profile: string, brief: string | null): string {
   const m = findBoardMember(profile);
-  return m ? `${m.seat}. ${m.lens.join(" ")}` : "";
+  return m ? guarded([`Seat: ${m.seat}.`, ...m.lens], brief, PERSONA_MAX_CHARS) : "";
 }
 
 /** True when the brief sets out items to take in order: numbered or bulleted lines, or an explicit agenda. */
@@ -94,15 +117,18 @@ export interface LivePromptInput {
   speakers: readonly LiveSpeaker[];
   /** Raw SOUL.md per member profile; null when missing. */
   souls: Record<string, string | null>;
+  /** Each member's private brief, only to keep it out of the prompt; null when missing. */
+  briefs?: Record<string, string | null>;
 }
 
-export function livePrompt({ meeting, speakers, souls }: LivePromptInput): string {
+export function livePrompt({ meeting, speakers, souls, briefs = {} }: LivePromptInput): string {
   const members = speakers.filter((s) => s.profile !== CHAIR_PROFILE);
   const roster = [
     `- <Chair>: the CEO of Zain Group, who chairs the meeting. Keeps it moving, brings in quiet members, and sums up briefly when asked. Says little.`,
     ...members.map((s) => {
       const soul = souls[s.profile];
-      const persona = (soul ? condenseSoul(soul) : "") || fallbackPersona(s.profile);
+      const brief = briefs[s.profile] ?? null;
+      const persona = (soul ? condenseSoul(soul, brief) : "") || fallbackPersona(s.profile, brief);
       return `- <${s.tag}>: ${s.name}. ${persona}`;
     }),
   ];
