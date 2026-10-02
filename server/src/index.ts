@@ -18,7 +18,11 @@ import { fileTeamStore } from "./org/teamStore";
 import { fileVoiceStore } from "./voice/assignments";
 import { ElevenLabsClient, envApiKey } from "./voice/elevenlabs";
 import { LiveService } from "./voice/live";
-import { BoardRoomAgent, fileAgentStore } from "./voice/liveAgent";
+import { BoardRoomAgent, LEADERSHIP_ROOM, fileAgentStore } from "./voice/liveAgent";
+import { weeklyPrioritiesPath } from "./leadership/context";
+import { execSouls } from "./leadership/prompt";
+import { LeadershipService } from "./leadership/service";
+import { allTeams } from "./org/teamStore";
 import { fileSouls } from "./voice/livePrompt";
 import { VoiceService } from "./voice/service";
 
@@ -46,7 +50,28 @@ const meetings = new MeetingEngine({
   dashboard,
   onTurns: (meeting, from) => voice.prefetch(meeting, from),
 });
-const live = new LiveService({ client: labs, agent: new BoardRoomAgent(labs, fileAgentStore(root)), voice, meetings, souls: fileSouls(), briefs: fileBriefs(root), memory, dashboard });
+const teams = fileTeamStore(root);
+const leadership = new LeadershipService({
+  meetings,
+  hermes: clients.hermes,
+  hires,
+  ceoWake: clients.ceoWake,
+  teams: () => allTeams(teams),
+  souls: execSouls(),
+  dashboard,
+  prioritiesPath: weeklyPrioritiesPath(),
+});
+const live = new LiveService({
+  client: labs,
+  agent: new BoardRoomAgent(labs, fileAgentStore(root)),
+  leadership: { agent: new BoardRoomAgent(labs, fileAgentStore(root, LEADERSHIP_ROOM.key), console.warn, LEADERSHIP_ROOM), prompt: (m) => leadership.prompt(m) },
+  voice,
+  meetings,
+  souls: fileSouls(),
+  briefs: fileBriefs(root),
+  memory,
+  dashboard,
+});
 const consultations = new ConsultationLog({
   hermes: clients.hermes,
   store: fileRecordStore(join(root, ".zain", "consultations.json"), isConsultationRecord),
@@ -61,7 +86,8 @@ const reconciler = new Reconciler({
 const app = createApp({
   ...clients,
   hires,
-  teams: fileTeamStore(process.cwd()),
+  teams,
+  leadership,
   dashboard,
   briefs: fileBriefs(process.cwd()),
   guard: { ...guardOptions(port, process.env), access: remoteAccess() },

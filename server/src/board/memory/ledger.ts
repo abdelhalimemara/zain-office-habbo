@@ -39,7 +39,7 @@ function gist(text: string, max: number): string {
 
 export function boardLedger(meetings: readonly BoardMeeting[], max = LEDGER_MEETINGS): LedgerEntry[] {
   return meetings
-    .filter((m) => m.status === "concluded")
+    .filter((m) => m.status === "concluded" && m.kind !== "leadership")
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, max)
     .map((m) => ({

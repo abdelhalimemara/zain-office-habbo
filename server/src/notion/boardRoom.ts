@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { BOARD_MEMBERS } from "../../../shared/board";
+import { SEATS } from "../leadership/seats";
 import { NotionClient, paragraph } from "./client";
 
 export const PARENT_PAGE_ID = "338448a0-4ab7-80e4-9258-c60049e47991";
@@ -13,7 +14,22 @@ export interface BoardRoomIds {
   dataSourceId: string;
 }
 
-export const STATUS_OPTIONS = ["Live", "In round", "Awaiting founder", "Voting", "Minutes", "Concluded", "Cancelled", "Awaiting answers", "Answered"];
+export const STATUS_OPTIONS = [
+  "Live",
+  "In round",
+  "Awaiting founder",
+  "Voting",
+  "Minutes",
+  "Concluded",
+  "Cancelled",
+  "Awaiting answers",
+  "Answered",
+  "Drafting tasks",
+  "Review tasks",
+  "Assigned",
+];
+/** Board meetings are "Meeting", leadership (VP) meetings "Leadership". */
+export const TYPE_OPTIONS = ["Meeting", "Consultation", "Leadership"];
 export const DECISION_OPTIONS = ["Approved", "Approved with conditions", "Rejected", "No decision"];
 export const REQUESTED_BY_OPTIONS = ["HQ", "CEO", "Board"];
 
@@ -23,11 +39,11 @@ const select = (names: readonly string[]) => ({ select: { options: names.map((na
 export function databaseProperties(): Record<string, unknown> {
   return {
     Name: { title: {} },
-    Type: select(["Meeting", "Consultation"]),
+    Type: select(TYPE_OPTIONS),
     Status: select(STATUS_OPTIONS),
     Date: { date: {} },
     "Requested by": select(REQUESTED_BY_OPTIONS),
-    Members: { multi_select: { options: BOARD_MEMBERS.map((m) => ({ name: m.name })) } },
+    Members: { multi_select: { options: [...BOARD_MEMBERS.map((m) => m.name), ...Object.values(SEATS).map((s) => s.name)].map((name) => ({ name })) } },
     Decision: select(DECISION_OPTIONS),
     Votes: { rich_text: {} },
     Conclusion: { rich_text: {} },

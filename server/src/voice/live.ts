@@ -6,6 +6,7 @@ import type { DashboardReader } from "../board/memory/dashboard";
 import type { MeetingEngine } from "../board/meetings/engine";
 import { FOUNDER } from "../board/meetings/rounds";
 import { HttpError, badRequest } from "../http";
+import { isLeadership, leadershipSpeakers } from "../leadership/seats";
 import type { BriefReader } from "../org/privateBriefs";
 import type { ElevenLabsClient, LabsConversation } from "./elevenlabs";
 import type { BoardRoomAgent } from "./liveAgent";
@@ -67,6 +68,8 @@ export interface LiveServiceOptions {
   memory?: MemoryStore;
   /** The company dashboard, shown to the room after the privacy guard. */
   dashboard?: DashboardReader;
+  /** The leadership (VP) room: its own agent, and the prompt for a meeting; leadership sessions answer 503 without it. */
+  leadership?: { agent: BoardRoomAgent; prompt: (meeting: BoardMeeting) => Promise<string> };
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -91,6 +94,7 @@ export class LiveService {
 
   async session(meetingId: string): Promise<LiveSessionResponse> {
     const meeting = live(await this.options.meetings.get(meetingId));
+    if (isLeadership(meeting)) return this.leadershipSession(meeting);
     const { voices } = await this.options.voice.voices();
     const agentId = await this.options.agent.ensure(voices);
     const signedUrl = await this.options.client.signedUrl(agentId);
@@ -113,30 +117,48 @@ export class LiveService {
     };
   }
 
-  /** Records a session's transcript once per conversation id; `final` moves the meeting to the vote. */
+  private async leadershipSession(meeting: BoardMeeting): Promise<LiveSessionResponse> {
+    const room = this.leadershipRoom();
+    const { voices } = await this.options.voice.voices();
+    const agentId = await room.agent.ensure(voices);
+    const signedUrl = await this.options.client.signedUrl(agentId);
+    const prompt = await room.prompt(meeting);
+    return { signedUrl, overrides: { agent: { prompt: { prompt }, firstMessage: LIVE_FIRST_MESSAGE, language: "en" } }, speakers: leadershipSpeakers(meeting) };
+  }
+
+  private leadershipRoom(): NonNullable<LiveServiceOptions["leadership"]> {
+    if (!this.options.leadership) throw new HttpError(503, "the leadership room is not set up on this server");
+    return this.options.leadership;
+  }
+
+  /** Records a session's transcript once per conversation id; `final` moves the meeting on (board: the vote; leadership: drafting the actions). */
   end(meetingId: string, { conversationId, final }: EndLive): Promise<BoardMeeting> {
     return this.locked(meetingId, async () => {
       const meeting = await this.options.meetings.get(meetingId);
       if (meeting.mode !== "voice") throw new HttpError(409, `meeting ${meetingId} is not a voice meeting`);
       const known = meeting.liveConversationIds?.includes(conversationId) ?? false;
       if (known || meeting.status !== "live") return this.options.meetings.recordLive(meetingId, conversationId, [], final);
-      const conversation = await this.finished(conversationId);
-      const turns = transcriptTurns(conversation, liveSpeakers(meeting), meeting.currentRound, this.now());
+      const leadership = isLeadership(meeting);
+      const conversation = await this.finished(conversationId, leadership ? this.leadershipRoom().agent : this.options.agent);
+      const speakers = leadership ? leadershipSpeakers(meeting) : liveSpeakers(meeting);
+      const turns = transcriptTurns(conversation, speakers, meeting.currentRound, this.now());
       return this.options.meetings.recordLive(meetingId, conversationId, turns, final);
     });
   }
 
-  /** Pushes changed voice assignments to the agent, if it exists. */
+  /** Pushes changed voice assignments to the room agents that exist. */
   async refreshVoices(): Promise<void> {
-    await this.options.agent.refresh((await this.options.voice.voices()).voices);
+    const { voices } = await this.options.voice.voices();
+    await this.options.agent.refresh(voices);
+    await this.options.leadership?.agent.refresh(voices);
   }
 
   /** The conversation once the call has ended; it may still be "processing", which already has the full transcript. */
-  private async finished(conversationId: string): Promise<LabsConversation> {
-    const agentId = await this.options.agent.agentId();
+  private async finished(conversationId: string, agent: BoardRoomAgent): Promise<LabsConversation> {
+    const agentId = await agent.agentId();
     for (let attempt = 1; ; attempt++) {
       const conversation = await this.options.client.conversation(conversationId);
-      if (!agentId || conversation.agent_id !== agentId) throw badRequest("this conversation is not from the board room");
+      if (!agentId || conversation.agent_id !== agentId) throw badRequest(`this conversation is not from the ${agent.room.name}`);
       if (!STILL_CONNECTED.has(conversation.status)) return conversation;
       if (attempt >= ATTEMPTS) throw new HttpError(409, "the live session is still connected; end it first");
       await this.sleep(RETRY_MS);
