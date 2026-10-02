@@ -1,0 +1,99 @@
+/*
+ * Zain Growth audit report: placeholder brand until the founder's template arrives.
+ * To rebrand, change the variables in :root (and the logo in logo.svg); the layout reads only these.
+ */
+:root {
+  --brand: #3dbe7a;
+  --brand-dark: #1f7a4c;
+  --brand-tint: #e9f8f0;
+  --ink: #12201a;
+  --muted: #5d6b64;
+  --line: #dfe7e2;
+  --paper: #ffffff;
+  --high: #d9534f;
+  --medium: #e8a33d;
+  --low: #3dbe7a;
+  --font: "Inter", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-ar: "IBM Plex Sans Arabic", "Inter", sans-serif;
+  --page-pad: 16mm;
+}
+
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 10.5pt; line-height: 1.5; }
+[dir="rtl"], :lang(ar) { font-family: var(--font-ar); }
+body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+.page { width: 210mm; height: 297mm; padding: var(--page-pad); position: relative; overflow: hidden; page-break-after: always; break-after: page; display: flex; flex-direction: column; }
+.page:last-child { page-break-after: auto; break-after: auto; }
+.page > header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--brand); padding-bottom: 4mm; margin-bottom: 7mm; }
+.page > header .brand { display: flex; align-items: center; gap: 3mm; font-weight: 700; color: var(--brand-dark); }
+.page > header .brand svg { width: 8mm; height: 8mm; }
+.page > header .meta { color: var(--muted); font-size: 9pt; }
+.page > footer { margin-top: auto; padding-top: 4mm; border-top: 1px solid var(--line); display: flex; justify-content: space-between; color: var(--muted); font-size: 8.5pt; }
+
+h1 { font-size: 26pt; line-height: 1.15; margin: 0 0 4mm; }
+h2 { font-size: 18pt; margin: 0 0 2mm; color: var(--ink); }
+h3 { font-size: 11.5pt; margin: 6mm 0 2mm; color: var(--brand-dark); }
+p { margin: 0 0 3mm; }
+.lead { font-size: 12pt; color: var(--muted); margin-bottom: 6mm; }
+.muted { color: var(--muted); }
+
+/* Cover */
+.cover { padding: 0; }
+.cover .band { background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%); color: #fff; padding: 22mm var(--page-pad) 18mm; }
+.cover .band .logo { display: flex; align-items: center; gap: 4mm; font-size: 15pt; font-weight: 700; letter-spacing: .02em; }
+.cover .band .logo svg { width: 14mm; height: 14mm; }
+.cover .band h1 { color: #fff; font-size: 30pt; margin-top: 22mm; }
+.cover .band .site { opacity: .9; font-size: 12pt; }
+.cover .body { padding: 14mm var(--page-pad); display: flex; gap: 12mm; align-items: center; }
+.cover .facts { flex: 1; }
+.cover .facts dl { display: grid; grid-template-columns: 34mm 1fr; gap: 2mm 4mm; margin: 0; }
+.cover .facts dt { color: var(--muted); }
+.cover .facts dd { margin: 0; font-weight: 600; }
+.cover footer { margin: auto var(--page-pad) var(--page-pad); }
+
+/* Score dial */
+.dial { width: 62mm; text-align: center; }
+.dial svg { width: 62mm; height: 62mm; }
+.dial .track { stroke: var(--line); }
+.dial .value { stroke: var(--brand); stroke-linecap: round; }
+.dial .num { font-size: 19px; font-weight: 800; fill: var(--ink); }
+.dial .of { font-size: 5px; fill: var(--muted); }
+.grade { display: inline-block; margin-top: 2mm; padding: 1.5mm 5mm; border-radius: 99px; background: var(--brand-tint); color: var(--brand-dark); font-weight: 800; font-size: 13pt; }
+
+/* Scorecard */
+.scorecard { display: grid; gap: 4mm; }
+.score-row { border: 1px solid var(--line); border-radius: 3mm; padding: 4mm 5mm; display: grid; grid-template-columns: 38mm 1fr 18mm; gap: 5mm; align-items: center; }
+.score-row .name { font-weight: 700; }
+.score-row .weight { color: var(--muted); font-size: 8.5pt; }
+.bar { height: 3mm; border-radius: 99px; background: var(--line); overflow: hidden; margin-bottom: 2mm; }
+.bar > span { display: block; height: 100%; background: var(--brand); }
+.score-row ul { margin: 0; padding-left: 4mm; color: var(--muted); font-size: 9pt; }
+.score-row .pts { font-size: 18pt; font-weight: 800; text-align: right; }
+
+/* Tables, stats, findings */
+table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 4mm; }
+th { text-align: start; color: var(--muted); font-weight: 600; border-bottom: 1.5px solid var(--line); padding: 2mm 2mm; }
+td { border-bottom: 1px solid var(--line); padding: 2mm 2mm; vertical-align: top; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin-bottom: 5mm; }
+.stat { background: var(--brand-tint); border-radius: 3mm; padding: 4mm; }
+.stat b { display: block; font-size: 16pt; }
+.stat span { color: var(--muted); font-size: 8.5pt; }
+.finding { border-inline-start: 3px solid var(--medium); padding: 1mm 0 1mm 4mm; margin-bottom: 3mm; }
+.finding.high { border-color: var(--high); }
+.finding.low { border-color: var(--low); }
+.finding b { display: block; }
+.pill { display: inline-block; padding: .3mm 2.5mm; border-radius: 99px; font-size: 8pt; font-weight: 700; background: var(--line); }
+.pill.high { background: #fbe4e3; color: var(--high); }
+.pill.medium { background: #fdf0dc; color: #a86a12; }
+.pill.low { background: var(--brand-tint); color: var(--brand-dark); }
+.yes { color: var(--brand-dark); font-weight: 700; }
+.no { color: var(--high); font-weight: 700; }
+
+/* Call to action */
+.cta { background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%); color: #fff; border-radius: 4mm; padding: 10mm; margin-top: 6mm; }
+.cta h2 { color: #fff; }
+.cta a { color: #fff; font-weight: 700; }
+ol.steps { padding-left: 6mm; }
+ol.steps li { margin-bottom: 3mm; }

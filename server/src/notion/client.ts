@@ -74,6 +74,27 @@ export class NotionClient {
     return out;
   }
 
+  /** Uploads one small file (single-part, under 20 MB) with the File Upload API; returns its file_upload id. */
+  async uploadFile(filename: string, contentType: string, bytes: Uint8Array): Promise<string> {
+    const upload = await this.request<{ id: string }>("POST", "/file_uploads", { mode: "single_part", filename, content_type: contentType });
+    const token = await this.token();
+    const form = new FormData();
+    form.set("file", new Blob([new Uint8Array(bytes)], { type: contentType }), filename);
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${BASE}/file_uploads/${upload.id}/send`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Notion-Version": NOTION_VERSION },
+        body: form,
+        signal: AbortSignal.timeout(TIMEOUT_MS * 3),
+      });
+    } catch (err) {
+      throw new NotionError(0, `Notion unreachable (${err instanceof Error ? err.name : "error"})`);
+    }
+    if (!res.ok) throw new NotionError(res.status, `Notion ${res.status}: file upload failed`);
+    return upload.id;
+  }
+
   /** Appends blocks in Notion's 100-per-request batches. */
   async append(blockId: string, blocks: readonly Json[]): Promise<void> {
     for (let i = 0; i < blocks.length; i += 100) {

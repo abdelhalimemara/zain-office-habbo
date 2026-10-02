@@ -1,0 +1,212 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { AUDITS_API, type AuditStepId, type ProspectAudit } from "../../../../shared/audits";
+import type { HermesClient } from "../../hermes/client";
+import { ANALYSIS_TITLE_PREFIX, AUDIT_AGENT, FALLBACK_AGENT, analysisTaskBody, fallbackAnalysis, parseAnalysis } from "./analysis";
+import { CostCapReached, type Budget } from "./budget";
+import { collectAds } from "./collect/ads";
+import { collectSearch } from "./collect/search";
+import { collectSocial } from "./collect/social";
+import { collectWebsite } from "./collect/website";
+import type { AuditCrm, CrmRecordKind } from "./crm";
+import type { AuditNotionSink } from "./notion";
+import type { PdfRenderer } from "./pdf";
+import { scoreAudit } from "./score";
+import { renderReport } from "./template/render";
+import type { StepResult, StoredAudit } from "./types";
+
+/** Hermes as the audit uses it (a narrow slice, so tests can fake it). */
+export type AuditHermes = Pick<HermesClient, "createTask" | "task" | "listProfiles" | "updateTask">;
+
+/** An agent that has not answered by then gets the analysis written from the scores. */
+export const ANALYSIS_TIMEOUT_SECONDS = 45 * 60;
+const GROWTH_TENANT = "zain-growth";
+
+export interface StepContext {
+  budget: Budget;
+  hermes: AuditHermes;
+  crm: AuditCrm;
+  pdf: PdfRenderer;
+  notion?: AuditNotionSink;
+  root: string;
+  publicBase: string;
+  now: () => number;
+  log: (line: string) => void;
+  /** Saves part of a step's progress right away (e.g. a CRM upload), so a retry does not repeat it. */
+  save: (patch: (s: StoredAudit) => void) => Promise<StoredAudit>;
+}
+
+/** What a finished (or, for analysis, started) step leaves behind. */
+export interface Outcome {
+  status: "done" | "skipped" | "running" | "failed";
+  note: string;
+  costUsd?: number;
+  patch?: (s: StoredAudit) => void;
+}
+
+export const pdfFile = (root: string, id: string) => join(root, ".zain", "audits", `${id}.pdf`);
+export const publicPdfUrl = (base: string, id: string) => `${base.replace(/\/+$/, "")}${AUDITS_API.pdf(id)}`;
+
+function collected<T>(r: StepResult<T>, put: (s: StoredAudit, data: T) => void): Outcome {
+  return { status: r.status, note: r.note, costUsd: r.costUsd, patch: r.data === undefined ? undefined : (s) => put(s, r.data as T) };
+}
+
+async function capped(run: () => Promise<Outcome>): Promise<Outcome> {
+  try {
+    return await run();
+  } catch (err) {
+    if (err instanceof CostCapReached) return { status: "skipped", note: err.message, costUsd: (err as { costUsd?: number }).costUsd ?? 0 };
+    throw err;
+  }
+}
+
+export async function runStep(step: AuditStepId, s: StoredAudit, ctx: StepContext): Promise<Outcome> {
+  const { audit, data } = s;
+  const p = audit.prospect;
+  switch (step) {
+    case "website":
+      return capped(async () => collected(await collectWebsite(s.id, p.website, ctx.budget, s.crmFlags), (x, d) => (x.data.website = d)));
+    case "search":
+      return capped(async () => collected(await collectSearch(s.id, p, data.website, ctx.budget), (x, d) => (x.data.search = d)));
+    case "social":
+      return capped(async () => collected(await collectSocial(s.id, p, data.website, ctx.budget), (x, d) => (x.data.social = d)));
+    case "ads":
+      return capped(async () => collected(await collectAds(s.id, p, ctx.budget, s.crmFlags), (x, d) => (x.data.ads = d)));
+    case "score": {
+      const score = scoreAudit(data, p.category);
+      return { status: "done", note: `Overall ${score.overall}/100, grade ${score.grade}`, patch: (x) => (x.audit.score = score) };
+    }
+    case "analysis":
+      return startAnalysis(s, ctx);
+    case "pdf": {
+      const html = renderReport(audit, data, new Date(audit.createdAt * 1000));
+      await ctx.pdf.render(html, pdfFile(ctx.root, s.id));
+      return { status: "done", note: "Branded PDF rendered", patch: (x) => (x.audit.pdfPath = AUDITS_API.pdf(s.id)) };
+    }
+    case "crm":
+      return fileInCrm(s, ctx);
+    case "notion": {
+      if (!ctx.notion) return { status: "skipped", note: "Notion is not configured" };
+      const bytes = await readFile(pdfFile(ctx.root, s.id)).catch(() => undefined);
+      const page = await ctx.notion.sync(audit, s.notionPageId, { bytes, url: publicPdfUrl(ctx.publicBase, s.id) });
+      return {
+        status: "done",
+        note: "Filed in Prospect Audits",
+        patch: (x) => {
+          x.notionPageId = page.pageId;
+          x.audit.notionPageUrl = page.url;
+        },
+      };
+    }
+  }
+}
+
+async function startAnalysis(s: StoredAudit, ctx: StepContext): Promise<Outcome> {
+  const score = s.audit.score!;
+  let assignee = FALLBACK_AGENT;
+  try {
+    if ((await ctx.hermes.listProfiles()).some((p) => p.name === AUDIT_AGENT)) assignee = AUDIT_AGENT;
+  } catch {
+    // Hermes down: createTask below reports it.
+  }
+  try {
+    const task = await ctx.hermes.createTask({
+      title: `${ANALYSIS_TITLE_PREFIX}${s.audit.prospect.name}`,
+      body: analysisTaskBody(s.audit, s.data, score),
+      assignee,
+      tenant: GROWTH_TENANT,
+      triage: false,
+    });
+    return {
+      status: "running",
+      note: `Waiting for ${assignee} (task ${task.id})`,
+      patch: (x) => (x.analysisTask = { taskId: task.id, assignee, startedAt: ctx.now() }),
+    };
+  } catch (err) {
+    ctx.log(`audits: ${s.id} analysis task could not be created (${err instanceof Error ? err.message : "error"})`);
+    const analysis = fallbackAnalysis(s.audit, score, s.data);
+    return { status: "done", note: "Hermes was unavailable; analysis written from the scores", patch: (x) => (x.audit.analysis = analysis) };
+  }
+}
+
+/** Picks up the agent's answer once its task is done; null while it is still working. */
+export async function checkAnalysis(s: StoredAudit, ctx: StepContext): Promise<Outcome | null> {
+  const t = s.analysisTask;
+  if (!t?.taskId) return null;
+  const score = s.audit.score!;
+  const fallback = (note: string): Outcome => {
+    const analysis = fallbackAnalysis(s.audit, score, s.data);
+    return { status: "done", note, patch: (x) => (x.audit.analysis = analysis) };
+  };
+  const { task } = await ctx.hermes.task(t.taskId);
+  if (task.status === "done") {
+    const parsed = parseAnalysis(task.result ?? task.latest_summary ?? "");
+    if (parsed) return { status: "done", note: `Written by ${t.assignee}`, patch: (x) => (x.audit.analysis = parsed) };
+    return fallback(`${t.assignee}'s answer was not valid JSON; analysis written from the scores`);
+  }
+  if (task.status === "archived") return fallback("The analysis task was archived; analysis written from the scores");
+  if (ctx.now() - t.startedAt > ANALYSIS_TIMEOUT_SECONDS) {
+    await ctx.hermes.updateTask(t.taskId, { status: "archived" }).catch(() => undefined);
+    return fallback(`${t.assignee} did not answer in 45 minutes; analysis written from the scores`);
+  }
+  return null;
+}
+
+export function crmNote(a: ProspectAudit, pdfUrl: string): string {
+  const s = a.score!;
+  const sections = Object.entries(s.sections)
+    .filter(([, v]) => v.weight > 0)
+    .map(([k, v]) => `${k} ${v.score}`)
+    .join(" · ");
+  const top = (a.analysis?.opportunities ?? []).slice(0, 3).map((o, i) => `${i + 1}. ${o.title} (${o.service})`);
+  return [
+    `**Zain Growth prospect audit**: ${s.overall}/100, grade ${s.grade}`,
+    "",
+    sections,
+    "",
+    a.analysis?.executiveSummary ?? "",
+    "",
+    "**Top opportunities**",
+    ...top,
+    "",
+    `PDF report: ${pdfUrl}`,
+  ].join("\n");
+}
+
+async function fileInCrm(s: StoredAudit, ctx: StepContext): Promise<Outcome> {
+  const { leadId, companyId } = s.audit.prospect;
+  const target: [CrmRecordKind, string] | null = leadId ? ["lead", leadId] : companyId ? ["company", companyId] : null;
+  if (!target) return { status: "skipped", note: "Not linked to a CRM record (started from a website)" };
+  const [kind, id] = target;
+  const url = publicPdfUrl(ctx.publicBase, s.id);
+  const name = `Zain Growth audit - ${s.audit.prospect.name}.pdf`;
+  let progress = s.crm ?? {};
+  let attached = !!progress.attachmentId;
+  if (!attached) {
+    try {
+      if (!progress.fileId) {
+        const fileId = await ctx.crm.uploadPdf(name, await readFile(pdfFile(ctx.root, s.id)));
+        progress = (await ctx.save((x) => (x.crm = { ...x.crm, fileId }))).crm ?? { fileId };
+      }
+      const attachmentId = await ctx.crm.attach(kind, id, name, progress.fileId!);
+      progress = (await ctx.save((x) => (x.crm = { ...x.crm, attachmentId }))).crm ?? progress;
+      attached = true;
+    } catch (err) {
+      // The note below still links the PDF on Zain HQ.
+      ctx.log(`audits: ${s.id} CRM attachment failed (${err instanceof Error ? err.message : "error"})`);
+    }
+  }
+  if (!progress.noteId) {
+    const noteId = await ctx.crm.note(kind, id, `Prospect audit: ${s.audit.score?.overall ?? "?"}/100 (${s.audit.score?.grade ?? "?"})`, crmNote(s.audit, url));
+    await ctx.save((x) => (x.crm = { ...x.crm, noteId }));
+  }
+  const crmUrl = ctx.crm.recordUrl(kind, id);
+  return {
+    status: "done",
+    note: attached ? `PDF attached to the ${kind} with a summary note` : `Summary note added with a link to the PDF (attachment failed)`,
+    patch: (x) => {
+      x.audit.crmUrl = crmUrl;
+      if (x.crm?.attachmentId) x.audit.crmAttachmentId = x.crm.attachmentId;
+    },
+  };
+}
