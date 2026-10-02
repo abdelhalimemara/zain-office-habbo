@@ -13,12 +13,13 @@ import {
   type UpdateActionsRequest,
 } from "@shared/leadership";
 import type { BoardMeeting, MeetingKind } from "@shared/meetings";
+import { findAgent } from "@shared/roster";
 
 export const LEADERSHIP_COLOR = "#17181A";
 
 export const PRIORITIES: readonly ActionPriority[] = ["P1", "P2", "P3"];
 
-/** How each seat is labelled in the VP room. */
+/** The seat each exec holds in the VP room. */
 export const SEAT_LABEL: Record<LeadershipSeat, string> = {
   default: "CEO",
   "zain-hq-coo": "COO",
@@ -47,13 +48,18 @@ export const DIVISION_HEAD: Record<DivisionId, LeadershipSeat> = {
   tech: "zain-tech-vp",
 };
 
-export const DIVISION_OPTIONS: readonly { id: DivisionId; label: string }[] = [
-  { id: "hq", label: "HQ / COO" },
-  { id: "studio", label: "Studio" },
-  { id: "growth", label: "Growth" },
-  { id: "labs", label: "Labs" },
-  { id: "tech", label: "Tech" },
-];
+/** The exec's own name ("Omar Khalid"), from the live roster or the built-in one; the seat when unnamed. */
+export function seatName(profile: LeadershipSeat, agents: readonly RosterEntry[] = []): string {
+  return agents.find((a) => a.profile === profile)?.name ?? findAgent(profile)?.name ?? SEAT_LABEL[profile];
+}
+
+const DIVISION_SHORT: Record<DivisionId, string> = { hq: "HQ", studio: "Studio", growth: "Growth", labs: "Labs", tech: "Tech" };
+
+/** Each division with the exec who owns its tasks, e.g. "Growth · Omar Khalid". */
+export const DIVISION_OPTIONS: readonly { id: DivisionId; label: string }[] = (Object.keys(DIVISION_HEAD) as DivisionId[]).map((id) => ({
+  id,
+  label: `${DIVISION_SHORT[id]} · ${seatName(DIVISION_HEAD[id])}`,
+}));
 
 export function isLeadershipSeat(profile: string): profile is LeadershipSeat {
   return (LEADERSHIP_SEATS as readonly string[]).includes(profile);
@@ -68,9 +74,12 @@ export function meetingsOfKind<T extends Pick<BoardMeeting, "kind" | "updatedAt"
   return (meetings ?? []).filter((m) => meetingKind(m) === kind).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-/** "CEO", "COO", "VP Studio"…, or the roster name for anyone else. */
+/** "Omar Khalid · VP Growth", "Susu · CEO"…, or the roster name for anyone else. */
 export function seatLabel(profile: string, agents: readonly RosterEntry[]): string {
-  if (isLeadershipSeat(profile)) return SEAT_LABEL[profile];
+  if (isLeadershipSeat(profile)) {
+    const name = seatName(profile, agents);
+    return name === SEAT_LABEL[profile] ? name : `${name} · ${SEAT_LABEL[profile]}`;
+  }
   const agent = agents.find((a) => a.profile === profile);
   return agent ? (agent.name ?? agent.title) : profile;
 }

@@ -67,6 +67,17 @@ describe("Leadership review", () => {
     expect(rows()).toHaveLength(2);
     expect(within(rows()[0]!).getByLabelText("Title, action 1")).toHaveValue("Riyadh rebrand");
     expect(within(rows()[0]!).getByLabelText("Division, action 1")).toHaveValue("studio");
+    // The owner is named with their seat, and each division option names the exec who receives it.
+    expect(within(rows()[0]!).getByRole("img", { name: "Lina Haddad · VP Studio" })).toBeInTheDocument();
+    expect(rows()[0]!.querySelector("[data-sprite]")).toHaveAttribute("data-sprite", "people/female-4");
+    expect(within(rows()[0]!).getByRole("option", { name: "Studio · Lina Haddad", selected: true })).toBeInTheDocument();
+    expect(within(rows()[0]!).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "HQ · Faisal Al-Harbi",
+      "Studio · Lina Haddad",
+      "Growth · Omar Khalid",
+      "Labs · Noura Al-Qahtani",
+      "Tech · Yousef Al-Mutairi",
+    ]);
     expect(within(rows()[0]!).getByRole("radio", { name: "P1" })).toHaveAttribute("aria-checked", "true");
     expect(within(rows()[0]!).getByLabelText("Due date, action 1")).toHaveValue("2026-10-09");
     expect(within(rows()[1]!).getByLabelText("Title, action 2")).toHaveValue("Launch the Ramadan campaign");
@@ -212,12 +223,12 @@ describe("Leadership review", () => {
 describe("Leadership drafting and assigned", () => {
   beforeEach(resetStore);
 
-  it("shows the CEO agent drafting with the transcript, labelled by seat", async () => {
+  it("shows Susu drafting with the transcript, labelled by name and seat", async () => {
     routes({}, { ...review, status: "drafting", outcome: undefined });
     open();
-    expect(await screen.findByText("The CEO agent is turning the meeting into tasks…")).toBeInTheDocument();
+    expect(await screen.findByText("Susu is turning the meeting into tasks…")).toBeInTheDocument();
     const transcript = screen.getByRole("list", { name: "Transcript" });
-    expect(within(transcript).getByText("VP Studio")).toBeInTheDocument();
+    expect(within(transcript).getByText("Lina Haddad · VP Studio")).toBeInTheDocument();
     expect(within(transcript).getByText("Rebrand first.")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Review tasks" })).not.toBeInTheDocument();
   });

@@ -64,7 +64,7 @@ function LeadershipList({ agents }: { agents: readonly RosterEntry[] }) {
   const anyHired = LEADERSHIP_SEATS.some((p) => agents.find((a) => a.profile === p)?.hired);
   return (
     <div className="zui-meetings">
-      <p className="zui-hint">Meet your CEO agent, COO and VPs by voice to set the week's priorities. The meeting ends with tasks you assign to the divisions.</p>
+      <p className="zui-hint">Meet Susu, your COO and VPs by voice to set the week's priorities. The meeting ends with tasks you assign to the divisions.</p>
       <button type="button" className="zui-btn zui-btn--primary zui-meetings__convene" onClick={() => openDialog(true)} disabled={!anyHired} aria-haspopup="dialog">
         Start a VP meeting
       </button>

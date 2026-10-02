@@ -42,7 +42,7 @@ describe("Voice settings", () => {
     const section = await voicesSection();
     const rows = within(within(section).getByRole("list", { name: "Board voices" })).getAllByRole("listitem");
     expect(rows.map((r) => r.querySelector(".zui-voice-row__name")!.textContent)).toEqual([
-      "CEO",
+      "Susu, CEO",
       "Alex Hormozi",
       "HRH Prince Alwaleed bin Talal",
       "Jeff Bezos",
@@ -60,8 +60,14 @@ describe("Voice settings", () => {
     routes(configured);
     const section = await voicesSection();
     const rows = within(within(section).getByRole("list", { name: "Leadership room voices" })).getAllByRole("listitem");
-    expect(rows.map((r) => r.querySelector(".zui-voice-row__name")!.textContent)).toEqual(["COO", "VP Studio", "VP Growth", "VP Labs", "VP Tech"]);
-    expect(within(rows[0]!).getByLabelText("ElevenLabs voice id for COO")).toBeInTheDocument();
+    expect(rows.map((r) => r.querySelector(".zui-voice-row__name")!.textContent)).toEqual([
+      "Faisal Al-Harbi · COO",
+      "Lina Haddad · VP Studio",
+      "Omar Khalid · VP Growth",
+      "Noura Al-Qahtani · VP Labs",
+      "Yousef Al-Mutairi · VP Tech",
+    ]);
+    expect(within(rows[0]!).getByLabelText("ElevenLabs voice id for Faisal Al-Harbi · COO")).toBeInTheDocument();
   });
 
   it("validates the pasted id, then saves it", async () => {

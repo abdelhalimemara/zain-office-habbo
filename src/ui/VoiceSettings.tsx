@@ -5,7 +5,7 @@ import { LEADERSHIP_SEATS } from "@shared/leadership";
 import { CHAIR_PROFILE, type VoicesResponse } from "@shared/voice";
 import { useSetVoice, useVoices } from "../api/voiceHooks";
 import { ErrorNote } from "./common";
-import { SEAT_LABEL, SEAT_ROLE } from "./leadershipModel";
+import { SEAT_ROLE, seatLabel } from "./leadershipModel";
 import { Portrait } from "./Portrait";
 import { VoiceTag, VoicesOffNotice } from "./VoiceBits";
 import { voiceIdError, voiceStatus } from "./voiceModel";
@@ -93,7 +93,7 @@ function leadershipSpeakers(agents: readonly RosterEntry[], withCeo: boolean): S
   return LEADERSHIP_SEATS.filter((p) => withCeo || p !== CHAIR_PROFILE).map((profile) => ({
     profile,
     agent: agents.find((a) => a.profile === profile),
-    name: SEAT_LABEL[profile],
+    name: seatLabel(profile, agents),
     seat: profile === CHAIR_PROFILE ? "CEO agent · also reads the board minutes" : SEAT_ROLE[profile],
   }));
 }

@@ -35,14 +35,18 @@ const SESSION: LiveSessionResponse = {
   signedUrl: "wss://example/convai?token=x",
   overrides: { agent: { prompt: { prompt: "p" }, firstMessage: "", language: "en" } },
   speakers: [
-    { tag: "CEO", profile: "default", name: "CEO" },
-    { tag: "COO", profile: "zain-hq-coo", name: "COO" },
-    { tag: "Studio", profile: "zain-studio-vp", name: "VP Studio" },
-    { tag: "Tech", profile: "zain-tech-vp", name: "VP Tech" },
+    { tag: "Susu", profile: "default", name: "Susu" },
+    { tag: "Faisal", profile: "zain-hq-coo", name: "Faisal Al-Harbi" },
+    { tag: "Lina", profile: "zain-studio-vp", name: "Lina Haddad" },
+    { tag: "Yousef", profile: "zain-tech-vp", name: "Yousef Al-Mutairi" },
   ],
 };
 
-const seatNames = () => within(screen.getByRole("list", { name: "Seats" })).getAllByRole("listitem").map((li) => li.querySelector(".zui-seat__name")!.textContent);
+const seatItems = () => within(screen.getByRole("list", { name: "Seats" })).getAllByRole("listitem");
+const seatNames = () => seatItems().map((li) => li.querySelector(".zui-seat__name")!.textContent);
+const seatRoles = () => seatItems().map((li) => li.querySelector(".zui-seat__role")?.textContent ?? null);
+const NAMES = ["Susu", "Faisal Al-Harbi", "Lina Haddad", "Yousef Al-Mutairi", "You"];
+const ROLES = ["CEO", "COO", "VP Studio", "VP Tech", null];
 
 function routes() {
   return mockFetch({
@@ -74,20 +78,23 @@ describe("Leadership live room", () => {
     vi.unstubAllGlobals();
   });
 
-  it("labels the seats CEO, COO and VPs, before and after joining, and never mentions a vote", async () => {
+  it("names the execs with their seats, before and after joining, and never mentions a vote", async () => {
     routes();
     act(() => useUiStore.setState({ panel: { kind: "leadership", id: live.id } }));
     renderUi(<UiRoot />);
     await screen.findByRole("button", { name: "Join the room" });
-    expect(seatNames()).toEqual(["CEO", "COO", "VP Studio", "VP Tech", "You"]);
+    expect(seatNames()).toEqual(NAMES);
+    expect(seatRoles()).toEqual(ROLES);
     expect(screen.getByText(/so your execs wait for you to open/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Join the room" }));
     await screen.findByText(/^Live · /);
-    expect(seatNames()).toEqual(["CEO", "COO", "VP Studio", "VP Tech", "You"]);
+    expect(seatNames()).toEqual(NAMES);
+    expect(seatRoles()).toEqual(ROLES);
     expect(screen.getByText("Your execs are waiting for you to open.")).toBeInTheDocument();
-    act(() => sdk.options[0]!.onMessage!({ role: "agent", event_id: 1, message: "<COO>Delivery is green.</COO>" }));
+    act(() => sdk.options[0]!.onMessage!({ role: "agent", event_id: 1, message: "<Faisal>Delivery is green.</Faisal><Yousef>Omar, can Growth take the launch?</Yousef>" }));
     const captions = screen.getByRole("list", { name: "Live captions" });
-    expect(within(captions).getByText("COO")).toBeInTheDocument();
+    expect(within(captions).getByText("Faisal Al-Harbi · COO")).toBeInTheDocument();
+    expect(within(captions).getByText("Yousef Al-Mutairi · VP Tech")).toBeInTheDocument();
     expect(screen.queryByText(/vote/i)).not.toBeInTheDocument();
   });
 
@@ -99,9 +106,9 @@ describe("Leadership live room", () => {
     await screen.findByText(/^Live · /);
     await userEvent.click(screen.getByRole("button", { name: "End meeting & draft tasks" }));
     const confirm = screen.getByRole("group", { name: "Confirm end meeting" });
-    expect(confirm).toHaveTextContent("End the meeting? The CEO agent turns it into tasks for you to review.");
+    expect(confirm).toHaveTextContent("End the meeting? Susu turns it into tasks for you to review.");
     await userEvent.click(within(confirm).getByRole("button", { name: "End & draft tasks" }));
     await waitFor(() => expect(fetch.calls("POST", LIVE_API.end(live.id)).map((c) => c.body)).toContainEqual({ conversationId: "conv-1", final: true }));
-    expect(await screen.findByText("The CEO agent is turning the meeting into tasks…")).toBeInTheDocument();
+    expect(await screen.findByText("Susu is turning the meeting into tasks…")).toBeInTheDocument();
   });
 });

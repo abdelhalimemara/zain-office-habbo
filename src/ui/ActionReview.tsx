@@ -151,7 +151,7 @@ export function ActionReview({ meeting, agents }: { meeting: BoardMeeting; agent
     <section className="zui-review" aria-label="Review tasks">
       <div className="zui-review__intro">
         <h3 className="zui-subheading">This week's priorities</h3>
-        <p className="zui-hint">Drafted by the CEO agent from the meeting. Edit anything, then assign: each action becomes a mandate for its division.</p>
+        <p className="zui-hint">Drafted by Susu, your CEO agent, from the meeting. Edit anything, then assign: each action becomes a mandate for its division.</p>
       </div>
       <label className="zui-sr-only" htmlFor={prioritiesId}>
         This week's priorities

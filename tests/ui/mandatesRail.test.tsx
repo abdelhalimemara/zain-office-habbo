@@ -99,7 +99,7 @@ describe("MandatesRail", () => {
     const card = (await screen.findByText("Launch film")).closest("button")!;
     expect(within(card).getByText(/Shoot a 60s launch film\./)).toHaveTextContent("Shoot a 60s launch film. Warm, Riyadh-first.");
     expect(card).not.toHaveTextContent("Instructions for");
-    expect(within(card).getByText("VP Studio")).toBeInTheDocument();
+    expect(within(card).getByText("Lina Haddad")).toBeInTheDocument();
     expect(within(card).getByText("Zain Studio")).toBeInTheDocument();
     expect(within(card).getByText("2/3 subtasks")).toBeInTheDocument();
     expect(within(card).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");

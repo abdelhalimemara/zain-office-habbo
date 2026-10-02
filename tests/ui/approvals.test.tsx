@@ -77,13 +77,13 @@ describe("ApprovalsInbox", () => {
     expect(send).toHaveClass("zui-btn--primary");
     expect(within(item).queryByRole("button", { name: /Request changes/ })).not.toBeInTheDocument();
     await userEvent.click(send);
-    expect(within(item).getByText("Write instructions for VP Tech to send this back.")).toBeInTheDocument();
-    expect(within(item).getByLabelText("Instructions for VP Tech")).toHaveAttribute("aria-invalid", "true");
+    expect(within(item).getByText("Write instructions for Yousef Al-Mutairi to send this back.")).toBeInTheDocument();
+    expect(within(item).getByLabelText("Instructions for Yousef Al-Mutairi")).toHaveAttribute("aria-invalid", "true");
     expect(fetch.calls("POST", API.reject("r2"))).toHaveLength(0);
 
-    await userEvent.type(within(item).getByLabelText("Instructions for VP Tech"), "Add rollback plan");
+    await userEvent.type(within(item).getByLabelText("Instructions for Yousef Al-Mutairi"), "Add rollback plan");
     await userEvent.click(send);
-    expect(await within(item).findByText("Sent back to VP Tech.")).toBeInTheDocument();
+    expect(await within(item).findByText("Sent back to Yousef Al-Mutairi.")).toBeInTheDocument();
     expect(fetch.calls("POST", API.reject("r2"))).toEqual([{ body: { reason: "Add rollback plan" } }]);
   });
 

@@ -8,7 +8,7 @@ import { WEEKLY_PRIORITIES_FILE } from "../../../shared/leadership";
 import { findAgent, type RosterAgent } from "../../../shared/roster";
 
 /** Per-division budget for the kanban state in the live prompt. */
-export const DIVISION_STATE_CHARS = 650;
+export const DIVISION_STATE_CHARS = 600;
 export const WEEKLY_PRIORITIES_CHARS = 1200;
 const RECENT_DONE_SECONDS = 7 * 24 * 3600;
 const TITLE_CHARS = 80;

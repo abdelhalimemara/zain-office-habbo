@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RosterEntry } from "@shared/api";
 import type { BoardMeeting } from "@shared/meetings";
-import { seatLabel } from "./leadershipModel";
+import { isLeadershipSeat, SEAT_LABEL, seatName } from "./leadershipModel";
 import { formatElapsed, liveCopy, type Caption, type LiveCopy } from "./liveModel";
 import { FOUNDER, speakerName } from "./meetingModel";
 import { Portrait } from "./Portrait";
@@ -11,27 +11,35 @@ import { Equalizer, MicIcon } from "./VoiceBits";
 interface Seat {
   profile: string;
   name: string;
+  /** The exec's seat in the VP room ("VP Growth"), shown under the name. */
+  role?: string;
 }
 
 /**
- * Seats in the room: the session's speakers once joined, the invited members before. The VP room labels its seats
- * by role (CEO, COO, VP Studio…) whatever the session calls them.
+ * Seats in the room: the session's speakers once joined, the invited members before. The VP room names each exec
+ * from the roster with their seat (Omar Khalid, VP Growth…) whatever the session calls them.
  */
 function seatsFor(meeting: BoardMeeting, room: Room, agents: readonly RosterEntry[]): Seat[] {
   const leadership = meeting.kind === "leadership";
-  const name = (profile: string, given?: string) => (leadership ? seatLabel(profile, agents) : (given ?? speakerName(profile, agents)));
-  const fromSession = room.speakers.map((s) => ({ profile: s.profile, name: name(s.profile, s.name) }));
-  const seats = fromSession.length ? fromSession : meeting.members.map((m) => ({ profile: m, name: name(m) }));
+  const seat = (profile: string, given?: string): Seat =>
+    leadership && isLeadershipSeat(profile)
+      ? { profile, name: seatName(profile, agents), role: SEAT_LABEL[profile] }
+      : { profile, name: given ?? speakerName(profile, agents) };
+  const fromSession = room.speakers.map((s) => seat(s.profile, s.name));
+  const seats = fromSession.length ? fromSession : meeting.members.map((m) => seat(m));
   return seats.filter((s, i) => seats.findIndex((x) => x.profile === s.profile) === i);
 }
 
+/** A caption's speaker: "Omar Khalid · VP Growth" in the VP room, the member's name in the board room. */
 function nameOf(profile: string, seats: readonly Seat[], agents: readonly RosterEntry[]): string {
   if (profile === FOUNDER) return "You";
-  return seats.find((s) => s.profile === profile)?.name ?? speakerName(profile, agents);
+  const seat = seats.find((s) => s.profile === profile);
+  if (!seat) return speakerName(profile, agents);
+  return seat.role ? `${seat.name} · ${seat.role}` : seat.name;
 }
 
 function SeatStrip({ seats, room, agents }: { seats: readonly Seat[]; room: Room; agents: readonly RosterEntry[] }) {
-  const all = [...seats, { profile: FOUNDER, name: "You" }];
+  const all: Seat[] = [...seats, { profile: FOUNDER, name: "You" }];
   return (
     <ul className="zui-seats" aria-label="Seats">
       {all.map((s) => {
@@ -54,6 +62,7 @@ function SeatStrip({ seats, room, agents }: { seats: readonly Seat[]; room: Room
               )}
             </span>
             <span className="zui-seat__name">{s.name}</span>
+            {s.role && <span className="zui-seat__role">{s.role}</span>}
             {founder && room.muted && <span className="zui-seat__muted">Muted</span>}
           </li>
         );

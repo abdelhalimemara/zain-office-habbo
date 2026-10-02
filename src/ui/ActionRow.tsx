@@ -4,12 +4,12 @@ import { getDivision, type DivisionId } from "@shared/divisions";
 import type { KanbanTask } from "@shared/hermes";
 import { ACTION_DETAIL_MAX, ACTION_TITLE_MAX, type ActionPriority } from "@shared/leadership";
 import { useUiStore } from "../state/store";
-import { DIVISION_HEAD, DIVISION_OPTIONS, PRIORITIES, SEAT_LABEL, type DraftAction, type RowErrors } from "./leadershipModel";
+import { DIVISION_HEAD, DIVISION_OPTIONS, PRIORITIES, seatLabel, type DraftAction, type RowErrors } from "./leadershipModel";
 import { Portrait } from "./Portrait";
 
 function Owner({ division, agents }: { division: DivisionId; agents: readonly RosterEntry[] }) {
   const head = DIVISION_HEAD[division];
-  return <Portrait agent={agents.find((a) => a.profile === head)} name={SEAT_LABEL[head]} size="md" color={getDivision(division).color} labelled={false} />;
+  return <Portrait agent={agents.find((a) => a.profile === head)} name={seatLabel(head, agents)} size="md" color={getDivision(division).color} labelled={false} />;
 }
 
 export function PriorityChip({ priority }: { priority: ActionPriority }) {

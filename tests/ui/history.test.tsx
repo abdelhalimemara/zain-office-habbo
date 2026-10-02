@@ -32,7 +32,7 @@ describe("HistoryTimeline", () => {
     });
     expect(container.querySelector("b, img:not(.zui-portrait__img), img[src=x]")).toBeNull();
     expect((window as unknown as { __pwnedHistory?: boolean }).__pwnedHistory).toBeUndefined();
-    expect(within(items[0]!).getByText("VP Studio")).toBeInTheDocument();
+    expect(within(items[0]!).getByText("Lina Haddad")).toBeInTheDocument();
     expect(within(items[1]!).getByText("Art Director")).toBeInTheDocument();
     expect(within(items[2]!).getByText("HQ (you)")).toBeInTheDocument();
     const time = items[0]!.querySelector("time")!;
@@ -76,7 +76,7 @@ describe("TaskDrawer overview", () => {
     const overview = await screen.findByRole("region", { name: "Overview" });
     expect(within(overview).getByText("Awaiting HQ")).toBeInTheDocument();
     expect(within(overview).getByText("Zain Studio")).toBeInTheDocument();
-    expect(within(overview).getByText("VP Studio")).toBeInTheDocument();
+    expect(within(overview).getByText("Lina Haddad")).toBeInTheDocument();
     expect(within(overview).getByText("1/2 subtasks done")).toBeInTheDocument();
     const rows = within(screen.getByRole("list", { name: "Subtasks" })).getAllByRole("listitem");
     expect(within(rows[0]!).getByText("Done")).toBeInTheDocument();

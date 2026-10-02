@@ -56,9 +56,9 @@ function conversation(agentId: string, transcript: Conversation["transcript"]): 
 
 const MEETING_TALK: Conversation["transcript"] = [
   { role: "user", message: "Studio, ship the Acme brand book by Thursday.", time_in_call_secs: 2 },
-  { role: "agent", message: "<Studio>Confirmed: the Acme brand book, owned by Studio, by Thursday.</Studio><CEO>Noted.</CEO>", time_in_call_secs: 5 },
+  { role: "agent", message: "<Lina>Confirmed: the Acme brand book, owned by Studio, by Thursday.</Lina><Susu>Noted.</Susu>", time_in_call_secs: 5 },
   { role: "user", message: "Tech, fix the client portal login.", time_in_call_secs: 9 },
-  { role: "agent", message: "<Tech>Confirmed, portal login fix this week.</Tech>", time_in_call_secs: 12 },
+  { role: "agent", message: "<Yousef>Confirmed, portal login fix this week.</Yousef>", time_in_call_secs: 12 },
 ];
 
 const DRAFT = [
@@ -137,15 +137,18 @@ describe("the leadership live session", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as LiveSessionResponse;
     expect(body.signedUrl).toContain("agent_room0000000002");
-    expect(body.speakers.map((s) => s.tag)).toEqual(["CEO", "COO", "Studio", "Growth", "Labs", "Tech"]);
+    expect(body.speakers.map((s) => s.tag)).toEqual(["Susu", "Faisal", "Lina", "Omar", "Noura", "Yousef"]);
+    expect(body.speakers.map((s) => s.name)).toEqual(["Susu", "Faisal Al-Harbi", "Lina Haddad", "Omar Khalid", "Noura Al-Qahtani", "Yousef Al-Mutairi"]);
     expect(body.overrides.agent.firstMessage).toBe("");
 
     const [boardAgent, vpAgent] = r.labs.called("POST", "/v1/convai/agents/create").map((c) => c.json!);
     expect(boardAgent!.name).toBe("Zain Board Room");
-    expect(boardAgent!.conversation_config.tts.supported_voices.map((v: { label: string }) => v.label)).not.toContain("COO");
+    expect(boardAgent!.conversation_config.tts.supported_voices.map((v: { label: string }) => v.label)).not.toContain("Faisal");
     expect(vpAgent!.name).toBe("Zain Leadership Room");
-    const voices = vpAgent!.conversation_config.tts.supported_voices as { label: string; voice_id: string }[];
-    expect(voices.map((v) => v.label)).toEqual(["CEO", "COO", "Studio", "Growth", "Labs", "Tech"]);
+    const voices = vpAgent!.conversation_config.tts.supported_voices as { label: string; voice_id: string; description: string }[];
+    expect(voices.map((v) => v.label)).toEqual(["Susu", "Faisal", "Lina", "Omar", "Noura", "Yousef"]);
+    expect(voices.every((v) => /^[A-Za-z]+$/.test(v.label))).toBe(true);
+    expect(voices[3]!.description).toBe("Omar Khalid: every line Omar Khalid says.");
     expect(new Set(voices.map((v) => v.voice_id)).size).toBe(6);
     expect(vpAgent!.conversation_config.agent.first_message).toBe("");
     const saved = JSON.parse(await readFile(r.agentsFile, "utf8"));
@@ -171,9 +174,15 @@ describe("the leadership live session", () => {
     const { meeting } = await r.start();
     const { prompt } = ((await (await r.session(meeting.id)).json()) as LiveSessionResponse).overrides.agent.prompt;
     expect(prompt).toContain("Abdelhalim, the founder, runs this meeting");
-    expect(prompt).toContain("<CEO>: CEO. The CEO agent: the founder's chief of staff");
+    expect(prompt).toContain("<Susu>: Susu, CEO. The CEO agent: the founder's chief of staff");
+    expect(prompt).toContain("<Faisal>: Faisal Al-Harbi, COO.");
+    expect(prompt).toContain("<Omar>: Omar Khalid, VP Growth.");
+    expect(prompt).toContain("<Noura>: Noura Al-Qahtani, VP Labs.");
+    expect(prompt).toContain("<Yousef>: Yousef Al-Mutairi, VP Tech.");
+    expect(prompt).toContain("Numbers first; talks in CAC, ROAS");
+    expect(prompt).toContain("### Zain Studio (Lina, VP Studio)");
     expect(prompt).toContain("Be direct and plain.");
-    expect(prompt).toContain("<Studio>: VP Studio. Heads Zain Studio");
+    expect(prompt).toContain("<Lina>: Lina Haddad, VP Studio. Heads Zain Studio");
     expect(prompt).toContain("STUDIOPERSONA");
     expect(prompt).toContain("Expertise: chief content officer, chief product officer.");
     expect(prompt).not.toMatch(/APPROVALSMARKER|FLOWMARKER|PROCEDUREMARKER|BOARDBRIEFMARKER|kanban_create|curl/);
@@ -188,6 +197,17 @@ describe("the leadership live session", () => {
     expect(prompt).toContain("Nobody decides for Abdelhalim");
     expect(prompt).toMatch(/Wrap every line in its speaker's tag/);
     expect(prompt).toContain("There is no vote");
+    // Peer address: whoever is named answers next, whether the founder or a colleague asked.
+    expect(prompt).toContain("Whoever is addressed by name answers next, in their own tag, whether Abdelhalim or a colleague asked");
+    expect(prompt).toContain(`if Susu says "Omar, what's Growth's capacity?", Omar answers straight away`);
+    expect(prompt).toContain("<Faisal>Delivery is on track.</Faisal>");
+    // Susu runs the agenda; the founder decides.
+    expect(prompt).toContain("Susu runs the agenda for Abdelhalim: she keeps time, pulls the right exec in by name");
+    expect(prompt).toContain("sums up the decision in one line. She never overrules Abdelhalim.");
+    expect(prompt).toContain("Execs may disagree with each other and with Susu.");
+    expect(prompt).toContain("they say so and take it as an action with a date; they never make up a number");
+    expect(prompt).toContain('no "great question"');
+    expect(prompt).not.toMatch(/<CEO>|<COO>|<Studio>|<Growth>|<Labs>|<Tech>/);
     expect(prompt).not.toContain("You report to");
   });
 
@@ -235,7 +255,12 @@ describe("ending a leadership meeting", () => {
     expect(r.kanban.tasks.size).toBe(1);
     expect(draft).toMatchObject({ assignee: "default", tenant: "zain-hq" });
     expect(draft.body).toContain(draftMarker(meeting.id));
-    expect(draft.body).toContain("VP Studio: Confirmed: the Acme brand book");
+    expect(draft.body).toContain("Lina Haddad · VP Studio: Confirmed: the Acme brand book");
+    expect(draft.body).toContain("Susu · CEO: Noted.");
+    expect(draft.body).toContain("You are Susu, the CEO agent.");
+    expect(draft.body).toContain('"growth": Zain Growth');
+    expect(draft.body).toContain("owned by Omar Khalid, the VP Growth");
+    expect(draft.body).toContain('goes to "hq" (Faisal Al-Harbi, the COO)');
     expect(draft.body).toContain("Founder (Abdelhalim): Tech, fix the client portal login.");
     expect(draft.body).toContain("Include ONLY tasks the founder actually gave");
     expect(draft.body).toContain('"priorities"');
@@ -445,12 +470,19 @@ describe("board flows stay as they are", () => {
     const props = meetingProperties(meeting) as Record<string, any>;
     expect(props.Type.select.name).toBe("Leadership");
     expect(props.Status.select.name).toBe("Review tasks");
-    expect(props.Members.multi_select.map((x: { name: string }) => x.name)).toEqual(["CEO", "COO", "VP Studio", "VP Growth", "VP Labs", "VP Tech"]);
+    expect(props.Members.multi_select.map((x: { name: string }) => x.name)).toEqual([
+      "Susu · CEO",
+      "Faisal Al-Harbi · COO",
+      "Lina Haddad · VP Studio",
+      "Omar Khalid · VP Growth",
+      "Noura Al-Qahtani · VP Labs",
+      "Yousef Al-Mutairi · VP Tech",
+    ]);
     const blocks = JSON.stringify(meetingBlocks(meeting));
     expect(blocks).toContain("Priorities");
     expect(blocks).toContain("[Proposed] Zain Studio · P1 · due 2026-10-08 — Ship the Acme brand book: Final PDF to the client.");
     expect(blocks).toContain("Transcript");
-    expect(blocks).toContain("VP Studio");
+    expect(blocks).toContain("Lina Haddad · VP Studio");
     expect(blocks).not.toContain("Votes");
   });
 });

@@ -33,7 +33,7 @@ function Drafting({ meeting, agents }: { meeting: BoardMeeting; agents: readonly
           <span />
           <span />
         </span>
-        The CEO agent is turning the meeting into tasks…
+        Susu is turning the meeting into tasks…
       </p>
       <h3 className="zui-subheading">Transcript</h3>
       <Transcript meeting={meeting} agents={agents} />

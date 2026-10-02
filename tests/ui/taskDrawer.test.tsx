@@ -65,7 +65,7 @@ describe("TaskDrawer", () => {
     expect(send).toBeDisabled();
     await userEvent.type(screen.getByLabelText("Comment"), "Key is set, go ahead");
     await userEvent.click(send);
-    expect(await screen.findByText("Sent to VP Tech as instructions.")).toBeInTheDocument();
+    expect(await screen.findByText("Sent to Yousef Al-Mutairi as instructions.")).toBeInTheDocument();
     expect(fetch.calls("POST", API.reject("t1"))).toEqual([{ body: { reason: "Key is set, go ahead" } }]);
   });
 
@@ -84,7 +84,7 @@ describe("TaskDrawer", () => {
     expect(reopen).toHaveClass("zui-btn--primary");
     await userEvent.type(box, "Lets reopen this, the key is set");
     await userEvent.click(reopen);
-    expect(await screen.findByText("Reopened for VP Tech.")).toBeInTheDocument();
+    expect(await screen.findByText("Reopened for Yousef Al-Mutairi.")).toBeInTheDocument();
     expect(fetch.calls("POST", API.reopen("t1"))).toEqual([{ body: { instructions: "Lets reopen this, the key is set" } }]);
 
     await userEvent.type(box, "FYI only");
@@ -112,7 +112,7 @@ describe("TaskDrawer", () => {
     const { container } = renderUi(<TaskDrawer id="t1" />);
     const brief = await screen.findByText(/Refresh the logo/);
     expect(brief.textContent).toBe("Refresh the logo\n  keep the gold");
-    const summary = screen.getByText("Instructions sent to VP Studio");
+    const summary = screen.getByText("Instructions sent to Lina Haddad");
     const details = summary.closest("details")!;
     expect(details).not.toHaveAttribute("open");
     expect(details).toHaveTextContent("**Instructions for VP Studio");
