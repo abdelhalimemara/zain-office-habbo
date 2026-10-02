@@ -4,6 +4,7 @@ import {
   type BoardConsultRequest,
   type BoardConsultResponse,
   type BoardResponse,
+  type ConnectionsResponse,
   type CreateMandateRequest,
   type CreateMandateResponse,
   type HeadcountCatalogResponse,
@@ -49,6 +50,7 @@ function post<T>(path: string, body: unknown): Promise<T> {
 
 export const api = {
   health: () => request<HealthResponse>(API.health),
+  connections: () => request<ConnectionsResponse>(API.connections),
   board: () => request<BoardResponse>(API.board),
   task: (id: string) => request<TaskDetailResponse>(API.task(id)),
   addComment: (id: string, body: string) => post<unknown>(API.taskComments(id), { body }),
