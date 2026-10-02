@@ -6,6 +6,7 @@ export const queryKeys = {
   board: ["board"] as const,
   roster: ["roster"] as const,
   health: ["health"] as const,
+  connections: ["connections"] as const,
   headcount: ["headcount-catalog"] as const,
   task: (id: string) => ["task", id] as const,
 };
@@ -20,6 +21,12 @@ export function useRoster() {
 
 export function useHealth() {
   return useQuery({ queryKey: queryKeys.health, queryFn: api.health, refetchInterval: 10_000 });
+}
+
+export const CONNECTIONS_POLL_MS = 30_000;
+
+export function useConnections() {
+  return useQuery({ queryKey: queryKeys.connections, queryFn: api.connections, refetchInterval: CONNECTIONS_POLL_MS, retry: false });
 }
 
 export function useTaskDetail(id: string) {

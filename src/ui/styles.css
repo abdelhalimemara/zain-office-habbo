@@ -2,6 +2,7 @@
 @import "./rail.css";
 @import "./drawer.css";
 @import "./client.css";
+@import "./conn.css";
 
 .zui-hud {
   position: absolute;

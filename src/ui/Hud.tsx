@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import type { HealthResponse } from "@shared/api";
 import { getDivision } from "@shared/divisions";
 import { hqDecisionCount } from "@shared/flow";
-import { useBoard, useHealth } from "../api/hooks";
+import { useBoard, useConnections, useHealth } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { useRosterAgents } from "./common";
+import { ConnectionsRow, ConnectionsSummary } from "./ConnectionsCluster";
 import { PHONE_QUERY } from "./KanbanPanel";
 import { useMediaQuery } from "./useMediaQuery";
 import { usePublishHudBottom } from "./useHudBottom";
@@ -14,9 +15,9 @@ type DotState = "ok" | "warn" | "bad" | "unknown";
 const HERMES_DOT: Record<HealthResponse["hermes"], DotState> = { reachable: "ok", unauthorized: "warn", unreachable: "bad" };
 const TELEGRAM_DOT: Record<HealthResponse["telegram"], DotState> = { connected: "ok", disconnected: "bad", unknown: "unknown" };
 
-function StatusDot({ label, state, detail }: { label: string; state: DotState; detail: string }) {
+function StatusDot({ label, state, detail, visible }: { label: string; state: DotState; detail: string; visible: boolean }) {
   return (
-    <span className="zui-dot-item" title={`${label}: ${detail}`}>
+    <span className={`zui-dot-item${visible ? "" : " zui-sr-only"}`} title={`${label}: ${detail}`}>
       <span className={`zui-dot zui-dot--${state}`} aria-hidden="true" />
       <span className="zui-dot-item__label">{label}</span>
       <span className="zui-sr-only">: {detail}</span>
@@ -80,6 +81,7 @@ export function Hud() {
   const d = division ? getDivision(division) : undefined;
   const hermes = health.data?.hermes;
   const telegram = health.data?.telegram;
+  const connectionsDown = useConnections().isError;
   const phone = useMediaQuery(PHONE_QUERY);
   const ref = useRef<HTMLElement>(null);
   usePublishHudBottom(ref);
@@ -112,8 +114,14 @@ export function Hud() {
         </nav>
       </div>
       <div className="zui-hud__status">
-        <StatusDot label="Hermes" state={hermes ? HERMES_DOT[hermes] : health.isError ? "bad" : "unknown"} detail={hermes ?? (health.isError ? "server offline" : "checking")} />
-        <StatusDot label="Telegram" state={telegram ? TELEGRAM_DOT[telegram] : "unknown"} detail={telegram ?? "unknown"} />
+        <StatusDot
+          label="Hermes"
+          state={hermes ? HERMES_DOT[hermes] : health.isError ? "bad" : "unknown"}
+          detail={hermes ?? (health.isError ? "server offline" : "checking")}
+          visible={hermes !== "reachable" && !health.isPending}
+        />
+        <StatusDot label="Telegram" state={telegram ? TELEGRAM_DOT[telegram] : "unknown"} detail={telegram ?? "unknown"} visible={connectionsDown && !phone} />
+        {phone && <ConnectionsSummary />}
       </div>
       {phone && <MoreMenu onBoard={openBoard} />}
       <div className="zui-hud__actions">
@@ -142,6 +150,7 @@ export function Hud() {
           Hire
         </button>
       </div>
+      {!phone && <ConnectionsRow />}
       {health.data?.reviewDispatch === "on" && (
         <p className="zui-banner zui-banner--warn" role="alert">
           Hermes review agent is on: it can approve mandates before HQ sees them.
