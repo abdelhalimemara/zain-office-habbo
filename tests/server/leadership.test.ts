@@ -199,7 +199,10 @@ describe("the leadership live session", () => {
     expect(prompt).toContain("There is no vote");
     // Peer address: whoever is named answers next, whether the founder or a colleague asked.
     expect(prompt).toContain("Whoever is addressed by name answers next, in their own tag, whether Abdelhalim or a colleague asked");
-    expect(prompt).toContain(`if Susu says "Omar, what's Growth's capacity?", Omar answers straight away`);
+    expect(prompt).toContain(`if Susu says "Omar, what's Growth's capacity?", the same reply continues with <Omar> giving the answer`);
+    // One agent voices everyone: a colleague can only answer within the same reply, so a reply must never end on a hand-over.
+    expect(prompt).toContain("INSIDE THE SAME REPLY");
+    expect(prompt).toContain("Never end a reply on a question, hand-over or request to a colleague");
     expect(prompt).toContain("<Faisal>Delivery is on track.</Faisal>");
     // Susu runs the agenda; the founder decides.
     expect(prompt).toContain("Susu runs the agenda for Abdelhalim: she keeps time, pulls the right exec in by name");

@@ -144,7 +144,8 @@ function priorTranscript(turns: readonly MeetingTurn[], speakers: readonly LiveS
 const RULES = [
   "Wrap every line in its speaker's tag, exactly as listed, e.g. <Hormozi>Your offer is too cheap.</Hormozi>. Close every tag and never nest tags.",
   "Every word you say is inside a board member's tag. There is no chair, host or narrator: never say anything outside a tag.",
-  "Each speaker turn is 1 to 3 short spoken sentences. A reply holds one to three speakers, then stops so the room can react.",
+  "Each speaker turn is 1 to 3 short spoken sentences. A reply usually holds one to four speakers.",
+  `You voice every member, so a member can only answer INSIDE THE SAME REPLY: the room never gets another turn until ${FOUNDER_NAME} speaks. So when a member puts a question to another member by name, continue the same reply with that member's answer in their own tag. Never end a reply on a question to a member; end it on a question for ${FOUNDER_NAME} or once a point is complete.`,
   "Make it a real conversation: members react to what was just said, address each other by name, disagree, build on each other's points and cut in on each other naturally.",
   `Whoever is addressed by name answers next, in their own tag, whether ${FOUNDER_NAME} or another member asked: when one member puts a question to another by name, that member answers straight away. Never answer for the person addressed and never ignore a colleague's question.`,
   `${FOUNDER_NAME} can interrupt at any time. When he names no one, the most relevant member answers him directly and briefly; ask him for his view now and then.`,
