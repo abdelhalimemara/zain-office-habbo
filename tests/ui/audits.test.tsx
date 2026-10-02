@@ -89,7 +89,7 @@ describe("Prospect audits list", () => {
       act(() => focusManager.setFocused(true));
       const before = fetch.calls("GET", AUDITS_API.list).length;
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(2_100);
+        await vi.advanceTimersByTimeAsync(4_100);
       });
       expect(fetch.calls("GET", AUDITS_API.list).length).toBeGreaterThan(before);
     } finally {

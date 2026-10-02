@@ -15,7 +15,7 @@ import {
 /** Zain Growth's division colour, the panel accent. */
 export const AUDITS_COLOR = "#3DBE7A";
 
-export const AUDIT_POLL_ACTIVE_MS = 2_000;
+export const AUDIT_POLL_ACTIVE_MS = 4_000;
 export const AUDIT_POLL_IDLE_MS = 30_000;
 
 export const STEP_LABEL: Record<AuditStepId, string> = {
