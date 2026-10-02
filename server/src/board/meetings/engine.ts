@@ -100,7 +100,41 @@ export class MeetingEngine {
       ...(req.relatedTaskId ? { relatedTaskId: req.relatedTaskId } : {}),
     };
     const stored: StoredMeeting = { id: meeting.id, meeting, rounds: [] };
+    if (meeting.mode === "voice") {
+      // The live room is round 1; no written opening round.
+      meeting.status = "live";
+      meeting.currentRound = 1;
+      meeting.liveConversationIds = [];
+      await this.save(stored);
+      return stored.meeting;
+    }
     await this.startRound(stored, 1, []);
+    return stored.meeting;
+  }
+
+  /**
+   * Appends a live session's transcript once per conversation id; `final` then sends the meeting to the vote.
+   * A conversation already recorded adds nothing, so repeating the call is harmless.
+   */
+  async recordLive(id: string, conversationId: string, turns: readonly MeetingTurn[], final: boolean): Promise<BoardMeeting> {
+    const stored = await this.load(id);
+    const m = stored.meeting;
+    const known = m.liveConversationIds?.includes(conversationId) ?? false;
+    if (m.status !== "live") {
+      if (known) return m;
+      throw new HttpError(409, `meeting ${id} is ${m.status}, not live`);
+    }
+    if (!known) {
+      m.liveConversationIds = [...(m.liveConversationIds ?? []), conversationId];
+      // Not recordTurns: these were already spoken in the room, so there is no audio to prefetch.
+      m.turns.push(...turns);
+    }
+    if (!final) {
+      await this.save(stored);
+      return m;
+    }
+    m.discussionRounds = m.currentRound - 1;
+    await this.startRound(stored, m.currentRound + 1, []);
     return stored.meeting;
   }
 

@@ -20,6 +20,7 @@ import { fullRoster, type HireStore } from "./org/hireStore";
 import { mergeRoster } from "./org/rosterView";
 import { allTeams, memoryTeamStore, type TeamStore } from "./org/teamStore";
 import { createTeam, defaultGhExec, listTeams, parseTeamRequest, type GhCheck } from "./org/techTeams";
+import type { LiveService } from "./voice/live";
 import type { VoiceService } from "./voice/service";
 import { voiceRoutes } from "./voice/routes";
 import { UI_AUTHOR, approve, createMandate, parseMandate, reject, reopen, taskDetail, unblock } from "./org/tasks";
@@ -34,6 +35,8 @@ export interface AppDeps {
   consultations: ConsultationLog;
   /** ElevenLabs voices for voice meetings. */
   voice: VoiceService;
+  /** Live voice meetings on the ElevenLabs Board Room agent; their routes answer 503 when omitted. */
+  live?: LiveService;
   /** Board members' private briefs, read only when writing their SOUL. */
   briefs: BriefReader;
   guard?: GuardOptions;
@@ -119,7 +122,7 @@ export function createApp(deps: AppDeps): Hono {
   });
 
   meetingRoutes(app, deps.meetings);
-  voiceRoutes(app, deps.voice, deps.meetings);
+  voiceRoutes(app, deps.voice, deps.meetings, deps.live);
 
   app.get("/api/roster", async (c) => {
     const [roster, profiles] = await Promise.all([fullRoster(hires), hermes.listProfiles()]);

@@ -1,5 +1,5 @@
 import { findBoardMember } from "../../../../shared/board";
-import type { BoardMeeting, Decision, MeetingTurn, MeetingVote, RoundKind, Vote } from "../../../../shared/meetings";
+import type { BoardMeeting, Decision, MeetingMode, MeetingTurn, MeetingVote, RoundKind, Vote } from "../../../../shared/meetings";
 import { CEO_PROFILE } from "../../../../shared/roster";
 
 export const FOUNDER = "founder";
@@ -21,6 +21,11 @@ export function roundLabel(round: number, discussionRounds: number): string {
   return kind === "vote" ? "Vote" : `Discussion ${round - 1}`;
 }
 
+/** A meeting's round label: a voice meeting's first round is its live discussion. */
+export function meetingRoundLabel(round: number, discussionRounds: number, mode: MeetingMode = "chat"): string {
+  return mode === "voice" && round === 1 ? "Live discussion" : roundLabel(round, discussionRounds);
+}
+
 /** Stable tag in a task body, so a meeting's tasks can be found again on the board. */
 export function marker(meetingId: string, round: number | "minutes"): string {
   return `<!-- zain-meeting:${meetingId}:${round} -->`;
@@ -32,14 +37,14 @@ export function speakerName(speaker: string): string {
   return findBoardMember(speaker)?.name ?? speaker;
 }
 
-export function transcript(turns: readonly MeetingTurn[], discussionRounds: number): string {
+export function transcript(turns: readonly MeetingTurn[], discussionRounds: number, mode?: MeetingMode): string {
   if (turns.length === 0) return "(No one has spoken yet.)";
   const lines: string[] = [];
   let round = 0;
   for (const turn of turns) {
     if (turn.round !== round) {
       round = turn.round;
-      lines.push(`--- Round ${round} · ${roundLabel(round, discussionRounds)} ---`);
+      lines.push(`--- Round ${round} · ${meetingRoundLabel(round, discussionRounds, mode)} ---`);
     }
     lines.push(`${speakerName(turn.speaker)}: ${turn.text.trim()}`, "");
   }
@@ -67,9 +72,17 @@ function outputContract(kind: RoundKind): string[] {
   ];
 }
 
+/** A voice meeting's discussion happened live; its founder lines are already in the transcript. */
+const LIVE_NOTE = [
+  "## Live discussion",
+  "The discussion below was a live voice meeting with the founder in the room, voiced on your behalf from your persona. Treat it as what you said; stand by it or say plainly where you now differ.",
+  "",
+];
+
 export function roundTaskBody(meeting: BoardMeeting, round: number): string {
   const kind = roundKind(round, meeting.discussionRounds);
   const remarks = meeting.turns.filter((t) => t.speaker === FOUNDER);
+  const live = meeting.mode === "voice";
   return [
     marker(meeting.id, round),
     `Board meeting: ${meeting.topic}`,
@@ -82,12 +95,11 @@ export function roundTaskBody(meeting: BoardMeeting, round: number): string {
     ...RULES[kind].map((r) => `- ${r}`),
     `- At most ${WORD_LIMIT} words. Stay in character; speak only for yourself.`,
     "",
+    ...(live ? LIVE_NOTE : []),
     "## Transcript so far",
-    transcript(meeting.turns, meeting.discussionRounds),
+    transcript(meeting.turns, meeting.discussionRounds, meeting.mode),
     "",
-    "## Founder remarks",
-    remarks.length ? remarks.map((r) => `- ${r.text.trim()}`).join("\n") : "(none)",
-    "",
+    ...(live ? [] : ["## Founder remarks", remarks.length ? remarks.map((r) => `- ${r.text.trim()}`).join("\n") : "(none)", ""]),
     "## Output contract",
     ...outputContract(kind),
   ].join("\n");
@@ -143,7 +155,7 @@ export function minutesTaskBody(meeting: BoardMeeting): string {
     meeting.brief,
     "",
     "## Transcript",
-    transcript(meeting.turns, meeting.discussionRounds),
+    transcript(meeting.turns, meeting.discussionRounds, meeting.mode),
     "",
     "## Votes",
     ...meeting.votes.map((v) => `- ${speakerName(v.member)}: ${v.vote}${v.conditions ? ` (conditions: ${v.conditions})` : ""} — ${v.rationale}`),
