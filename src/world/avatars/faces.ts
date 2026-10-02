@@ -72,7 +72,7 @@ const NORMAL: Readonly<Record<FaceName, readonly [number, number, number]>> = {
   bottom: [0, 0, -1],
 };
 
-/** Which captured texture paints a face, and whether it is mirrored horizontally. */
+/** Fallback source when an atlas has no baked texture for a face, and whether it is mirrored horizontally. */
 export function faceSource(face: FaceName): { src: SourceFace; flipU: boolean } {
   switch (face) {
     case "back":
@@ -88,7 +88,13 @@ export function faceSource(face: FaceName): { src: SourceFace; flipU: boolean } 
 
 /** Brightness of each lit orientation, from the floors' box shading (top +0.08, left -0.12, right -0.3). */
 export const FACE_LIGHT = { top: 1.08, left: 0.88, right: 0.7 } as const;
-const SOURCE_LIGHT: Readonly<Record<SourceFace, number>> = { front: FACE_LIGHT.left, side: FACE_LIGHT.right, top: FACE_LIGHT.top };
+
+/** Lighting already baked into a face texture: captured faces carry the reference light, synthesised ones are front-lit. */
+export function sourceLight(face: FaceName): number {
+  return face === "side" ? FACE_LIGHT.right : face === "top" ? FACE_LIGHT.top : FACE_LIGHT.left;
+}
+
+const ARMS = new Set<PartName>(["upperR", "upperL", "foreR", "foreL", "thumb"]);
 
 export interface ProjectedFace {
   part: NamedPart;
@@ -99,8 +105,8 @@ export interface ProjectedFace {
   eu: [number, number];
   ev: [number, number];
   depth: number;
-  /** Multiplier to relight the source texture for this orientation (<= 1). */
-  tint: number;
+  /** Brightness this face should have for its current orientation (see FACE_LIGHT). */
+  light: number;
 }
 
 const VIEW: readonly [number, number, number] = [1, 1, 1 / Z_SCALE];
@@ -147,12 +153,16 @@ export function standBox(spec: AvatarSpec, name: PartName): Box3 | undefined {
 }
 
 /** Every box face the viewer can see, back to front, for a rig and facing. */
-export function projectFaces(spec: AvatarSpec, rig: Rig, facing: Facing, filter?: (p: NamedPart) => boolean): ProjectedFace[] {
+export function projectFaces(spec: AvatarSpec, rig: Rig, facing: Facing, filter?: (p: NamedPart) => boolean, mirrored = false): ProjectedFace[] {
   const fm = facingMatrix(facing);
   const out: ProjectedFace[] = [];
-  for (const part of buildParts(spec, rig)) {
+  const parts = buildParts(spec, rig);
+  const torso = parts.find((p) => p.name === "torso")!;
+  const shoulder = apply(mul(fm, torso.m), [0, 0, torso.h])[2];
+  for (const part of parts) {
     if (filter && !filter(part)) continue;
     const m = mul(fm, part.m);
+    const raised = ARMS.has(part.name) && apply(m, [part.w / 2, part.d / 2, part.h / 2])[2] > shoulder + 2 ? 1000 : 0;
     const box = standBox(spec, part.name) ?? texBox(part);
     for (const face of ALL_FACES) {
       const n = rotate(m, NORMAL[face]);
@@ -162,7 +172,6 @@ export function projectFaces(spec: AvatarSpec, rig: Rig, facing: Facing, filter?
       const s10 = screen(apply(m, facePoint(box, face, 1, 0)));
       const s01 = screen(apply(m, facePoint(box, face, 0, 1)));
       const c = apply(m, facePoint(box, face, 0.5, 0.5));
-      const { src } = faceSource(face);
       out.push({
         part,
         box,
@@ -170,8 +179,8 @@ export function projectFaces(spec: AvatarSpec, rig: Rig, facing: Facing, filter?
         o: s00,
         eu: [s10[0] - s00[0], s10[1] - s00[1]],
         ev: [s01[0] - s00[0], s01[1] - s00[1]],
-        depth: c[0] * VIEW[0] + c[1] * VIEW[1] + c[2] * VIEW[2],
-        tint: Math.min(1, lightFor(n) / SOURCE_LIGHT[src]),
+        depth: c[0] * VIEW[0] + c[1] * VIEW[1] + c[2] * VIEW[2] + raised,
+        light: lightFor(mirrored ? [n[1], n[0], n[2]] : n),
       });
     }
   }

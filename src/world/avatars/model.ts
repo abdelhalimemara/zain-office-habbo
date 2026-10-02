@@ -112,7 +112,7 @@ export function buildParts(spec: AvatarSpec, rig: Rig): NamedPart[] {
     add(`fore${sfx}`, d.armW, d.armD, d.foreArm + 1, mul(elbowM, translate(-d.armW / 2, -d.armD / 2, -d.foreArm)), foreArmPaint(spec), 11 + side);
     if (side > 0 && rig.thumbL) {
       const skin = spec.skin;
-      add("thumb", 2, 2, 3, mul(elbowM, translate(-d.armW / 2 + Math.floor((d.armW - 2) / 2), d.armD / 2, 1 - d.foreArm)), () => skin, 15);
+      add("thumb", 3, 4, 4, mul(elbowM, translate(-1.5, d.armD / 2 - 1, -d.foreArm)), () => skin, 15);
     }
   }
 

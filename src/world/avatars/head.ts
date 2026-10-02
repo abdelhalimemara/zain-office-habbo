@@ -108,6 +108,7 @@ function hairColor(spec: AvatarSpec, s: HairShape, x: number, y: number, z: numb
   if (hit === 3) return shade(h.color, ((x + y + z) & 1) * 0.08);
   if (hit === 4) return h.accent ?? 0x2b2b2e;
   if (hit === 5) return 0xf2f2f2;
+  if (hit === 6) return shade(h.accent ?? 0x2b2b2e, 0.18);
   const streak = (hash3(x, y * 3 + Math.floor(z / 2), 5) - 0.5) * 0.04;
   const lift = z >= H ? 0.04 : y < 0 || x < 0 || x >= W || y >= D ? -0.03 : 0;
   return shade(h.color, streak + lift);

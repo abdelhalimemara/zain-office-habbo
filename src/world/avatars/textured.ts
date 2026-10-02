@@ -1,7 +1,8 @@
 import { Assets, Container, Matrix, Rectangle, Sprite, Texture } from "pixi.js";
 import type { SpriteKey } from "../characters";
 import { ATLASES } from "./atlas/urls";
-import { faceSource, projectFaces, type ProjectedFace } from "./faces";
+import { lighten } from "./color";
+import { faceSource, projectFaces, sourceLight, type ProjectedFace } from "./faces";
 import { volumeOf } from "./raster";
 import type { AvatarSpec, Facing, Rig } from "./types";
 
@@ -81,56 +82,68 @@ function place(sprite: Sprite, f: ProjectedFace, sx: number, sy: number, U0: num
   return sprite;
 }
 
+function lit(sprite: Sprite, ratio: number, out: Sprite[]): void {
+  sprite.tint = gray(ratio);
+  out.push(sprite);
+  if (ratio <= 1.01) return;
+  const glow = new Sprite(sprite.texture);
+  glow.position.copyFrom(sprite.position);
+  glow.scale.copyFrom(sprite.scale);
+  glow.skew.copyFrom(sprite.skew);
+  glow.rotation = sprite.rotation;
+  glow.pivot.copyFrom(sprite.pivot);
+  glow.tint = gray(ratio - 1);
+  glow.blendMode = "add";
+  out.push(glow);
+}
+
 function faceSprites(a: Atlas, f: ProjectedFace, sx: number, sy: number, solid: boolean): Sprite[] {
-  const { src, flipU } = faceSource(f.face);
-  const rect = a.meta.faces[f.part.name]?.[src];
-  const sprite = new Sprite();
   const out: Sprite[] = [];
-  let U0 = 0;
-  let U1 = 1;
-  let V0 = 0;
-  let V1 = 1;
-  if (rect) {
-    const [x, y, w, h, u0, u1, v0, v1] = rect;
-    if (src === f.face) {
-      if (solid) {
-        const under = new Sprite(Texture.WHITE);
-        under.tint = shadeRgb(rect[8], f.tint);
-        out.push(place(under, f, sx, sy, 0, 1, 0, 1, false));
-      }
-      sprite.texture = frameTexture(a, `${f.part.name}/${src}`, x, y, w, h);
-      [U0, U1, V0, V1] = [u0, u1, v0, v1];
-    } else {
-      const under = new Sprite(Texture.WHITE);
-      under.tint = shadeRgb(rect[8], f.tint);
-      out.push(place(under, f, sx, sy, 0, 1, 0, 1, false));
-      const from = f.face === "back" && f.part.name === "head" ? 0.5 : 0;
-      const cx0 = x + Math.round(((from - u0) / (u1 - u0)) * w);
-      const cx1 = x + Math.round(((1 - u0) / (u1 - u0)) * w);
-      const cy0 = y + Math.round(((0 - v0) / (v1 - v0)) * h);
-      const cy1 = y + Math.round(((1 - v0) / (v1 - v0)) * h);
-      sprite.texture = frameTexture(a, `${f.part.name}/${src}/core${from}`, cx0, cy0, cx1 - cx0, cy1 - cy0);
-    }
-    sprite.tint = gray(f.tint);
-  } else {
+  const own = a.meta.faces[f.part.name]?.[f.face];
+  const fallback = faceSource(f.face);
+  const src = own ? f.face : fallback.src;
+  const flipU = own ? false : fallback.flipU;
+  const rect = own ?? a.meta.faces[f.part.name]?.[fallback.src];
+  const ratio = f.light / sourceLight(src);
+  const sprite = new Sprite();
+  if (!rect) {
     const vol = volumeOf(f.part);
     let col = 0xaaaaaa;
-    for (const v of vol) if (v) {
-      col = v - 1;
-      break;
-    }
+    for (const v of vol)
+      if (v) {
+        col = v - 1;
+        break;
+      }
     sprite.texture = Texture.WHITE;
-    sprite.tint = shadeRgb(col, f.tint * (f.face === "top" ? 1.08 : f.face === "side" ? 0.7 : 0.88));
+    sprite.tint = f.face === "top" ? lighten(col, 0.3) : shadeRgb(col, f.light);
+    out.push(place(sprite, f, sx, sy, 0, 1, 0, 1, false));
+    return out;
   }
-  out.push(place(sprite, f, sx, sy, U0, U1, V0, V1, flipU));
+  const [x, y, w, h, u0, u1, v0, v1, avg] = rect;
+  if (solid || !own) {
+    const under = new Sprite(Texture.WHITE);
+    under.tint = shadeRgb(avg, Math.min(1, ratio));
+    out.push(place(under, f, sx, sy, 0, 1, 0, 1, false));
+  }
+  if (own) {
+    sprite.texture = frameTexture(a, `${f.part.name}/${src}`, x, y, w, h);
+    lit(place(sprite, f, sx, sy, u0, u1, v0, v1, false), ratio, out);
+    return out;
+  }
+  const cx0 = x + Math.round(((0 - u0) / (u1 - u0)) * w);
+  const cx1 = x + Math.round(((1 - u0) / (u1 - u0)) * w);
+  const cy0 = y + Math.round(((0 - v0) / (v1 - v0)) * h);
+  const cy1 = y + Math.round(((1 - v0) / (v1 - v0)) * h);
+  sprite.texture = frameTexture(a, `${f.part.name}/${src}/core`, cx0, cy0, cx1 - cx0, cy1 - cy0);
+  lit(place(sprite, f, sx, sy, 0, 1, 0, 1, flipU), ratio, out);
   return out;
 }
 
-export function texturedFigure(spec: AvatarSpec, rig: Rig, facing: Extract<Facing, "SW" | "NW">, sx: number, sy: number): Container | null {
+export function texturedFigure(spec: AvatarSpec, rig: Rig, facing: Extract<Facing, "SW" | "NW">, sx: number, sy: number, mirrored = false): Container | null {
   const a = atlases.get(spec.key);
   if (!a) return null;
   const root = new Container();
-  for (const f of projectFaces(spec, rig, facing)) {
+  for (const f of projectFaces(spec, rig, facing, undefined, mirrored)) {
     for (const s of faceSprites(a, f, sx, sy, facing === "NW")) root.addChild(s);
   }
   return root;
