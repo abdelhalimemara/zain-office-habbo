@@ -9,6 +9,9 @@ export type RoundKind = "opening" | "discussion" | "vote";
 
 export type Vote = "approve" | "approve-with-conditions" | "reject" | "abstain";
 
+/** "chat": text only. "voice": every turn is also spoken in the member's ElevenLabs voice and the founder can speak back. */
+export type MeetingMode = "chat" | "voice";
+
 export type Decision = "approved" | "approved-with-conditions" | "rejected" | "no-decision";
 
 export interface MeetingTurn {
@@ -34,6 +37,8 @@ export interface BoardMeeting {
   topic: string;
   brief: string;
   members: string[];
+  /** Absent on meetings created before voice meetings existed: treat as "chat". */
+  mode?: MeetingMode;
   /** True: the board discusses on its own and never pauses for founder remarks. */
   boardOnly: boolean;
   /** Discussion rounds between the opening and the vote (1..3). */
@@ -58,6 +63,8 @@ export interface StartMeetingRequest {
   brief: string;
   members?: string[];
   boardOnly?: boolean;
+  /** Defaults to "chat". */
+  mode?: MeetingMode;
   discussionRounds?: number;
   relatedTaskId?: string;
 }
