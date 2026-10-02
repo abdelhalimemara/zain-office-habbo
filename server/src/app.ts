@@ -146,7 +146,7 @@ export function createApp(deps: AppDeps): Hono {
   meetingRoutes(app, deps.meetings);
   if (deps.leadership) leadershipRoutes(app, deps.leadership);
   if (deps.memory) memoryRoutes(app, deps.memory, hires);
-  if (deps.audits) auditRoutes(app, deps.audits, deps.audits.crm);
+  if (deps.audits) auditRoutes(app, deps.audits, deps.audits.crm, ceoWake);
   voiceRoutes(app, deps.voice, deps.meetings, deps.live);
 
   app.get("/api/roster", async (c) => {

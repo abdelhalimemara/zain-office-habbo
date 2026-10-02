@@ -1,4 +1,4 @@
-import type { AuditStepId, ProspectAudit, SearchRun, SeoRead, SocialChannelRow } from "../../../../shared/audits";
+import type { AuditStatus, AuditStepId, ProspectAudit, SearchRun, SeoRead, SocialChannelRow } from "../../../../shared/audits";
 
 /** Tags seen in the crawl's HTML and window globals (or flagged on the CRM record). */
 export interface Trackers {
@@ -130,6 +130,8 @@ export interface StoredAudit {
   audit: ProspectAudit;
   data: CollectedData;
   crmFlags?: CrmFlags;
+  /** The kanban task of the agent that started this audit; told the outcome once per run (reportedStatus). */
+  parent?: { taskId: string; reportedStatus?: AuditStatus };
   analysisTask?: { taskId?: string; assignee: string; startedAt: number };
   crm?: { fileId?: string; attachmentId?: string; noteId?: string };
   notionPageId?: string;

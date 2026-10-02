@@ -7,6 +7,7 @@ import { Budget, round } from "./budget";
 import type { AuditCrm } from "./crm";
 import type { AuditNotionSink } from "./notion";
 import type { PdfRenderer, Screenshotter } from "./chrome";
+import { REPORTED, reportToParent } from "./parent";
 import { asOfLabel, checkAnalysis, pdfFile, runStep, screenshotFile, type AuditHermes, type Outcome, type StepContext } from "./steps";
 import type { CrmFlags, StoredAudit } from "./types";
 import { dnsResolver, siteHost, validateWebsite, type Resolver } from "./url";
@@ -83,6 +84,15 @@ export class AuditEngine {
     return (await this.load(id)).audit;
   }
 
+  /** Hermes and the DNS resolver, shared with the audit-request route. */
+  get hermes(): AuditHermes {
+    return this.deps.hermes;
+  }
+
+  get resolver(): Resolver {
+    return this.deps.resolve ?? dnsResolver;
+  }
+
   /** The CRM the audits read prospects from (the prospect search route uses it too). */
   get crm(): AuditCrm {
     return this.deps.crm;
@@ -122,7 +132,13 @@ export class AuditEngine {
       updatedAt: at,
     };
     const flags: CrmFlags | undefined = record && Object.values(record.flags).some((v) => v !== undefined) ? record.flags : undefined;
-    await this.deps.store.put({ id: audit.id, audit, data: { asOf: asOfLabel(at) }, ...(flags ? { crmFlags: flags } : {}) });
+    await this.deps.store.put({
+      id: audit.id,
+      audit,
+      data: { asOf: asOfLabel(at) },
+      ...(flags ? { crmFlags: flags } : {}),
+      ...(req.parentTaskId ? { parent: { taskId: req.parentTaskId } } : {}),
+    });
     void this.tick();
     return audit;
   }
@@ -154,6 +170,8 @@ export class AuditEngine {
       }
       s.audit.status = "queued";
       delete s.audit.error;
+      // The rerun's outcome is news for the parent task again.
+      if (s.parent) delete s.parent.reportedStatus;
     });
     void this.tick();
     return saved.audit;
@@ -168,6 +186,7 @@ export class AuditEngine {
     });
     const task = saved.analysisTask?.taskId;
     if (task && step(saved.audit, "analysis").status === "running") await this.deps.hermes.updateTask(task, { status: "archived" }).catch(() => undefined);
+    void this.tick();
     return saved.audit;
   }
 
@@ -190,9 +209,26 @@ export class AuditEngine {
           this.log(`audits: ${s.id} failed to advance (${err instanceof Error ? err.message : "error"})`);
         }
       }
+      for (const s of await this.deps.store.list()) {
+        if (s.parent && REPORTED.has(s.audit.status) && s.parent.reportedStatus !== s.audit.status) this.reportParent(s);
+      }
     } catch (err) {
       this.log(`audits: tick failed (${err instanceof Error ? err.message : "error"})`);
     }
+  }
+
+  /** Tells the requesting agent's task how the audit ended (once per outcome), then unblocks it. */
+  private reportParent(s: StoredAudit): void {
+    this.background(`${s.id}:parent`, async () => {
+      const fresh = await this.load(s.id);
+      if (!fresh.parent || !REPORTED.has(fresh.audit.status) || fresh.parent.reportedStatus === fresh.audit.status) return false;
+      await reportToParent(fresh, { hermes: this.deps.hermes, root: this.deps.root, publicBase: this.deps.publicBase ?? DEFAULT_PUBLIC_BASE });
+      const status = fresh.audit.status;
+      await this.update(s.id, (x) => {
+        if (x.parent) x.parent.reportedStatus = status;
+      });
+      return false;
+    });
   }
 
   /** Resolves when every step under way has saved its outcome (tests, shutdown). */

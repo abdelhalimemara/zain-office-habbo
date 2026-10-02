@@ -20,7 +20,7 @@ import { validateWebsite, type Resolver } from "./url";
 import type { StoredAudit } from "./types";
 
 /** Hermes as the audit uses it (a narrow slice, so tests can fake it). */
-export type AuditHermes = Pick<HermesClient, "createTask" | "task" | "listProfiles" | "updateTask">;
+export type AuditHermes = Pick<HermesClient, "createTask" | "task" | "listProfiles" | "updateTask" | "addComment">;
 
 /** An agent that has not answered by then gets the analysis written from the scores. */
 export const ANALYSIS_TIMEOUT_SECONDS = 45 * 60;
