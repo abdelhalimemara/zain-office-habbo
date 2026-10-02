@@ -41,6 +41,7 @@ describe("npm run ahmad:whatsapp -- --route-only", () => {
     expect(hermesFetch.calls.filter((c) => c.method !== "GET")).toEqual([]);
     expect(lines[0]).toBe("WhatsApp on the gateway: not configured.");
     expect(lines.join("\n")).toContain("without starting pairing");
+    expect(lines.join("\n")).toContain("WHATSAPP_ALLOWED_USERS=*");
   });
 
   it("routes to Ahmad, opens DMs and enables kanban without pairing", async () => {
@@ -64,6 +65,7 @@ describe("npm run ahmad:whatsapp -- --route-only", () => {
         },
       ],
       ["PUT /api/env", { key: "WHATSAPP_ALLOW_ALL_USERS", value: "true", profile: "default" }],
+      ["PUT /api/env", { key: "WHATSAPP_ALLOWED_USERS", value: "*", profile: "default" }],
       ["PUT /api/config", { profile: "zain-hq-accounts", config: { platform_toolsets: { whatsapp: ["hermes-whatsapp", "kanban"], email: ["hermes-email", "kanban"] } } }],
       ["PUT /api/env", { key: "WHATSAPP_DM_POLICY", value: "open", profile: "default" }],
     ]);
@@ -134,6 +136,7 @@ describe("npm run ahmad:whatsapp", () => {
         },
       ],
       ["PUT /api/env", { key: "WHATSAPP_ALLOW_ALL_USERS", value: "true", profile: "default" }],
+      ["PUT /api/env", { key: "WHATSAPP_ALLOWED_USERS", value: "*", profile: "default" }],
       ["PUT /api/config", { profile: "zain-hq-accounts", config: { platform_toolsets: { whatsapp: ["hermes-whatsapp", "kanban"], email: ["hermes-email", "kanban"] } } }],
       ["POST /api/messaging/whatsapp/onboarding/start", { mode: "bot", allowed_users: "", profile: null }],
       ["POST /api/messaging/whatsapp/onboarding/pair1/apply", { mode: "bot", profile: null }],

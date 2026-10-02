@@ -92,6 +92,9 @@ async function routeAndOpen(hermes: HermesClient): Promise<void> {
   const gateway = (defaults.gateway ?? {}) as Record<string, unknown>;
   await hermes.mergeConfig("default", { gateway: { profile_routes: withAhmadRoute(gateway.profile_routes) } });
   await hermes.setEnv("default", "WHATSAPP_ALLOW_ALL_USERS", "true");
+  // The Node bridge gates senders itself and ignores ALLOW_ALL_USERS: an open bot needs "*"
+  // (scripts/whatsapp-bridge/allowlist.js).
+  await hermes.setEnv("default", "WHATSAPP_ALLOWED_USERS", "*");
   await enableKanbanToolsets(hermes, ["whatsapp", "email"]);
 }
 
@@ -106,7 +109,7 @@ async function runRouteOnly(apply: boolean, hermes: HermesClient, log: (line: st
   if (!apply) {
     log("Dry run. With --apply this will (without starting pairing):");
     log(`- add gateway.profile_routes "${ROUTE_NAME}" on the default profile: every WhatsApp chat → ${ACCOUNTS_PROFILE}`);
-    log("- set WHATSAPP_ALLOW_ALL_USERS=true and WHATSAPP_DM_POLICY=open on the default profile");
+    log("- set WHATSAPP_ALLOW_ALL_USERS=true, WHATSAPP_ALLOWED_USERS=* and WHATSAPP_DM_POLICY=open on the default profile");
     log(`- enable the kanban toolset for ${ACCOUNTS_PROFILE} on WhatsApp and email`);
     return "dry-run";
   }
@@ -138,7 +141,7 @@ export async function runWhatsAppSetup({
   if (!apply) {
     log("Dry run. With --apply this will:");
     log(`- add gateway.profile_routes "${ROUTE_NAME}" on the default profile: every WhatsApp chat → ${ACCOUNTS_PROFILE}`);
-    log("- allow every sender on WhatsApp (WHATSAPP_ALLOW_ALL_USERS=true) on the default profile");
+    log("- allow every sender on WhatsApp (WHATSAPP_ALLOW_ALL_USERS=true, WHATSAPP_ALLOWED_USERS=*) on the default profile");
     log(`- enable the kanban toolset for ${ACCOUNTS_PROFILE} on WhatsApp and email`);
     log("- start WhatsApp linking (bot mode) and show the QR code here, then apply it (Hermes restarts the gateway)");
     log("- set WHATSAPP_DM_POLICY=open so anyone can message Ahmad");
