@@ -33,8 +33,9 @@ export function consultationTitle(question: string): string {
   return `${CONSULTATION_PREFIX}${short}`;
 }
 
-export function consultationBody({ question, relatedTaskId }: BoardConsultRequest): string {
-  return [question, ...(relatedTaskId ? ["", `Related task: ${relatedTaskId}`] : []), "", "Answer per your board charter."].join("\n");
+/** `memory`: the member's "What the board already knows" section (board/memory/ledger.ts), or none. */
+export function consultationBody({ question, relatedTaskId }: BoardConsultRequest, memory: readonly string[] = []): string {
+  return [question, ...(relatedTaskId ? ["", `Related task: ${relatedTaskId}`] : []), "", ...memory, "Answer per your board charter."].join("\n");
 }
 
 /**
@@ -60,15 +61,15 @@ export async function hiredBoardMembers(
 /** One consultation task per advisor; only hired advisors can be asked, since Hermes runs profiles. */
 export async function consultBoard(
   req: BoardConsultRequest,
-  deps: { hermes: HermesClient; hires: HireStore; ceoWake: CeoWake },
+  deps: { hermes: HermesClient; hires: HireStore; ceoWake: CeoWake; memory?: (member: string) => Promise<string[]> },
 ): Promise<BoardConsultResponse> {
   const members = await hiredBoardMembers(req.members, deps);
 
   const title = consultationTitle(req.question);
-  const body = consultationBody(req);
   const tasks = [];
   let allSubscribed = true;
   for (const assignee of members) {
+    const body = consultationBody(req, (await deps.memory?.(assignee).catch(() => [])) ?? []);
     const task = await deps.hermes.createTask({ title, body, assignee, tenant: HQ_TENANT, triage: false });
     tasks.push(task);
     allSubscribed = (await deps.ceoWake.subscribe(task.id)).subscribed && allSubscribed;

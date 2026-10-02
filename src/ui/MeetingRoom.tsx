@@ -46,7 +46,7 @@ function Bubble({ turn, agents, now }: { turn: MeetingTurn; agents: readonly Ros
 function Minutes({ turns }: { turns: MeetingTurn[] }) {
   return (
     <section className="zui-minutes" aria-label="Minutes">
-      <h4 className="zui-minutes__title">Minutes · by the chair</h4>
+      <h4 className="zui-minutes__title">Minutes · notes by the CEO's office</h4>
       {turns.map((t, i) => (
         <p key={i} className="zui-turn__text" dir="auto">
           {t.text}

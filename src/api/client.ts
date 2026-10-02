@@ -16,6 +16,7 @@ import {
   type RosterResponse,
   type TaskDetailResponse,
 } from "@shared/api";
+import { BOARD_MEMORY_API, type BoardMemoryResponse } from "@shared/boardMemory";
 import {
   MEETINGS_API,
   type FounderRemarkRequest,
@@ -66,6 +67,9 @@ export const api = {
   startMeeting: (input: StartMeetingRequest) => post<MeetingResponse>(MEETINGS_API.list, input),
   founderRemark: (id: string, input: FounderRemarkRequest) => post<MeetingResponse>(MEETINGS_API.remark(id), input),
   cancelMeeting: (id: string) => post<MeetingResponse>(MEETINGS_API.cancel(id), {}),
+  boardMemory: () => request<BoardMemoryResponse>(BOARD_MEMORY_API.list),
+  /** The origin guard wants JSON on every write, so the DELETE carries an empty object. */
+  deleteMemoryNote: (profile: string, id: string) => request<void>(BOARD_MEMORY_API.note(profile, id), { method: "DELETE", body: "{}" }),
   voices: () => request<VoicesResponse>(VOICE_API.voices),
   setVoice: (profile: string, input: SetVoiceRequest) => put<unknown>(VOICE_API.voice(profile), input),
   liveSession: (id: string) => post<LiveSessionResponse>(LIVE_API.session(id), {}),

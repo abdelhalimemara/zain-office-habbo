@@ -1,4 +1,4 @@
-import { CHAIR_PROFILE, splitBySpeaker, type LiveSpeaker } from "@shared/voice";
+import { splitBySpeaker, type LiveSpeaker } from "@shared/voice";
 import { ApiRequestError } from "../api/client";
 import { FOUNDER } from "./meetingModel";
 
@@ -7,7 +7,7 @@ export interface Caption {
   key: string;
   /** "u-<event>" or "a-<event>": captions from one message share it, so a resent message replaces its own. */
   event: string;
-  /** Board member profile, CHAIR_PROFILE, or FOUNDER for the founder's own words. */
+  /** Board member profile, or FOUNDER for the founder's own words. */
   speaker: string;
   text: string;
 }
@@ -22,26 +22,34 @@ export interface LiveMessage {
 /** Captions kept on screen; older ones are already in the server transcript. */
 export const MAX_CAPTIONS = 200;
 
-/** The profile behind a multi-voice tag; untagged agent text belongs to the chair. */
-export function profileForTag(tag: string | null, speakers: readonly LiveSpeaker[]): string {
-  return (tag && speakers.find((s) => s.tag === tag)?.profile) || CHAIR_PROFILE;
+/**
+ * The profile behind a multi-voice tag. There is no chair: untagged agent text goes to `previous` (the member who
+ * spoke last), or to nobody (null, dropped) when no member has spoken yet.
+ */
+export function profileForTag(tag: string | null, speakers: readonly LiveSpeaker[], previous: string | null = null): string | null {
+  return (tag && speakers.find((s) => s.tag === tag)?.profile) || previous;
 }
 
-export function messageCaptions(msg: LiveMessage, speakers: readonly LiveSpeaker[]): Caption[] {
+export function messageCaptions(msg: LiveMessage, speakers: readonly LiveSpeaker[], previous: string | null = null): Caption[] {
   const event = `${msg.role === "user" ? "u" : "a"}-${msg.event_id}`;
   if (msg.role === "user") {
     const text = msg.message.trim();
     return text ? [{ key: event, event, speaker: FOUNDER, text }] : [];
   }
-  return splitBySpeaker(msg.message, speakers).map((p, i) => ({ key: `${event}-${i}`, event, speaker: profileForTag(p.tag, speakers), text: p.text }));
+  return splitBySpeaker(msg.message, speakers).flatMap((p, i) => {
+    const speaker = profileForTag(p.tag, speakers, previous);
+    return speaker ? [{ key: `${event}-${i}`, event, speaker, text: p.text }] : [];
+  });
 }
 
 /** Adds a message's captions in order; a message resent with the same event id replaces its earlier captions in place. */
 export function addMessage(captions: readonly Caption[], msg: LiveMessage, speakers: readonly LiveSpeaker[]): Caption[] {
-  const added = messageCaptions(msg, speakers);
-  const event = added[0]?.event ?? `${msg.role === "user" ? "u" : "a"}-${msg.event_id}`;
-  const at = captions.findIndex((c) => c.event === event);
-  const next = at < 0 ? [...captions, ...added] : [...captions.slice(0, at), ...added, ...captions.slice(at).filter((c) => c.event !== event)];
+  const own = `${msg.role === "user" ? "u" : "a"}-${msg.event_id}`;
+  const at = captions.findIndex((c) => c.event === own);
+  const before = at < 0 ? captions : captions.slice(0, at);
+  const previous = [...before].reverse().find((c) => c.speaker !== FOUNDER)?.speaker ?? null;
+  const added = messageCaptions(msg, speakers, previous);
+  const next = at < 0 ? [...captions, ...added] : [...before, ...added, ...captions.slice(at).filter((c) => c.event !== own)];
   return next.slice(-MAX_CAPTIONS);
 }
 

@@ -69,7 +69,7 @@ export function meetingBlocks(m: BoardMeeting): Json[] {
     }
     if (m.decision) blocks.push(...paragraphs(`Decision: ${DECISION[m.decision]} (${votesSummary(m.votes)})`));
   }
-  if (m.conclusion) blocks.push(heading("Conclusion"), ...paragraphs(m.conclusion));
+  if (m.conclusion) blocks.push(heading("Minutes · notes by the CEO's office"), ...paragraphs(m.conclusion));
   return blocks;
 }
 

@@ -1,6 +1,7 @@
 import { findBoardMember } from "../../../../shared/board";
 import type { BoardMeeting, Decision, MeetingMode, MeetingTurn, MeetingVote, RoundKind, Vote } from "../../../../shared/meetings";
 import { CEO_PROFILE } from "../../../../shared/roster";
+import { splitMemory } from "../memory/notes";
 
 export const FOUNDER = "founder";
 export const MEETING_TITLE_PREFIX = "Board meeting · ";
@@ -33,7 +34,7 @@ export function marker(meetingId: string, round: number | "minutes"): string {
 
 export function speakerName(speaker: string): string {
   if (speaker === FOUNDER) return "Founder (Abdelhalim)";
-  if (speaker === CEO_PROFILE) return "CEO (chair)";
+  if (speaker === CEO_PROFILE) return "CEO's office (minutes)";
   return findBoardMember(speaker)?.name ?? speaker;
 }
 
@@ -68,7 +69,12 @@ function outputContract(kind: RoundKind): string[] {
     "Your result (kanban_complete) must be plain text in exactly this shape:",
     "VOTE: approve|approve-with-conditions|reject|abstain",
     "CONDITIONS: <your conditions>   (only if you vote approve-with-conditions)",
-    "<your rationale, the rest of the text>",
+    "<your rationale>",
+    "MEMORY:",
+    "- <1 to 3 short, durable insights worth remembering for future meetings: facts about Zain's business, the founder's views and preferences, or commitments made>",
+    "",
+    "The MEMORY block comes last. Each insight is one line under 200 characters, in your own words; skip anything already in your notes.",
+    "Also save the single most important insight with your `memory` tool (your persistent memory), so you remember it in later chats too.",
   ];
 }
 
@@ -79,7 +85,8 @@ const LIVE_NOTE = [
   "",
 ];
 
-export function roundTaskBody(meeting: BoardMeeting, round: number): string {
+/** `memory`: the "What the board already knows" section for this member (memory/ledger.ts), or none. */
+export function roundTaskBody(meeting: BoardMeeting, round: number, memory: readonly string[] = []): string {
   const kind = roundKind(round, meeting.discussionRounds);
   const remarks = meeting.turns.filter((t) => t.speaker === FOUNDER);
   const live = meeting.mode === "voice";
@@ -95,6 +102,7 @@ export function roundTaskBody(meeting: BoardMeeting, round: number): string {
     ...RULES[kind].map((r) => `- ${r}`),
     `- At most ${WORD_LIMIT} words. Stay in character; speak only for yourself.`,
     "",
+    ...memory,
     ...(live ? LIVE_NOTE : []),
     "## Transcript so far",
     transcript(meeting.turns, meeting.discussionRounds, meeting.mode),
@@ -107,8 +115,9 @@ export function roundTaskBody(meeting: BoardMeeting, round: number): string {
 
 const VOTES: readonly Vote[] = ["approve-with-conditions", "approve", "reject", "abstain"];
 
-/** Reads the vote contract; anything malformed counts as an abstention carrying the raw text. */
-export function parseVote(member: string, text: string): MeetingVote {
+/** Reads the vote contract; anything malformed counts as an abstention carrying the raw text. A MEMORY block is left out. */
+export function parseVote(member: string, answer: string): MeetingVote {
+  const text = splitMemory(answer).body;
   const lines = text.replace(/\r/g, "").split("\n");
   const first = lines.findIndex((l) => l.trim());
   const head = /^\**\s*vote\s*\**\s*:\s*\**\s*([a-z _-]+)/i.exec(lines[first] ?? "");
@@ -149,7 +158,8 @@ export function votesSummary(votes: readonly MeetingVote[]): string {
 export function minutesTaskBody(meeting: BoardMeeting): string {
   return [
     marker(meeting.id, "minutes"),
-    `You chair the Zain Group board. Write the minutes of the board meeting "${meeting.topic}".`,
+    `You take the notes for the Zain Group board. Write the minutes of the board meeting "${meeting.topic}".`,
+    "You are not a board member and you did not take part: the founder, Abdelhalim, is the CEO in the boardroom and leads it. Record what was said, neutrally, with no opinions or recommendations of your own.",
     "",
     "## Brief",
     meeting.brief,

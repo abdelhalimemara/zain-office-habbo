@@ -50,11 +50,10 @@ const voting: BoardMeeting = {
 
 const SESSION: LiveSessionResponse = {
   signedUrl: "wss://api.elevenlabs.io/v1/convai/conversation?token=abc",
-  overrides: { agent: { prompt: { prompt: "You are the board." }, firstMessage: "<Chair>The floor is open.</Chair>", language: "en" } },
+  overrides: { agent: { prompt: { prompt: "You are the board." }, firstMessage: "", language: "en" } },
   speakers: [
     { tag: "Hormozi", profile: HORMOZI, name: "Alex Hormozi" },
     { tag: "Buffett", profile: BUFFETT, name: "Warren Buffett" },
-    { tag: "Chair", profile: "default", name: "The chair" },
   ],
 };
 
@@ -131,12 +130,12 @@ describe("Live board room", () => {
     expect(fetch.calls("POST", LIVE_API.session("m-live"))).toHaveLength(1);
     expect(session().options).toMatchObject({ signedUrl: SESSION.signedUrl, overrides: SESSION.overrides, connectionType: "websocket" });
     expect(session().setMicMuted).toHaveBeenCalledWith(false);
+    expect(within(room()).getByText("The board is waiting for you to open.")).toBeInTheDocument();
     expect(within(room()).getByRole("button", { name: "Mute" })).toHaveAttribute("aria-pressed", "false");
     await waitFor(() => expect(within(room()).getByRole("meter", { name: "Mic level" })).toHaveAttribute("aria-valuenow", "42"));
     expect(within(screen.getByRole("list", { name: "Seats" })).getAllByRole("listitem").map((li) => li.querySelector(".zui-seat__name")!.textContent)).toEqual([
       "Alex Hormozi",
       "Warren Buffett",
-      "The chair",
       "You",
     ]);
   });
@@ -145,18 +144,18 @@ describe("Live board room", () => {
     routes();
     renderUi(<MeetingRoom id="m-live" />);
     await join();
-    fire("onMessage", { role: "agent", source: "ai", event_id: 1, message: "<Chair>The floor is open.</Chair>" });
+    // No chair: an untagged opening with no member before it is dropped; later untagged text stays with the member.
+    fire("onMessage", { role: "agent", source: "ai", event_id: 1, message: "The floor is open." });
     fire("onMessage", { role: "agent", source: "ai", event_id: 2, message: "<Hormozi>Raise prices.</Hormozi><Buffett>Mind the moat.</Buffett>" });
     fire("onMessage", { role: "user", source: "user", event_id: 3, message: "What about hiring?" });
     const captions = screen.getByRole("list", { name: "Live captions" });
     const bubbles = within(captions).getAllByRole("listitem").filter((li) => li.querySelector(".zui-turn__name"));
     expect(bubbles.map((b) => [b.querySelector(".zui-turn__name")!.textContent, b.querySelector(".zui-turn__text")!.textContent])).toEqual([
-      ["The chair", "The floor is open."],
       ["Alex Hormozi", "Raise prices."],
       ["Warren Buffett", "Mind the moat."],
       ["You", "What about hiring?"],
     ]);
-    expect(bubbles[3]).toHaveClass("zui-turn--founder");
+    expect(bubbles[2]).toHaveClass("zui-turn--founder");
 
     fire("onMessage", { role: "agent", source: "ai", event_id: 4, message: "<Buffett>Hire slowly.</Buffett>" });
     fire("onModeChange", { mode: "speaking" });

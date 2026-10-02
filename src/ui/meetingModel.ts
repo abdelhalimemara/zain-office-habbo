@@ -133,7 +133,7 @@ export function speakerName(profile: string, roster: readonly RosterAgent[]): st
 
 /** "Waiting for Hormozi, Buffett…" uses surnames for board seats. */
 export function shortName(profile: string, roster: readonly RosterAgent[]): string {
-  if (profile === CHAIR) return "the chair";
+  if (profile === CHAIR) return "the CEO's office";
   const member = findBoardMember(profile);
   if (member) {
     const words = member.name.split(/\s+/);

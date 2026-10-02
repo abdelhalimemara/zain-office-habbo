@@ -76,12 +76,12 @@ function VoiceRow({ speaker, voices }: { speaker: Speaker; voices: VoicesRespons
   );
 }
 
-/** Each board member's ElevenLabs voice, plus the chair's (the CEO speaks the minutes). */
+/** Each board member's ElevenLabs voice, plus the CEO's office, which reads the minutes. */
 export function VoiceSettings({ advisors, agents }: { advisors: readonly RosterEntry[]; agents: readonly RosterEntry[] }) {
   const voices = useVoices();
   const ceo = agents.find((a) => a.profile === CHAIR_PROFILE);
   const speakers: Speaker[] = [
-    { profile: CHAIR_PROFILE, agent: ceo, name: ceo?.name ? `${ceo.name}, CEO` : "CEO", seat: "Chairs meetings and speaks the minutes" },
+    { profile: CHAIR_PROFILE, agent: ceo, name: ceo?.name ? `${ceo.name}, CEO` : "CEO", seat: "Takes the notes and reads the minutes" },
     ...advisors.map((a) => ({ profile: a.profile, agent: a, name: findBoardMember(a.profile)?.name ?? a.title, seat: findBoardMember(a.profile)?.seat ?? a.title })),
   ];
   return (

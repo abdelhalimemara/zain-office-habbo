@@ -7,6 +7,7 @@ import { useBoard, useBoardConsult } from "../api/hooks";
 import { useUiStore } from "../state/store";
 import { ActivityBadge, AgentChip, ErrorNote, Text, useRosterAgents } from "./common";
 import { MeetingsTab } from "./MeetingsTab";
+import { MemoryTab } from "./MemoryTab";
 import { Portrait } from "./Portrait";
 import { Panel } from "./Panel";
 import { VoiceSettings } from "./VoiceSettings";
@@ -128,20 +129,23 @@ function Consultation({ task, agents }: { task: KanbanTask; agents: readonly Ros
   );
 }
 
-export function BoardPanel({ members: preselect, tab: initialTab }: { members?: string[]; tab?: "meetings" | "consult" }) {
+type BoardTab = "meetings" | "consult" | "memory";
+const TAB_LABEL: Record<BoardTab, string> = { meetings: "Meetings", consult: "Consult", memory: "Memory" };
+
+export function BoardPanel({ members: preselect, tab: initialTab }: { members?: string[]; tab?: BoardTab }) {
   const { agents, loaded } = useRosterAgents();
   const board = useBoard();
   const closePanel = useUiStore((s) => s.closePanel);
   const advisors = agents.filter((a) => a.rank === "board");
   const recent = board.data ? boardConsultations(board.data, agents).slice(0, RECENT) : [];
-  const [tab, setTab] = useState<"meetings" | "consult">(initialTab ?? (preselect ? "consult" : "meetings"));
+  const [tab, setTab] = useState<BoardTab>(initialTab ?? (preselect ? "consult" : "meetings"));
   const tabId = useId();
 
   return (
     <Panel title="Board of advisors" accent={BOARD_COLOR} onClose={closePanel}>
       <p className="zui-hint">AI advisors modelled on public figures' published thinking. They advise the CEO and founder; they don't run work.</p>
-      <div role="tablist" aria-label="Board" className="zui-segmented">
-        {(["meetings", "consult"] as const).map((t) => (
+      <div role="tablist" aria-label="Board" className="zui-segmented zui-segmented--3">
+        {(["meetings", "consult", "memory"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -152,13 +156,15 @@ export function BoardPanel({ members: preselect, tab: initialTab }: { members?: 
             className="zui-segmented__tab"
             onClick={() => setTab(t)}
           >
-            {t === "meetings" ? "Meetings" : "Consult"}
+            {TAB_LABEL[t]}
           </button>
         ))}
       </div>
       <div role="tabpanel" id={`${tabId}-panel`} aria-labelledby={`${tabId}-${tab}`} className="zui-board-tab">
         {tab === "meetings" ? (
           <MeetingsTab advisors={advisors} agents={agents} />
+        ) : tab === "memory" ? (
+          <MemoryTab agents={agents} />
         ) : (
           <>
             <ul className="zui-board-members" aria-label="Board members">

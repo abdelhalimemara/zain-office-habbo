@@ -1,6 +1,6 @@
 /**
  * Board meetings: a multi-round discussion among board advisors (optionally with the founder),
- * ending in a vote and minutes written by the chair (the CEO). Mirrored to Notion.
+ * ending in a vote and minutes taken by the CEO's office (the CEO Hermes, a neutral note-taker). Mirrored to Notion.
  */
 
 /** "live": a voice meeting in the live room; it skips the written rounds and goes to the vote when the founder ends it. */
@@ -21,7 +21,7 @@ export type Decision = "approved" | "approved-with-conditions" | "rejected" | "n
 export interface MeetingTurn {
   round: number;
   kind: RoundKind;
-  /** Board member profile, "founder" for HQ remarks, or the chair profile for minutes. */
+  /** Board member profile, "founder" for HQ remarks, or the CEO profile for the minutes. */
   speaker: string;
   text: string;
   /** Unix seconds. */

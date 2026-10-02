@@ -1,6 +1,7 @@
 import { createApp } from "../../server/src/app";
 import { ConsultationLog, type ConsultationRecord, type ConsultationSink } from "../../server/src/board/consultLog";
 import { MeetingEngine, type MeetingSink, type StoredMeeting } from "../../server/src/board/meetings/engine";
+import { memoryMemoryStore, type MemoryStore } from "../../server/src/board/memory/notes";
 import { memoryRecordStore, type RecordStore } from "../../server/src/board/recordStore";
 import type { GuardOptions } from "../../server/src/guard";
 import { fileBriefs, type BriefReader } from "../../server/src/org/privateBriefs";
@@ -196,7 +197,9 @@ export function setup(
     now?: () => number;
     voice?: VoiceService;
     /** Built once the meeting engine exists, e.g. a LiveService over a fake ElevenLabs. */
-    live?: (meetings: MeetingEngine, voice: VoiceService) => LiveService;
+    live?: (meetings: MeetingEngine, voice: VoiceService, memory: MemoryStore) => LiveService;
+    /** Board members' notes; an empty in-memory store by default. */
+    memory?: MemoryStore;
     onTurns?: (meeting: BoardMeeting, from: number) => void;
   } = {},
 ) {
@@ -214,6 +217,7 @@ export function setup(
   const meetingStore = options.meetingStore ?? memoryRecordStore<StoredMeeting>();
   const consultationStore = options.consultationStore ?? memoryRecordStore<ConsultationRecord>();
   const quiet = () => undefined;
+  const memory = options.memory ?? memoryMemoryStore();
   const meetings = new MeetingEngine({
     hermes,
     hires,
@@ -223,6 +227,7 @@ export function setup(
     now: options.now,
     log: quiet,
     onTurns: options.onTurns,
+    memory,
     newId: (() => {
       let n = 0;
       return () => `mtg_${String(++n).padStart(10, "0")}`;
@@ -230,8 +235,8 @@ export function setup(
   });
   const consultations = new ConsultationLog({ hermes, store: consultationStore, sink: options.sink, now: options.now, log: quiet });
   const voice = options.voice ?? stubVoice();
-  const live = options.live?.(meetings, voice);
-  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations, voice, live });
+  const live = options.live?.(meetings, voice, memory);
+  const app = createApp({ hermes, headcount, hires, ceoWake, briefs, connections, guard: options.guard, teams, gh, meetings, consultations, memory, voice, live });
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request(path, {
       method,
@@ -261,5 +266,6 @@ export function setup(
     consultationStore,
     voice,
     live,
+    memory,
   };
 }

@@ -1,12 +1,14 @@
 import type { BoardMeeting, MeetingTurn } from "../../../shared/meetings";
 import { splitBySpeaker, type EndLiveRequest, type LiveSessionResponse, type LiveSpeaker } from "../../../shared/voice";
+import { boardLedger } from "../board/memory/ledger";
+import type { MemoryStore } from "../board/memory/notes";
 import type { MeetingEngine } from "../board/meetings/engine";
 import { FOUNDER } from "../board/meetings/rounds";
 import { HttpError, badRequest } from "../http";
 import type { BriefReader } from "../org/privateBriefs";
 import type { ElevenLabsClient, LabsConversation } from "./elevenlabs";
 import type { BoardRoomAgent } from "./liveAgent";
-import { liveFirstMessage, livePrompt, liveSpeakers, type SoulReader } from "./livePrompt";
+import { LIVE_FIRST_MESSAGE, livePrompt, liveSpeakers, type SoulReader } from "./livePrompt";
 import type { VoiceService } from "./service";
 
 export const CONVERSATION_ID = /^conv_[A-Za-z0-9]{8,64}$/;
@@ -24,7 +26,10 @@ export function parseEndLive(body: Record<string, unknown>): EndLive {
   return { conversationId, final: final ?? true };
 }
 
-/** The founder's and the agent's messages as meeting turns; agent messages are split by voice tag. */
+/**
+ * The founder's and the agent's messages as meeting turns; agent messages are split by voice tag.
+ * Untagged text that opens a message goes to the member who spoke last, or is dropped when no one has yet.
+ */
 export function transcriptTurns(conversation: LabsConversation, speakers: readonly LiveSpeaker[], round: number, now: number): MeetingTurn[] {
   const start = conversation.metadata?.start_time_unix_secs;
   const turns: MeetingTurn[] = [];
@@ -41,7 +46,8 @@ export function transcriptTurns(conversation: LabsConversation, speakers: readon
     if (entry.role === "user") push(FOUNDER, message, at);
     else if (entry.role === "agent") {
       for (const part of splitBySpeaker(message, speakers)) {
-        push(speakers.find((s) => s.tag === part.tag)?.profile ?? speakers[0]!.profile, part.text, at);
+        const profile = speakers.find((s) => s.tag === part.tag)?.profile ?? [...turns].reverse().find((t) => t.speaker !== FOUNDER)?.speaker;
+        if (profile) push(profile, part.text, at);
       }
     }
   }
@@ -56,6 +62,8 @@ export interface LiveServiceOptions {
   souls: SoulReader;
   /** Members' private briefs, read only so that none of their text reaches the prompt. */
   briefs: BriefReader;
+  /** Members' notes from earlier meetings, shown to the room after the privacy guard. */
+  memory?: MemoryStore;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -80,12 +88,20 @@ export class LiveService {
     const agentId = await this.options.agent.ensure(voices);
     const signedUrl = await this.options.client.signedUrl(agentId);
     const speakers = liveSpeakers(meeting);
-    const read = (reader: (p: string) => Promise<string | null>) =>
-      Promise.all(meeting.members.map(async (p) => [p, await reader(p).catch(() => null)] as const)).then(Object.fromEntries);
-    const [souls, briefs] = await Promise.all([read(this.options.souls), read(this.options.briefs)]);
+    const ledger = boardLedger((await this.options.meetings.list()).filter((m) => m.id !== meeting.id));
+    // Every brief whose owner appears in the room or the ledger, so the guard can keep all of them out.
+    const guarded = [...new Set([...meeting.members, ...ledger.flatMap((e) => e.votes.map((v) => v.member))])];
+    const read = <T>(profiles: readonly string[], reader: (p: string) => Promise<T>) =>
+      Promise.all(profiles.map(async (p) => [p, await reader(p).catch(() => null)] as const)).then((e) => Object.fromEntries(e) as Record<string, T | null>);
+    const [souls, briefs, notes] = await Promise.all([
+      read(meeting.members, this.options.souls),
+      read(guarded, this.options.briefs),
+      read(meeting.members, (p) => this.options.memory?.notes(p) ?? Promise.resolve([])),
+    ]);
+    const memory = Object.fromEntries(Object.entries(notes).map(([p, n]) => [p, n ?? []]));
     return {
       signedUrl,
-      overrides: { agent: { prompt: { prompt: livePrompt({ meeting, speakers, souls, briefs }) }, firstMessage: liveFirstMessage(meeting), language: "en" } },
+      overrides: { agent: { prompt: { prompt: livePrompt({ meeting, speakers, souls, briefs, ledger, notes: memory }) }, firstMessage: LIVE_FIRST_MESSAGE, language: "en" } },
       speakers,
     };
   }

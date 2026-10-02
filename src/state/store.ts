@@ -9,7 +9,7 @@ export type HirePrefill = Partial<Pick<RosterAgent, "profile" | "title" | "rank"
 export type Panel =
   | { kind: "kanban"; division: DivisionId }
   | { kind: "approvals" }
-  | { kind: "board"; members?: string[]; tab?: "meetings" | "consult" }
+  | { kind: "board"; members?: string[]; tab?: "meetings" | "consult" | "memory" }
   | { kind: "meeting"; id: string }
   | { kind: "agent"; profile: string }
   | { kind: "task"; id: string }

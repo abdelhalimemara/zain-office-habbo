@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { RosterEntry } from "@shared/api";
 import type { BoardMeeting } from "@shared/meetings";
-import { CHAIR_PROFILE } from "@shared/voice";
 import { formatElapsed, type Caption } from "./liveModel";
 import { FOUNDER, speakerName } from "./meetingModel";
 import { Portrait } from "./Portrait";
@@ -22,7 +21,7 @@ function seatsFor(meeting: BoardMeeting, room: Room, agents: readonly RosterEntr
 
 function nameOf(profile: string, seats: readonly Seat[], agents: readonly RosterEntry[]): string {
   if (profile === FOUNDER) return "You";
-  return seats.find((s) => s.profile === profile)?.name ?? (profile === CHAIR_PROFILE ? "The chair" : speakerName(profile, agents));
+  return seats.find((s) => s.profile === profile)?.name ?? speakerName(profile, agents);
 }
 
 function SeatStrip({ seats, room, agents }: { seats: readonly Seat[]; room: Room; agents: readonly RosterEntry[] }) {
@@ -158,7 +157,9 @@ export function LiveRoom({ meeting, agents }: { meeting: BoardMeeting; agents: r
           {statusLine(room)}
         </span>
         {inCall && (
-          <span className="zui-hint">{room.mode === "speaking" ? "The board is speaking. Jump in any time." : "The floor is open. Just talk."}</span>
+          <span className="zui-hint">
+            {room.mode === "speaking" ? "The board is speaking. Jump in any time." : room.captions.length === 0 ? "The board is waiting for you to open." : "The floor is open. Just talk."}
+          </span>
         )}
       </div>
       <SeatStrip seats={seats} room={room} agents={agents} />
@@ -180,7 +181,7 @@ export function LiveRoom({ meeting, agents }: { meeting: BoardMeeting; agents: r
             <MicIcon />
             {room.phase === "joining" ? "Joining…" : room.saving ? "Saving the last session…" : "Join the room"}
           </button>
-          <p className="zui-hint">Your mic stays on the whole time. Talk whenever you like; anyone can jump in.</p>
+          <p className="zui-hint">You lead the meeting, so the board waits for you to open. Your mic stays on the whole time; anyone can jump in.</p>
         </div>
       )}
 
