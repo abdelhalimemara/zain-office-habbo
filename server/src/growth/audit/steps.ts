@@ -204,10 +204,18 @@ export async function checkAnalysis(s: StoredAudit, ctx: StepContext): Promise<O
   if (!t?.taskId) return null;
   const draft = draftAnalysis(s.audit, s.audit.score!, s.data);
   const fallback = (note: string): Outcome => ({ status: "done", note, patch: (x) => (x.audit.analysis = draft) });
-  const { task } = await ctx.hermes.task(t.taskId);
+  const { task, comments } = await ctx.hermes.task(t.taskId);
   if (task.status === "done") {
-    const parsed = parseAnalysis(task.result ?? task.latest_summary ?? "", draft);
+    // The answer belongs in `result`; agents sometimes leave it in the summary or a comment instead.
+    const candidates = [task.result, task.latest_summary, ...[...(comments ?? [])].reverse().map((c) => c.body)];
+    const parsed = candidates.map((c) => (c ? parseAnalysis(c, draft) : null)).find((p) => p);
     if (parsed) return { status: "done", note: `Written by ${t.assignee}`, patch: (x) => (x.audit.analysis = parsed) };
+    if (!t.retried) {
+      // One more chance with a precise instruction before falling back to the draft.
+      await ctx.hermes.addComment(t.taskId, `Your analysis wasn't saved: the task finished without the JSON in \`result\`. Please redo it and call kanban_complete(result="\`\`\`json {...} \`\`\`", summary="Analysis written for ${s.audit.prospect.name}").`, "zain-hq-audits");
+      await ctx.hermes.updateTask(t.taskId, { status: "ready" });
+      return { status: "running", note: `Asked ${t.assignee} to resend the analysis`, patch: (x) => { if (x.analysisTask) { x.analysisTask.retried = true; x.analysisTask.startedAt = ctx.now(); } } };
+    }
     return fallback(`${t.assignee}'s answer was not valid JSON; analysis written from the scores`);
   }
   if (task.status === "archived") return fallback("The analysis task was archived; analysis written from the scores");
