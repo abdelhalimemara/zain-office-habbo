@@ -64,7 +64,11 @@ export async function searchStep(s: StoredAudit, ctx: StepContext): Promise<Outc
       const seeds = candidates
         .filter((c) => items[c.domain] && isRelevant(rankingKeywords(items[c.domain]).join(" \n "), terms))
         .map((c) => ({ domain: c.domain, overlap: keywordOverlap(items[c.domain], undefined) }));
-      const neighbours = neighbourCandidates(seeds, candidates, host, MAX_NEIGHBOURS).map((c) => ({ ...c, name: nameFromDomain(c.domain) }));
+      const neighbours = neighbourCandidates(seeds, candidates, host, MAX_NEIGHBOURS).map((c) => ({
+        ...c,
+        name: nameFromDomain(c.domain),
+        viaName: candidates.find((x) => x.domain === c.via)?.name ?? nameFromDomain(c.via!),
+      }));
       if (neighbours.length) {
         await lookup(neighbours.map((c) => c.domain));
         candidates.unshift(...neighbours);

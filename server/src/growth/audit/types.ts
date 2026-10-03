@@ -56,8 +56,9 @@ export interface Competitor {
   /** Organic keywords it shares with the prospect, and Semrush's competition level 0..1 (estimated). */
   commonKeywords?: number;
   competitionLevel?: number;
-  /** Found as an organic competitor of this Saudi candidate (the prospect's own overlap was too thin). */
+  /** Found as an organic competitor of this Saudi candidate (the prospect's own overlap was too thin), and its brand. */
   via?: string;
+  viaName?: string;
 }
 
 export interface SearchData {

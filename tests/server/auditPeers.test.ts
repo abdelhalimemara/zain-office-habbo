@@ -6,6 +6,7 @@ import { categoryTerms, finalPeers, isRelevant, mergeCandidates, neighbourCandid
 import { keywordOverlap } from "../../server/src/growth/audit/collect/seo";
 import { brandRun } from "../../server/src/growth/audit/collect/search";
 import { scoreAudit } from "../../server/src/growth/audit/score";
+import { sharedKeywords, type ReportContext } from "../../server/src/growth/audit/template/layout";
 import { renderReport } from "../../server/src/growth/audit/template/render";
 import type { CollectedData, TrafficRead } from "../../server/src/growth/audit/types";
 
@@ -133,7 +134,8 @@ describe("competitors by keyword overlap (Semrush first)", () => {
       asOf: "3 Oct 2026",
       competitors: [
         { domain: "aleef.com", name: "Aleef", source: "semrush", commonKeywords: 14, competitionLevel: 0.37 },
-        { domain: "petarabia.sa", name: "Petarabia", source: "semrush", via: "pethouseksa.com" },
+        { domain: "petarabia.sa", name: "Petarabia", source: "semrush", via: "pethouseksa.com", viaName: "Pethouseksa" },
+        { domain: "pets.sa", name: "Pets SA", source: "search" },
       ],
       ads: { google: {}, meta: {}, traffic: {} },
     };
@@ -142,12 +144,34 @@ describe("competitors by keyword overlap (Semrush first)", () => {
     Object.assign(audit, publicView(audit, data));
     const analysis = draftAnalysis(audit, audit.score, data);
     const html = renderReport(audit, data, analysis, { logo: null });
-    expect(html).toContain("against Saudi competitors found by shared keywords (Semrush, est.), same public measures.");
+    expect(html).toContain("against Saudi competitors found by shared keywords (Semrush, est.) and live category searches, same public measures.");
     expect(html).toContain("Shared keywords (Semrush)");
     expect(html).toContain("14, 37% competition (est.)"); // The Competitive Gap
     expect(html).toContain("<td>14 (est.)</td>"); // the SEO columns on the traffic page
-    expect(html).toContain("via pethouseksa.com");
-    expect(analysis.coverLine).toContain("2 Saudi competitors competing on the same keywords");
+    expect(html).toContain("via Pethouseksa");
+    expect(analysis.coverLine).toContain("3 Saudi competitors competing on the same keywords");
+  });
+});
+
+describe("the shared-keywords column", () => {
+  it("shows the Semrush count, the brand a neighbour was found through, or that it came from search", () => {
+    const ctx = {
+      host: "thepawconcept.co",
+      data: {
+        competitors: [
+          { domain: "aleef.com", name: "Aleef", source: "semrush", commonKeywords: 1200, competitionLevel: 0.37 },
+          { domain: "petarabia.sa", name: "Petarabia", source: "semrush", via: "pethouseksa.com", viaName: "Pethouseksa" },
+          { domain: "old.sa", name: "Old", source: "semrush", via: "seed.sa" },
+          { domain: "pets.sa", name: "Pets SA", source: "search" },
+        ],
+      },
+    } as unknown as ReportContext;
+    expect(sharedKeywords(ctx, "aleef.com")).toBe("1,200 (est.)");
+    expect(sharedKeywords(ctx, "aleef.com", true)).toBe("1,200, 37% competition (est.)");
+    expect(sharedKeywords(ctx, "petarabia.sa")).toBe("via Pethouseksa");
+    expect(sharedKeywords(ctx, "old.sa")).toBe("via seed.sa"); // records saved before brand names were kept
+    expect(sharedKeywords(ctx, "pets.sa")).toBe("search");
+    expect(sharedKeywords(ctx, "thepawconcept.co")).toBe("—");
   });
 });
 
