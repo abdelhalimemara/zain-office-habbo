@@ -152,7 +152,7 @@ export function finalPeers(candidates: readonly Candidate[], traffic: Record<str
   const chosen = bySemrush.length >= MIN_SEMRUSH_PEERS ? bySemrush : survivors;
   return chosen
     .slice(0, MAX_COMPETITORS)
-    .map(({ domain, name, instagram, source, commonKeywords, competitionLevel, via }) => ({
+    .map(({ domain, name, instagram, source, commonKeywords, competitionLevel, via, viaName }) => ({
       domain,
       name,
       ...(instagram ? { instagram } : {}),
@@ -160,5 +160,6 @@ export function finalPeers(candidates: readonly Candidate[], traffic: Record<str
       ...(commonKeywords !== undefined ? { commonKeywords } : {}),
       ...(competitionLevel !== undefined ? { competitionLevel } : {}),
       ...(via ? { via } : {}),
+      ...(viaName ? { viaName } : {}),
     }));
 }

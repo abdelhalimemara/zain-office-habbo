@@ -28,7 +28,10 @@ export function peerMethod(ctx: ReportContext): string {
   return "found in live category searches";
 }
 
-/** A competitor's shared keywords with the prospect (and Semrush's competition level), or how it was found. */
+/**
+ * A competitor's shared keywords with the prospect (and Semrush's competition level), else how it was found:
+ * "via <brand>" for a neighbour of a Saudi candidate, "search" for one from the category searches.
+ */
 export function sharedKeywords(ctx: ReportContext, domain: string | undefined, withLevel = false): string {
   if (!domain || domain === ctx.host) return "—";
   const c = ctx.data.competitors?.find((x) => x.domain === domain);
@@ -37,7 +40,8 @@ export function sharedKeywords(ctx: ReportContext, domain: string | undefined, w
     return `${c.commonKeywords.toLocaleString("en-US")}${level} (est.)`;
   }
   // A neighbour shares keywords with the Saudi candidate it was found through, not (measurably) with the prospect.
-  return c?.via ? `via ${esc(c.via)}` : "—";
+  if (c?.via) return `via ${esc(c.viaName ?? c.via)}`;
+  return c?.source === "search" ? "search" : "—";
 }
 
 export function esc(value: unknown): string {
