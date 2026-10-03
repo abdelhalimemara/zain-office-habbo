@@ -70,13 +70,15 @@ const plausible = (domain: string, prospectDomain: string) => !!domain && !onHos
  * MIN_COMMON_KEYWORDS), then the category-search ones, without duplicates, at most MAX_CANDIDATES.
  */
 export function mergeCandidates(
-  overlap: readonly { domain: string; commonKeywords: number }[],
+  overlap: readonly { domain: string; commonKeywords: number; competitionLevel?: number }[],
   searchDomains: readonly string[],
   prospectDomain: string,
 ): Candidate[] {
   const out: Candidate[] = [];
   for (const o of overlap) {
-    if (o.commonKeywords >= MIN_COMMON_KEYWORDS && plausible(o.domain, prospectDomain)) out.push({ domain: o.domain, name: o.domain, source: "semrush", commonKeywords: o.commonKeywords });
+    if (o.commonKeywords >= MIN_COMMON_KEYWORDS && plausible(o.domain, prospectDomain)) {
+      out.push({ domain: o.domain, name: o.domain, source: "semrush", commonKeywords: o.commonKeywords, ...(o.competitionLevel !== undefined ? { competitionLevel: o.competitionLevel } : {}) });
+    }
   }
   for (const d of searchDomains) {
     if (plausible(d, prospectDomain) && !out.some((c) => c.domain === d)) {
@@ -150,12 +152,13 @@ export function finalPeers(candidates: readonly Candidate[], traffic: Record<str
   const chosen = bySemrush.length >= MIN_SEMRUSH_PEERS ? bySemrush : survivors;
   return chosen
     .slice(0, MAX_COMPETITORS)
-    .map(({ domain, name, instagram, source, commonKeywords, via }) => ({
+    .map(({ domain, name, instagram, source, commonKeywords, competitionLevel, via }) => ({
       domain,
       name,
       ...(instagram ? { instagram } : {}),
       ...(source ? { source } : {}),
       ...(commonKeywords !== undefined ? { commonKeywords } : {}),
+      ...(competitionLevel !== undefined ? { competitionLevel } : {}),
       ...(via ? { via } : {}),
     }));
 }

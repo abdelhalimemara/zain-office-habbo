@@ -132,7 +132,7 @@ describe("competitors by keyword overlap (Semrush first)", () => {
     const data: CollectedData = {
       asOf: "3 Oct 2026",
       competitors: [
-        { domain: "aleef.com", name: "Aleef", source: "semrush", commonKeywords: 14 },
+        { domain: "aleef.com", name: "Aleef", source: "semrush", commonKeywords: 14, competitionLevel: 0.37 },
         { domain: "petarabia.sa", name: "Petarabia", source: "semrush", via: "pethouseksa.com" },
       ],
       ads: { google: {}, meta: {}, traffic: {} },
@@ -142,9 +142,10 @@ describe("competitors by keyword overlap (Semrush first)", () => {
     Object.assign(audit, publicView(audit, data));
     const analysis = draftAnalysis(audit, audit.score, data);
     const html = renderReport(audit, data, analysis, { logo: null });
-    expect(html).toContain("against Saudi competitors found by keyword overlap (Semrush, est.), same public measures.");
-    expect(html).toContain("Common keywords (Semrush)");
-    expect(html).toContain("14 (est.)");
+    expect(html).toContain("against Saudi competitors found by shared keywords (Semrush, est.), same public measures.");
+    expect(html).toContain("Shared keywords (Semrush)");
+    expect(html).toContain("14, 37% competition (est.)"); // The Competitive Gap
+    expect(html).toContain("<td>14 (est.)</td>"); // the SEO columns on the traffic page
     expect(html).toContain("via pethouseksa.com");
     expect(analysis.coverLine).toContain("2 Saudi competitors competing on the same keywords");
   });

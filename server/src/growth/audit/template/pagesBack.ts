@@ -1,6 +1,6 @@
 import { AUDIT_AREA_LABELS } from "../../../../../shared/audits";
 import { shortDate } from "../dates";
-import { bottomLine, cards, esc, fmt, logo, page, pct, peerMethod, pill, t, table, type ReportContext } from "./layout";
+import { bottomLine, cards, esc, fmt, logo, page, pct, peerMethod, pill, sharedKeywords, t, table, type ReportContext } from "./layout";
 import { googleCell, metaCell } from "./pagesFront";
 
 const CHANNEL_LABEL: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook", x: "X / Twitter", linkedin: "LinkedIn", youtube: "YouTube", snapchat: "Snapchat" };
@@ -56,11 +56,11 @@ export function traffic(ctx: ReportContext): string {
       ? [`~${fmt(r.traffic.monthlyVisits)} (est.)`, pct(r.traffic.bounceRate), esc(r.traffic.topSource ?? "—"), r.traffic.saudiShare === undefined ? "—" : `${pct(r.traffic.saudiShare)} (est.)`]
       : ["not measured", "—", "—", "—"];
   const body = `<div class="body">${table(
-    ["Business", `Est. monthly visits (${period})`, "Bounce rate", "Top source", "Saudi share", "Organic (Semrush)", "Authority"],
-    rows.map((r) => [t(r.name), ...cell(r), r.organicTraffic === undefined ? "—" : `~${fmt(r.organicTraffic)}`, r.authorityScore === undefined ? "—" : String(r.authorityScore)]),
+    ["Business", `Est. monthly visits (${period})`, "Bounce rate", "Top source", "Saudi share", "Organic (Semrush)", "Authority", "Shared keywords"],
+    rows.map((r) => [t(r.name), ...cell(r), r.organicTraffic === undefined ? "—" : `~${fmt(r.organicTraffic)}`, r.authorityScore === undefined ? "—" : String(r.authorityScore), sharedKeywords(ctx, r.domain)]),
     `Estimated: Similarweb via Apify (${period}) and ${ctx.src.semrush}. Small domains sit near the reliable-measurement threshold; treat as directional, not exact.`,
     0,
-    ["17%", "17%", "11%", "20%", "12%", "13%", "10%"],
+    ["15%", "15%", "9%", "19%", "11%", "11%", "8%", "12%"],
   )}</div>`;
   return page(ctx, 9, "Traffic (Similarweb Estimates)", "Third-party estimates, not the sites' own analytics — directional only.", body, `${cards(items)}${bottomLine(ctx.analysis.bottomLines.traffic)}`);
 }
@@ -90,12 +90,6 @@ export function reputation(ctx: ReportContext): string {
 
 export function competitive(ctx: ReportContext): string {
   const rows = ctx.audit.benchmark ?? [];
-  const commonKeywords = (domain: string | undefined) => {
-    if (domain === ctx.host) return "—";
-    const c = ctx.data.competitors?.find((x) => x.domain === domain);
-    // A neighbour shares keywords with the Saudi candidate it was found through, not (measurably) with the prospect.
-    return c?.commonKeywords !== undefined ? `${fmt(c.commonKeywords)} (est.)` : c?.via ? `via ${esc(c.via)}` : "—";
-  };
   const me = rows[0];
   const ig = (r: (typeof rows)[number]) => (typeof r.instagramFollowers === "number" ? fmt(r.instagramFollowers) : "not measured");
   const visits = (r: (typeof rows)[number]) => (typeof r.traffic === "object" ? `~${fmt(r.traffic.monthlyVisits)} (est.)` : "not measured");
@@ -108,8 +102,8 @@ export function competitive(ctx: ReportContext): string {
     igLeader ? { title: `Instagram: ${igLeader.name} leads`, detail: `${ig(igLeader)} followers; engagement and Meta activity complete the picture (see Organic Social and Paid Media).` } : { title: "Social", detail: "Instagram followers were not measured for this set." },
   ];
   const body = `<div class="body">${table(
-    ["Business", "Common keywords (Semrush)", "Google Ads", "Meta Ads", "Instagram followers", "Est. monthly visits", "Authority (Semrush)"],
-    rows.map((r) => [t(r.name), commonKeywords(r.domain), googleCell(r, ctx).split(",")[0]!, metaCell(r).replace(/\s\(.*$/, ""), ig(r), visits(r), r.authorityScore === undefined ? "—" : String(r.authorityScore)]),
+    ["Business", "Shared keywords (Semrush)", "Google Ads", "Meta Ads", "Instagram followers", "Est. monthly visits", "Authority (Semrush)"],
+    rows.map((r) => [t(r.name), sharedKeywords(ctx, r.domain, true), googleCell(r, ctx).split(",")[0]!, metaCell(r).replace(/\s\(.*$/, ""), ig(r), visits(r), r.authorityScore === undefined ? "—" : String(r.authorityScore)]),
     `Competitors ${peerMethod(ctx)}; other sources as on the previous pages, ${ctx.day}.`,
     0,
   )}</div>`;
