@@ -171,7 +171,10 @@ export function fakeHermes(profiles: string[] = []) {
       tasks.set(t.id, t);
       return t;
     },
-    task: async (id) => ({ task: tasks.get(id)!, comments: [], links: { parents: [], children: [] } }) as unknown as Awaited<ReturnType<AuditHermes["task"]>>,
+    task: async (id) =>
+      ({ task: tasks.get(id)!, comments: comments.filter((c) => c.id === id).map((c) => ({ body: c.body, author: c.author })), links: { parents: [], children: [] } }) as unknown as Awaited<
+        ReturnType<AuditHermes["task"]>
+      >,
     addComment: async (id, body, author) => {
       comments.push({ id, body, author });
     },

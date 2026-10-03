@@ -141,7 +141,7 @@ export interface StoredAudit {
   crmFlags?: CrmFlags;
   /** The kanban task of the agent that started this audit; told the outcome once per run (reportedStatus). */
   parent?: { taskId: string; reportedStatus?: AuditStatus };
-  analysisTask?: { taskId?: string; assignee: string; startedAt: number };
+  analysisTask?: { taskId?: string; assignee: string; startedAt: number; retried?: boolean };
   crm?: { fileId?: string; attachmentId?: string; noteId?: string };
   notionPageId?: string;
 }

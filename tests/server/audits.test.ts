@@ -87,12 +87,39 @@ describe("audit pipeline", () => {
     await rig.drive();
     rig.hermes.complete("Sorry, I could not finish this one.");
     await rig.drive();
+    // First a precise resend request, with the task back on the agent's lane.
+    const [task] = [...rig.hermes.tasks.values()];
+    expect(task!.status).toBe("ready");
+    expect(rig.hermes.comments.at(-1)?.body).toContain("kanban_complete(result=");
+    expect((await rig.engine.get(id)).steps.find((s) => s.id === "analysis")?.note).toMatch(/resend/);
+    rig.hermes.complete("Still no JSON, sorry.");
+    await rig.drive();
     const audit = await rig.engine.get(id);
     expect(audit.status).toBe("done");
     expect(audit.steps.find((s) => s.id === "analysis")?.note).toMatch(/not valid JSON/);
     expect(audit.analysis?.coverLine).toContain("thestudio.sa");
     expect(audit.analysis?.fix.map((f) => f.name)).toEqual(["Foundation", "Demand Capture", "Demand Generation"]);
     expect(audit.steps.find((s) => s.id === "crm")).toMatchObject({ status: "skipped", note: expect.stringContaining("Not linked") });
+  });
+
+  it("takes the analysis from a comment when the agent left result empty", async () => {
+    const rig = await auditRig();
+    const { id } = await rig.engine.start({ website: "https://thestudio.sa", name: "THE STUDIO" }, "hq");
+    await rig.drive();
+    const [task] = [...rig.hermes.tasks.values()];
+    await rig.hermes.hermes.addComment(task!.id, answer(draftIn(task!.body!), { headline: "Headline from a comment." }), "zain-growth-analyst");
+    rig.hermes.complete("");
+    await rig.drive();
+    const audit = await rig.engine.get(id);
+    expect(audit.status).toBe("done");
+    expect(audit.analysis?.headline).toBe("Headline from a comment.");
+  });
+
+  it("tells the agent exactly where the JSON goes", async () => {
+    const rig = await auditRig();
+    await rig.engine.start({ website: "https://thestudio.sa", name: "THE STUDIO" }, "hq");
+    await rig.drive();
+    expect([...rig.hermes.tasks.values()][0]!.body).toContain("call kanban_complete with result = the finished JSON");
   });
 
   it("fails cleanly at the website step when Apify is not connected", async () => {

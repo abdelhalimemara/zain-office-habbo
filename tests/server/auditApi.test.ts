@@ -62,6 +62,8 @@ describe("audits API", () => {
     await rig.drive();
     rig.hermes.complete("not JSON: the drafted analysis is used");
     await rig.drive();
+    rig.hermes.complete("still not JSON: after one resend the draft is used");
+    await rig.drive();
     const pdf = await send("GET", AUDITS_API.pdf(audit.id));
     expect(pdf.status).toBe(200);
     expect(pdf.headers.get("content-type")).toBe("application/pdf");

@@ -160,7 +160,7 @@ export function analysisTaskBody(audit: ProspectAudit, data: CollectedData, scor
     `Write the analysis for the Zain Growth Digital Gap Audit of ${audit.prospect.name} (${audit.prospect.website}).`,
     "The data was collected with Apify and scored by Zain HQ; scores, statuses and severities are final. It fills a branded PDF the prospect will read, so be specific, factual and courteous. Rules from the template: built from public data only; every fact is quoted, estimated or not measured, with its source; not measured is not zero (never call an unmeasured area a weakness). Write in English and keep Arabic names as they are.",
     `A draft built from the data is below: sharpen its wording and add insight, but do not invent numbers. bottomLines keys: ${BOTTOM_LINE_KEYS.join(", ")}. fix has exactly three phases named ${FIX_NAMES.join(", ")}. Findings are the gaps (fair/weak areas), ordered by severity. Services: ${Object.values(SERVICE_FOR).join("; ")}.`,
-    "Answer with ONLY the finished JSON in one ```json fenced block, same shape as the draft.",
+    "HOW TO ANSWER (important): call kanban_complete with result = the finished JSON inside one ```json fenced block (same shape as the draft) and summary = \"Analysis written for " + audit.prospect.name + "\". Only the `result` argument is saved: JSON written in your reply or only in the summary is lost, and the report falls back to the draft.",
     "",
     "Draft:",
     "```json",
