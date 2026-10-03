@@ -17,6 +17,8 @@ export const CONVERSATION_ID = /^conv_[A-Za-z0-9]{8,64}$/;
 /** Conversation states in which the call is still connected and the transcript may grow. */
 const STILL_CONNECTED = new Set(["initiated", "in-progress"]);
 const ATTEMPTS = 8;
+/** ElevenLabs can report "processing" with an empty transcript for a while after a long call: wait up to a minute. */
+const PROCESSING_ATTEMPTS = 40;
 const RETRY_MS = 1500;
 
 export type EndLive = Required<EndLiveRequest>;
@@ -146,6 +148,24 @@ export class LiveService {
     });
   }
 
+  /**
+   * Leadership meetings that reached review without a usable transcript (e.g. it was still being processed when the
+   * call ended): re-reads every session's transcript from ElevenLabs and drafts the action items again.
+   */
+  rebuild(meetingId: string): Promise<BoardMeeting> {
+    return this.locked(meetingId, async () => {
+      const meeting = await this.options.meetings.get(meetingId);
+      if (!isLeadership(meeting)) throw new HttpError(409, `meeting ${meetingId} is not a leadership meeting`);
+      const ids = meeting.liveConversationIds ?? [];
+      if (ids.length === 0) throw new HttpError(409, `meeting ${meetingId} has no recorded live session`);
+      const speakers = leadershipSpeakers(meeting);
+      const turns: MeetingTurn[] = [];
+      for (const id of ids) turns.push(...transcriptTurns(await this.finished(id, this.leadershipRoom().agent), speakers, meeting.currentRound, this.now()));
+      if (turns.length === 0) throw new HttpError(409, "the recorded sessions have no transcript yet");
+      return this.options.meetings.redraft(meetingId, turns);
+    });
+  }
+
   /** Pushes changed voice assignments to the room agents that exist. */
   async refreshVoices(): Promise<void> {
     const { voices } = await this.options.voice.voices();
@@ -159,8 +179,10 @@ export class LiveService {
     for (let attempt = 1; ; attempt++) {
       const conversation = await this.options.client.conversation(conversationId);
       if (!agentId || conversation.agent_id !== agentId) throw badRequest(`this conversation is not from the ${agent.room.name}`);
-      if (!STILL_CONNECTED.has(conversation.status)) return conversation;
-      if (attempt >= ATTEMPTS) throw new HttpError(409, "the live session is still connected; end it first");
+      const transcribing = conversation.status === "processing" && !hasWords(conversation);
+      if (!STILL_CONNECTED.has(conversation.status) && !transcribing) return conversation;
+      if (transcribing && attempt >= PROCESSING_ATTEMPTS) throw new HttpError(409, "ElevenLabs is still processing the transcript; try again in a minute");
+      if (!transcribing && attempt >= ATTEMPTS) throw new HttpError(409, "the live session is still connected; end it first");
       await this.sleep(RETRY_MS);
     }
   }
@@ -178,4 +200,8 @@ function live(meeting: BoardMeeting): BoardMeeting {
   if (meeting.mode !== "voice") throw new HttpError(409, `meeting ${meeting.id} is not a voice meeting`);
   if (meeting.status !== "live") throw new HttpError(409, `meeting ${meeting.id} is ${meeting.status}, not live`);
   return meeting;
+}
+
+function hasWords(conversation: LabsConversation): boolean {
+  return conversation.transcript.some((e) => typeof e.message === "string" && e.message.trim() !== "");
 }

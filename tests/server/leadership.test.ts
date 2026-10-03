@@ -279,6 +279,41 @@ describe("ending a leadership meeting", () => {
     expect(meeting.outcome!.actions.every((a) => /^act_[a-f0-9]{8}$/.test(a.id))).toBe(true);
   });
 
+  it("waits while ElevenLabs is still processing the transcript, and records nothing until it is there", async () => {
+    const r = room();
+    const { meeting } = await r.start();
+    await r.session(meeting.id);
+    r.labs.conversations.set(CONV, { ...conversation("agent_room0000000001", []), status: "processing" });
+    const early = await r.end(meeting.id, { conversationId: CONV });
+    expect(early.status).toBe(409);
+    expect(await early.json()).toEqual({ error: "ElevenLabs is still processing the transcript; try again in a minute" });
+    expect((await r.meeting(meeting.id)).liveConversationIds ?? []).toEqual([]);
+    r.labs.conversations.set(CONV, conversation("agent_room0000000001", MEETING_TALK));
+    const ended = (await (await r.end(meeting.id, { conversationId: CONV })).json()).meeting as BoardMeeting;
+    expect(ended.status).toBe("drafting");
+    expect(ended.turns).toHaveLength(5);
+  });
+
+  it("redrafts a meeting that reached review without its transcript", async () => {
+    const r = room();
+    const { meeting } = await r.start();
+    await r.session(meeting.id);
+    r.labs.conversations.set(CONV, conversation("agent_room0000000001", []));
+    await r.end(meeting.id, { conversationId: CONV });
+    r.kanban.complete(r.kanban.byTitle("Leadership meeting")[0]!.id, "No priorities were agreed in the provided transcript.");
+    await r.meetings.tick();
+    expect((await r.meeting(meeting.id)).status).toBe("review");
+    r.labs.conversations.set(CONV, conversation("agent_room0000000001", MEETING_TALK));
+    const res = await r.send("POST", `/api/leadership/meetings/${meeting.id}/redraft`, {});
+    expect(res.status).toBe(200);
+    const again = (await res.json()).meeting as BoardMeeting;
+    expect(again.status).toBe("drafting");
+    expect(again.turns).toHaveLength(5);
+    expect(again.outcome).toBeUndefined();
+    expect(r.kanban.byTitle("Leadership meeting")).toHaveLength(2);
+    expect((await r.send("POST", `/api/leadership/meetings/${meeting.id}/redraft`, {})).status).toBe(409);
+  });
+
   it("goes to review with no actions when the draft cannot be read", async () => {
     const r = room();
     const { meeting } = await reviewed(r, "Sorry, I could not do it.");

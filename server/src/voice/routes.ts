@@ -38,6 +38,12 @@ export function voiceRoutes(app: Hono, voice: VoiceService, meetings: MeetingEng
 
   app.post(`${MEETINGS_API.list}/:id/live`, async (c) => c.json(await liveRoom().session(meetingIdParam(c.req.param("id")))));
 
+  app.post("/api/leadership/meetings/:id/redraft", async (c) => {
+    const id = meetingIdParam(c.req.param("id"));
+    await readJsonObject(c);
+    return c.json({ meeting: await liveRoom().rebuild(id) });
+  });
+
   app.post(`${MEETINGS_API.list}/:id/live/end`, async (c) => {
     const id = meetingIdParam(c.req.param("id"));
     return c.json({ meeting: await liveRoom().end(id, parseEndLive(await readJsonObject(c))) });

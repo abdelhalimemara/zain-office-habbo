@@ -170,6 +170,18 @@ export class MeetingEngine {
     return stored.meeting;
   }
 
+  /** A leadership meeting in review gets its transcript replaced and the action items drafted again (nothing assigned yet). */
+  async redraft(id: string, turns: readonly MeetingTurn[]): Promise<BoardMeeting> {
+    const stored = await this.load(id);
+    const m = stored.meeting;
+    if (m.kind !== "leadership" || m.status !== "review") throw new HttpError(409, `meeting ${id} is ${m.status}; only a leadership meeting in review can be redrafted`);
+    if (m.outcome?.actions.some((a) => a.status === "assigned")) throw new HttpError(409, `meeting ${id} already has assigned actions`);
+    m.turns = [...turns];
+    delete m.outcome;
+    await startDrafting(stored, this.drafting);
+    return stored.meeting;
+  }
+
   async remark(id: string, { text, next }: Required<FounderRemarkRequest>): Promise<BoardMeeting> {
     const stored = await this.load(id);
     const m = stored.meeting;

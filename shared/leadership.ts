@@ -72,6 +72,8 @@ export const LEADERSHIP_API = {
   start: "/api/leadership/meetings",
   actions: (id: string) => `/api/leadership/meetings/${encodeURIComponent(id)}/actions`,
   assign: (id: string) => `/api/leadership/meetings/${encodeURIComponent(id)}/actions/assign`,
+  /** POST {}: re-read the live transcript from ElevenLabs and draft the action items again (review, nothing assigned). */
+  redraft: (id: string) => `/api/leadership/meetings/${encodeURIComponent(id)}/redraft`,
 } as const;
 
 export const ACTION_TITLE_MAX = 200;
