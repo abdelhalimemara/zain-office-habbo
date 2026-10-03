@@ -1,4 +1,5 @@
 import { DIVISIONS } from "../../../shared/divisions";
+import { agentAnswers } from "../hermes/answer";
 import type { KanbanTask } from "../../../shared/hermes";
 import { ACTIONS_MAX, ACTION_TITLE_MAX, type ActionItem } from "../../../shared/leadership";
 import type { BoardMeeting } from "../../../shared/meetings";
@@ -113,8 +114,8 @@ export async function checkDrafting(stored: StoredMeeting, board: readonly Kanba
     toReview(stored, DRAFT_TIMED_OUT, []);
     return ctx.save(stored);
   }
-  const answer = task.status === "done" ? (task.result ?? task.latest_summary ?? "") : "";
-  const draft = parseDraft(answer, ctx.log);
+  const answers = task.status === "done" ? agentAnswers(await ctx.hermes.task(taskId)) : [];
+  const draft = answers.map((a) => parseDraft(a, () => undefined)).find((d) => d) ?? parseDraft(answers[0] ?? "", ctx.log);
   if (!draft) {
     ctx.log(`leadership: could not read the drafted actions for ${m.id}`);
     toReview(stored, DRAFT_FAILED, []);

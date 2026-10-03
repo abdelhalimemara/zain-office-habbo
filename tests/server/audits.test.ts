@@ -115,6 +115,16 @@ describe("audit pipeline", () => {
     expect(audit.analysis?.headline).toBe("Headline from a comment.");
   });
 
+  it("takes the analysis from the run's metadata when the agent left result empty", async () => {
+    const rig = await auditRig();
+    const { id } = await rig.engine.start({ website: "https://thestudio.sa", name: "THE STUDIO" }, "hq");
+    await rig.drive();
+    const [task] = [...rig.hermes.tasks.values()];
+    rig.hermes.completeWithMetadata({ ...draftIn(task!.body!), headline: "Headline from metadata." });
+    await rig.drive();
+    expect((await rig.engine.get(id)).analysis?.headline).toBe("Headline from metadata.");
+  });
+
   it("tells the agent exactly where the JSON goes", async () => {
     const rig = await auditRig();
     await rig.engine.start({ website: "https://thestudio.sa", name: "THE STUDIO" }, "hq");

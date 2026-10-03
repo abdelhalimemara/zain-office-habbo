@@ -39,6 +39,8 @@ export interface HermesTaskDetail {
   link_tasks?: { id: string; title: string; status: TaskStatus }[];
   /** The task's event log (kanban_db.list_events), oldest first. */
   events?: HermesEvent[];
+  /** The task's runs, oldest first; `metadata` is what the worker passed to kanban_complete(metadata=…). */
+  runs?: { summary?: string | null; metadata?: unknown }[];
 }
 
 export interface HermesEvent {

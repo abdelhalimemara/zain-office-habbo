@@ -314,6 +314,20 @@ describe("ending a leadership meeting", () => {
     expect((await r.send("POST", `/api/leadership/meetings/${meeting.id}/redraft`, {})).status).toBe(409);
   });
 
+  it("reads the draft from the run's metadata when the CEO agent left result empty", async () => {
+    const r = room();
+    const { meeting } = await r.start();
+    await r.session(meeting.id);
+    r.labs.conversations.set(CONV, conversation("agent_room0000000001", MEETING_TALK));
+    await r.end(meeting.id, { conversationId: CONV });
+    const draft = r.kanban.byTitle("Leadership meeting")[0]!;
+    r.kanban.completeWithMetadata(draft.id, JSON.parse(DRAFT.replace(/^[\s\S]*?```json/, "").replace(/```[\s\S]*$/, "")), "Captured the agreed priorities.");
+    await r.meetings.tick();
+    const m = await r.meeting(meeting.id);
+    expect(m.status).toBe("review");
+    expect(m.outcome!.actions.map((a) => a.title)).toEqual(["Ship the Acme brand book", "Fix the client portal login"]);
+  });
+
   it("goes to review with no actions when the draft cannot be read", async () => {
     const r = room();
     const { meeting } = await reviewed(r, "Sorry, I could not do it.");

@@ -8,6 +8,8 @@ const MAX_TASKS = 80;
 /** An in-memory kanban board behind the Hermes routes the meetings engine uses. */
 export function fakeKanban(hiredProfiles: readonly string[] = BOARD_MEMBERS.map((m) => m.profile)) {
   const tasks = new Map<string, KanbanTask>();
+  /** Per task: what its last worker run passed as kanban_complete(metadata=…). */
+  const runMetadata = new Map<string, unknown>();
   let next = 0;
 
   const board = (): KanbanBoard => ({
@@ -32,7 +34,9 @@ export function fakeKanban(hiredProfiles: readonly string[] = BOARD_MEMBERS.map(
   for (let i = 1; i <= MAX_TASKS; i++) {
     const id = `t_${i}`;
     routes[`GET ${KANBAN}/tasks/${id}`] = () =>
-      tasks.has(id) ? { task: tasks.get(id), comments: [], links: { parents: [], children: [] } } : json({ detail: "not found" }, 404);
+      tasks.has(id)
+        ? { task: tasks.get(id), comments: [], links: { parents: [], children: [] }, runs: runMetadata.has(id) ? [{ summary: null, metadata: runMetadata.get(id) }] : [] }
+        : json({ detail: "not found" }, 404);
     routes[`PATCH ${KANBAN}/tasks/${id}`] = (c) => {
       const current = tasks.get(id)!;
       const updated = { ...current, ...(c.body as Partial<KanbanTask>) };
@@ -47,6 +51,11 @@ export function fakeKanban(hiredProfiles: readonly string[] = BOARD_MEMBERS.map(
     routes,
     tasks,
     byTitle,
+    /** A worker that finished with its structured answer in the run's metadata instead of `result`. */
+    completeWithMetadata(id: string, metadata: unknown, latest_summary = "Done.") {
+      runMetadata.set(id, metadata);
+      this.complete(id, null, latest_summary);
+    },
     complete(id: string, result: string | null, latest_summary: string | null = null) {
       tasks.set(id, { ...tasks.get(id)!, status: "done", result, latest_summary });
     },

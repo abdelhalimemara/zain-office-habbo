@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { AUDITS_API, AUDIT_AREA_LABELS, type AuditStepId, type ProspectAudit } from "../../../../shared/audits";
 import type { HermesClient } from "../../hermes/client";
+import { agentAnswers } from "../../hermes/answer";
 import { ANALYSIS_TITLE_PREFIX, AUDIT_AGENT, FALLBACK_AGENT, analysisTaskBody, draftAnalysis, parseAnalysis } from "./analysis";
 import { publicView } from "./benchmark";
 import { searchStep } from "./searchStep";
@@ -204,11 +205,11 @@ export async function checkAnalysis(s: StoredAudit, ctx: StepContext): Promise<O
   if (!t?.taskId) return null;
   const draft = draftAnalysis(s.audit, s.audit.score!, s.data);
   const fallback = (note: string): Outcome => ({ status: "done", note, patch: (x) => (x.audit.analysis = draft) });
-  const { task, comments } = await ctx.hermes.task(t.taskId);
+  const detail = await ctx.hermes.task(t.taskId);
+  const { task } = detail;
   if (task.status === "done") {
-    // The answer belongs in `result`; agents sometimes leave it in the summary or a comment instead.
-    const candidates = [task.result, task.latest_summary, ...[...(comments ?? [])].reverse().map((c) => c.body)];
-    const parsed = candidates.map((c) => (c ? parseAnalysis(c, draft) : null)).find((p) => p);
+    // The answer belongs in `result`; agents sometimes leave it in the summary, the run's metadata or a comment.
+    const parsed = agentAnswers(detail).map((c) => parseAnalysis(c, draft)).find((p) => p);
     if (parsed) return { status: "done", note: `Written by ${t.assignee}`, patch: (x) => (x.audit.analysis = parsed) };
     if (!t.retried) {
       // One more chance with a precise instruction before falling back to the draft.
