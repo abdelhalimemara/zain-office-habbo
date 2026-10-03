@@ -81,7 +81,7 @@ const studio: RosterAgent[] = [
     skills: mk("seo-audit", "ai-seo", "programmatic-seo", "content-strategy", "copywriting", "copy-editing", "schema") },
   { profile: "zain-studio-brand", title: "Brand Strategist", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp", unit: "design",
     skills: ["product:brand-identity", "marketing:positioning-and-messaging", "marketing:brand-voice", ...mk("product-marketing", "customer-research")] },
-  { profile: "zain-studio-ux", title: "UX / Web Designer", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp", unit: "design",
+  { profile: "zain-studio-ux", name: "Ziad Farouk", title: "UX / Web Designer", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp", unit: "design",
     skills: ["product:interface-craft", "product:ux-product-auditor", "product:design-styles",
       ...mk("site-architecture", "cro", "signup", "onboarding")] },
 ];
