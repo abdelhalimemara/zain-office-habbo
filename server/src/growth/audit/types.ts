@@ -53,8 +53,9 @@ export interface Competitor {
   instagram?: string;
   /** How it was found: Semrush keyword overlap (preferred) or the category searches (fallback). */
   source?: "semrush" | "search";
-  /** Organic keywords it shares with the prospect (Semrush, estimated). */
+  /** Organic keywords it shares with the prospect, and Semrush's competition level 0..1 (estimated). */
   commonKeywords?: number;
+  competitionLevel?: number;
   /** Found as an organic competitor of this Saudi candidate (the prospect's own overlap was too thin). */
   via?: string;
 }

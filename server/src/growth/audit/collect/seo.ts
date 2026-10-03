@@ -82,12 +82,15 @@ export async function semrushProspect(auditId: string, website: string, budget: 
 }
 
 /** Semrush's organic competitors: the domains ranking for the same keywords, most keywords in common first. */
-export function keywordOverlap(prospectItem: Item | undefined, auditItem: Item | undefined): { domain: string; commonKeywords: number }[] {
+export function keywordOverlap(prospectItem: Item | undefined, auditItem: Item | undefined): { domain: string; commonKeywords: number; competitionLevel?: number }[] {
   const organic = arr(obj(obj(prospectItem).organic).competitors);
   const list = organic.length ? organic : arr(obj(obj(auditItem).semrush).organic_competitors);
   const self = siteHost(`https://${String(obj(prospectItem).domain ?? "")}`);
   return list
-    .map((c) => ({ domain: siteHost(`https://${String(c.domain ?? "")}`), commonKeywords: num(c.common_keywords) ?? 0 }))
+    .map((c) => {
+      const level = num(c.competition_level);
+      return { domain: siteHost(`https://${String(c.domain ?? "")}`), commonKeywords: num(c.common_keywords) ?? 0, ...(level !== undefined ? { competitionLevel: level } : {}) };
+    })
     .filter((c) => c.domain && c.domain !== self)
     .sort((a, b) => b.commonKeywords - a.commonKeywords);
 }
