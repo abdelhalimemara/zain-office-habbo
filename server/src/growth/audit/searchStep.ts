@@ -75,7 +75,7 @@ export async function searchStep(s: StoredAudit, ctx: StepContext): Promise<Outc
   }
   if (!serp && !seo) throw Object.assign(new Error(notes.join("; ")), { costUsd });
   const bySemrush = candidates.filter((c) => c.source === "semrush").length;
-  notes.push(`${candidates.length} competitor candidates (${bySemrush} by keyword overlap): ${candidates.map((c) => (c.via ? `${c.domain} (via ${c.via})` : c.domain)).join(", ") || "none found"}`);
+  notes.push(`${candidates.length} competitor candidates (${bySemrush} by shared keywords): ${candidates.map((c) => (c.via ? `${c.domain} (via ${c.via})` : c.domain)).join(", ") || "none found"}`);
   return {
     status: "done",
     note: notes.join("; "),

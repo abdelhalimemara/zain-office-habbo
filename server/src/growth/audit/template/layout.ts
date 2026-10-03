@@ -23,9 +23,21 @@ export function peerMethod(ctx: ReportContext): string {
   const peers = ctx.data.ads ? (ctx.data.competitors ?? []) : [];
   const semrush = peers.some((c) => c.source === "semrush");
   const search = peers.some((c) => c.source === "search");
-  if (semrush && search) return "found by keyword overlap (Semrush, est.) and live category searches";
-  if (semrush) return "found by keyword overlap (Semrush, est.)";
+  if (semrush && search) return "found by shared keywords (Semrush, est.) and live category searches";
+  if (semrush) return "found by shared keywords (Semrush, est.)";
   return "found in live category searches";
+}
+
+/** A competitor's shared keywords with the prospect (and Semrush's competition level), or how it was found. */
+export function sharedKeywords(ctx: ReportContext, domain: string | undefined, withLevel = false): string {
+  if (!domain || domain === ctx.host) return "—";
+  const c = ctx.data.competitors?.find((x) => x.domain === domain);
+  if (c?.commonKeywords !== undefined) {
+    const level = withLevel && c.competitionLevel !== undefined ? `, ${Math.round(c.competitionLevel * 100)}% competition` : "";
+    return `${c.commonKeywords.toLocaleString("en-US")}${level} (est.)`;
+  }
+  // A neighbour shares keywords with the Saudi candidate it was found through, not (measurably) with the prospect.
+  return c?.via ? `via ${esc(c.via)}` : "—";
 }
 
 export function esc(value: unknown): string {
