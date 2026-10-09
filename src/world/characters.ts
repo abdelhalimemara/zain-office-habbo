@@ -50,6 +50,7 @@ export const NAMED_SPRITE_BY_PROFILE: Readonly<Record<string, SpriteKey>> = {
   "zain-studio-seo-writer": "people/female-2",
   "zain-studio-ux": "people/male-9",
   [CLAUDE_LANE]: "voxel/claude",
+  "zain-studio-seo-research": "people/male-8",
 };
 
 export function spriteFor(profile: string, rank: Rank): SpriteKey {
