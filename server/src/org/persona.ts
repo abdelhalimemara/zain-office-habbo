@@ -47,7 +47,8 @@ function teamLines(agent: RosterAgent, roster: readonly RosterAgent[]): string[]
     .filter((a) => a.profile !== agent.profile && a.rank !== "ceo" && a.rank !== "board")
     .map((a) => {
       const unit = findUnit(a.unit);
-      return `- \`${a.profile}\` — ${a.title}${unit ? ` (${unit.name})` : ""}`;
+      const external = a.external ? ` · ${a.name ?? a.title} on Claude Code: ${a.focus ?? "works this lane's tasks"}` : "";
+      return `- \`${a.profile}\` — ${a.title}${unit ? ` (${unit.name})` : ""}${external}`;
     });
 }
 

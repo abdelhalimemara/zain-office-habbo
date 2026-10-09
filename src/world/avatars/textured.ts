@@ -1,5 +1,5 @@
 import { Assets, Container, Matrix, Rectangle, Sprite, Texture } from "pixi.js";
-import type { SpriteKey } from "../characters";
+import type { SpriteKey, TexturedSpriteKey } from "../characters";
 import { ATLASES } from "./atlas/urls";
 import { lighten } from "./color";
 import { faceSource, projectFaces, sourceLight, type ProjectedFace } from "./faces";
@@ -28,7 +28,7 @@ let loading: Promise<void> | null = null;
 /** Load every reference-texture atlas; avatars built before this resolves use the voxel look. */
 export function loadAvatarAtlases(): Promise<void> {
   loading ??= Promise.all(
-    (Object.keys(ATLASES) as SpriteKey[]).map(async (key) => {
+    (Object.keys(ATLASES) as TexturedSpriteKey[]).map(async (key) => {
       const { url, meta } = ATLASES[key];
       const source = await Assets.load<Texture>(url);
       atlases.set(key, { meta: meta as AtlasMeta, source, frames: new Map() });

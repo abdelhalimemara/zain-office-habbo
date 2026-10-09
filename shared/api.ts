@@ -162,7 +162,7 @@ export interface BoardConsultResponse {
 }
 
 export interface RosterEntry extends RosterAgent {
-  /** True when the Hermes profile exists. */
+  /** True when the Hermes profile exists; always true for an external agent (it has no profile). */
   hired: boolean;
   model: string | null;
 }

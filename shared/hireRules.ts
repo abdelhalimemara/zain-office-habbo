@@ -1,5 +1,7 @@
 /** Hire validation shared by the hire form and the server (which also checks the live catalog). */
 
+import { ROSTER, isExternal } from "./roster";
+
 export const PROFILE_PATTERN = /^zain-[a-z0-9-]{2,40}$/;
 export const TITLE_MAX = 60;
 export const MIN_SKILLS = 1;
@@ -21,6 +23,7 @@ export function hireFieldErrors({ profile, title, skills }: HireFields): HireFie
   if (!t) errors.title = "Title is required.";
   else if (t.length > TITLE_MAX) errors.title = `Title must be ${TITLE_MAX} characters or fewer.`;
   if (!PROFILE_PATTERN.test(profile)) errors.profile = "Use zain- followed by 2–40 lowercase letters, digits or dashes.";
+  else if (isExternal(ROSTER.find((a) => a.profile === profile))) errors.profile = "This is an external agent's lane, not a Hermes profile.";
   if (skills.length < MIN_SKILLS) errors.skills = "Pick at least one skill.";
   else if (skills.length > MAX_SKILLS) errors.skills = `Pick at most ${MAX_SKILLS} skills.`;
   else if (skills.some((s) => !SKILL_ID_PATTERN.test(s))) errors.skills = "Skills must be ids like department:skill.";

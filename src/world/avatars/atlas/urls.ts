@@ -1,4 +1,4 @@
-import type { SpriteKey } from "../../characters";
+import type { TexturedSpriteKey } from "../../characters";
 import female_1Url from "./people-female-1.webp";
 import female_1Meta from "./people-female-1.json";
 import female_2Url from "./people-female-2.webp";
@@ -38,7 +38,7 @@ import buffettMeta from "./board-buffett.json";
 import jobsUrl from "./board-jobs.webp";
 import jobsMeta from "./board-jobs.json";
 
-export const ATLASES: Readonly<Record<SpriteKey, { url: string; meta: unknown }>> = {
+export const ATLASES: Readonly<Record<TexturedSpriteKey, { url: string; meta: unknown }>> = {
   "people/female-1": { url: female_1Url, meta: female_1Meta },
   "people/female-2": { url: female_2Url, meta: female_2Meta },
   "people/female-3": { url: female_3Url, meta: female_3Meta },

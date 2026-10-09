@@ -1,6 +1,6 @@
 import type { RosterEntry } from "../../shared/api";
 import { DIVISIONS, type DivisionId } from "../../shared/divisions";
-import { agentActivity, divisionStats, type DivisionStats } from "../../shared/flow";
+import { divisionStats, rosterActivity, type DivisionStats } from "../../shared/flow";
 import type { KanbanBoard } from "../../shared/hermes";
 import { ROSTER, type RosterAgent } from "../../shared/roster";
 import type { Insets, WorldAgent } from "../world";
@@ -18,7 +18,7 @@ export function rosterOrFallback(entries: RosterEntry[] | undefined): RosterEntr
 
 export function toWorldAgents(roster: RosterEntry[], board: KanbanBoard | undefined): WorldAgent[] {
   return roster.map((agent) => {
-    const { activity, task } = board ? agentActivity(agent.profile, board) : { activity: "idle" as const, task: null };
+    const { activity, task } = board ? rosterActivity(agent, board) : { activity: "idle" as const, task: null };
     return {
       profile: agent.profile,
       title: agent.name ?? agent.title,

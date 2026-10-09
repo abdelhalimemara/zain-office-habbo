@@ -41,8 +41,8 @@ export function buildStudio(): FloorPlan {
   b.deskRow(13, 7, 3, "+y", { team: "design" });
   for (let x = 10; x <= 15; x++) b.item("chair", x, 9, 1, 1, { facing: "-y" });
   b.deskRow(7, 11, 3, "+y", { team: "organic" });
-  b.deskRow(10, 11, 3, "+y");
-  for (let x = 7; x <= 12; x++) b.item("chair", x, 13, 1, 1, { facing: "-y" });
+  b.deskRow(10, 11, 4, "+y");
+  for (let x = 7; x <= 13; x++) b.item("chair", x, 13, 1, 1, { facing: "-y" });
 
   b.item("bookcase", 18, 0, 4, 1);
   const mgr = b.item("execDesk", 19, 3, 2, 1);

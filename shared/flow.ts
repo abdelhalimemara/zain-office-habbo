@@ -176,6 +176,24 @@ export function agentActivity(
   return best;
 }
 
+/**
+ * An external agent (not a Hermes profile, see RosterAgent.external) has no Hermes worker whose state
+ * the board reflects in full: it works its lane through a bridge. It is "working" while a task assigned
+ * to its lane is running, otherwise idle.
+ */
+export function laneActivity(lane: string, board: KanbanBoard): { activity: AgentActivity; task: KanbanTask | null } {
+  const task = allTasks(board).find((t) => t.assignee === lane && t.status === "running") ?? null;
+  return { activity: task ? "working" : "idle", task };
+}
+
+/** agentActivity for a roster agent, or laneActivity when it is external. */
+export function rosterActivity(
+  agent: Pick<RosterAgent, "profile" | "external">,
+  board: KanbanBoard,
+): { activity: AgentActivity; task: KanbanTask | null } {
+  return agent.external ? laneActivity(agent.profile, board) : agentActivity(agent.profile, board);
+}
+
 export interface DivisionStats {
   working: number;
   blocked: number;

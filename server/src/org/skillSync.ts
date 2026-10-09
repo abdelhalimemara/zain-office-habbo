@@ -1,4 +1,4 @@
-import { CEO_PROFILE } from "../../../shared/roster";
+import { CEO_PROFILE, isExternal } from "../../../shared/roster";
 import { HermesError, type HermesClient } from "../hermes/client";
 import type { HeadcountSource } from "../headcount/catalog";
 import { installSkill, type SkillFileSink } from "../headcount/install";
@@ -40,14 +40,17 @@ function reason(err: unknown): string {
 /**
  * What each roster profile lacks compared with shared/roster.ts: skills (by their Hermes name), the
  * unit and marketing-context block in its SOUL, and its description. Only reads Hermes. The CEO's
- * SOUL and description are hand-kept, so only its skills are compared.
+ * SOUL and description are hand-kept, so only its skills are compared. External agents are not Hermes
+ * profiles and are left out.
  */
 export async function planSkillSync(
   { hermes, hires, profile }: Pick<SkillSyncOptions, "hermes" | "hires" | "profile">,
 ): Promise<ProfilePlan[]> {
   const roster = await fullRoster(hires);
-  const scope = profile ? roster.filter((a) => a.profile === profile) : roster;
-  if (profile && !scope.length) throw new Error(`${profile} is not on the roster`);
+  const scope = (profile ? roster.filter((a) => a.profile === profile) : roster).filter((a) => !isExternal(a));
+  if (profile && !scope.length) {
+    throw new Error(isExternal(roster.find((a) => a.profile === profile)) ? `${profile} is an external agent, not a Hermes profile` : `${profile} is not on the roster`);
+  }
   const existing = new Map((await hermes.listProfiles()).map((p) => [p.name, p]));
   const plans: ProfilePlan[] = [];
   for (const agent of scope) {

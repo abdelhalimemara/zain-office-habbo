@@ -1,4 +1,4 @@
-import { CEO_PROFILE, ROSTER } from "../../../shared/roster";
+import { CEO_PROFILE, ROSTER, isExternal } from "../../../shared/roster";
 import { defaultClients } from "../app";
 import { hire } from "../org/hire";
 import { fileHireStore } from "../org/hireStore";
@@ -20,9 +20,10 @@ async function main(): Promise<void> {
     return;
   }
   const existing = new Set((await hermes.listProfiles()).map((p) => p.name));
-  const pending = ROSTER.filter((a) => a.profile !== CEO_PROFILE && !existing.has(a.profile));
+  const hirable = ROSTER.filter((a) => a.profile !== CEO_PROFILE && !isExternal(a));
+  const pending = hirable.filter((a) => !existing.has(a.profile));
 
-  console.log(`${ROSTER.length - 1} roster agents, ${pending.length} not hired yet.`);
+  console.log(`${hirable.length} roster agents, ${pending.length} not hired yet.`);
   for (const agent of pending) {
     console.log(`- ${agent.profile} (${agent.title}, ${agent.division}) skills: ${agent.skills.map(hermesSkillName).join(", ")}`);
   }

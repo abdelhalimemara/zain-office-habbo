@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BOARD_SPRITE_BY_PROFILE, BOARD_SPRITES, CEO_SPRITE, WORKER_SPRITES, spriteFor } from "../../src/world/characters";
+import { BOARD_SPRITE_BY_PROFILE, BOARD_SPRITES, CEO_SPRITE, VOXEL_SPRITES, WORKER_SPRITES, spriteFor } from "../../src/world/characters";
 import { bodyOf } from "../../src/world/avatars/body";
 import { standHeightUnits, unitFor } from "../../src/world/avatars/cache";
 import { mul, rasterize, VoxelGrid } from "../../src/world/avatars/raster";
@@ -20,7 +20,11 @@ const SYMMETRIC: AvatarSpec = {
 
 describe("avatar specs", () => {
   it("cover exactly the sprite keys used by characters.ts", () => {
-    const expected = [...WORKER_SPRITES.map((k) => `people/${k}`), ...BOARD_SPRITES.map((k) => `board/${k}`)].sort();
+    const expected = [
+      ...WORKER_SPRITES.map((k) => `people/${k}`),
+      ...BOARD_SPRITES.map((k) => `board/${k}`),
+      ...VOXEL_SPRITES.map((k) => `voxel/${k}`),
+    ].sort();
     expect([...AVATAR_KEYS].sort()).toEqual(expected);
     expect(Object.keys(AVATAR_SPECS).sort()).toEqual(expected);
     for (const k of AVATAR_KEYS) expect(specFor(k).key).toBe(k);

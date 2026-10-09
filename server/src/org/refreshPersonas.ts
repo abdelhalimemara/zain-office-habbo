@@ -1,4 +1,4 @@
-import { CEO_PROFILE, ROSTER } from "../../../shared/roster";
+import { CEO_PROFILE, ROSTER, isExternal } from "../../../shared/roster";
 import { HermesError, type HermesClient } from "../hermes/client";
 import { fullRoster, type HireStore } from "./hireStore";
 import { profileDescription, soulText } from "./persona";
@@ -23,7 +23,7 @@ function reason(err: unknown): string {
 /**
  * Re-writes SOUL and description of every hired ROSTER agent from the current persona code, so
  * protocol changes reach agents hired earlier. Never creates profiles, installs skills or touches
- * the CEO. Returns the number of profiles that failed.
+ * the CEO or external agents (they have no Hermes profile). Returns the number of profiles that failed.
  */
 export async function refreshPersonas({ hermes, hires, apply, briefs, teams: store = memoryTeamStore(), log = console.log }: RefreshOptions): Promise<number> {
   const existing = new Set((await hermes.listProfiles()).map((p) => p.name));
@@ -32,6 +32,10 @@ export async function refreshPersonas({ hermes, hires, apply, briefs, teams: sto
   let failed = 0;
   for (const agent of ROSTER) {
     if (agent.profile === CEO_PROFILE) continue;
+    if (isExternal(agent)) {
+      log(`skip ${agent.profile} (external: ${agent.external}, not a Hermes profile)`);
+      continue;
+    }
     if (!existing.has(agent.profile)) {
       log(`skip ${agent.profile} (not hired)`);
       continue;

@@ -82,13 +82,19 @@ describe("seat assignment", () => {
 
 describe("character sprites", () => {
   it("are deterministic, use the worker set and map the board to their portraits", () => {
-    for (const r of ROSTER.filter((a) => a.rank !== "board" && a.rank !== "ceo")) {
+    for (const r of ROSTER.filter((a) => a.rank !== "board" && a.rank !== "ceo" && !a.external)) {
       expect(spriteFor(r.profile, r.rank)).toBe(spriteFor(r.profile, r.rank));
       expect(WORKER_SPRITES.map((w) => `people/${w}`)).toContain(spriteFor(r.profile, r.rank));
     }
     expect(spriteFor("zain-board-hormozi", "board")).toBe("board/hormozi");
     expect(spriteFor("zain-board-jobs", "board")).toBe("board/jobs");
     expect(spriteFor(CEO_PROFILE, "ceo")).toBe(CEO_SPRITE);
+  });
+
+  it("give Claude, the external lane agent, his own voxel character that no one else has", () => {
+    expect(spriteFor("zain-claude", "specialist")).toBe("voxel/claude");
+    const others = ROSTER.filter((a) => a.profile !== "zain-claude").map((a) => spriteFor(a.profile, a.rank));
+    expect(others).not.toContain("voxel/claude");
   });
 
   it("ships every sprite and no floor renders", () => {

@@ -2,11 +2,18 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { DIVISION_IDS } from "../../../shared/divisions";
-import { ROSTER, type RosterAgent } from "../../../shared/roster";
+import { ROSTER, isExternal, type RosterAgent } from "../../../shared/roster";
 
 export interface HireStore {
   list(): Promise<RosterAgent[]>;
   save(agent: RosterAgent): Promise<void>;
+}
+
+/** External agents are roster-only and never hired; a store refuses them so nothing can turn one into a profile. */
+function refuseExternal(agent: RosterAgent): void {
+  if (isExternal(agent) || isExternal(ROSTER.find((a) => a.profile === agent.profile))) {
+    throw new Error(`${agent.profile} is an external agent and cannot be hired`);
+  }
 }
 
 export function memoryHireStore(initial: RosterAgent[] = []): HireStore {
@@ -14,6 +21,7 @@ export function memoryHireStore(initial: RosterAgent[] = []): HireStore {
   return {
     list: async () => [...hires],
     save: async (agent) => {
+      refuseExternal(agent);
       if (ROSTER.some((a) => a.profile === agent.profile)) return;
       const i = hires.findIndex((h) => h.profile === agent.profile);
       if (i >= 0) hires[i] = agent;
@@ -31,6 +39,7 @@ function isRosterAgent(value: unknown): value is RosterAgent {
     DIVISION_IDS.includes(a.division as RosterAgent["division"]) &&
     (a.rank === "vp" || a.rank === "lead" || a.rank === "specialist") &&
     typeof a.reportsTo === "string" &&
+    a.external === undefined &&
     Array.isArray(a.skills) &&
     a.skills.every((s) => typeof s === "string")
   );
@@ -65,6 +74,11 @@ export function fileHireStore(root: string): HireStore {
   return {
     list: read,
     save: (agent) => {
+      try {
+        refuseExternal(agent);
+      } catch (err) {
+        return Promise.reject(err);
+      }
       if (ROSTER.some((a) => a.profile === agent.profile)) return Promise.resolve();
       const saved = queue.then(() => write(agent));
       queue = saved.catch(() => undefined);
