@@ -1,4 +1,4 @@
-import type { SpriteKey } from "../world/characters";
+import type { TexturedSpriteKey } from "../world/characters";
 import female1 from "../world/assets/people/female-1.webp";
 import female2 from "../world/assets/people/female-2.webp";
 import female3 from "../world/assets/people/female-3.webp";
@@ -19,7 +19,7 @@ import bezos from "../world/assets/board/bezos.webp";
 import buffett from "../world/assets/board/buffett.webp";
 import jobs from "../world/assets/board/jobs.webp";
 
-export const PORTRAIT_URLS: Readonly<Record<SpriteKey, string>> = {
+export const PORTRAIT_URLS: Readonly<Record<TexturedSpriteKey, string>> = {
   "people/female-1": female1,
   "people/female-2": female2,
   "people/female-3": female3,

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Rank } from "@shared/roster";
-import { spriteFor } from "../world/characters";
+import { isTextured, spriteFor } from "../world/characters";
 import { Avatar, type AvatarSize } from "./Avatar";
 import { PORTRAIT_URLS } from "./portraitUrls";
 
@@ -18,7 +18,8 @@ export interface PortraitProps {
 export function Portrait({ agent, name, size = "sm", color, vacant, labelled = true }: PortraitProps) {
   const [failed, setFailed] = useState(false);
   const sprite = agent ? spriteFor(agent.profile, agent.rank) : null;
-  if (!sprite || failed) return <Avatar name={name} color={color} size={size} vacant={vacant} />;
+  // A voxel-only character has no portrait image, so it keeps the initials circle.
+  if (!sprite || !isTextured(sprite) || failed) return <Avatar name={name} color={color} size={size} vacant={vacant} />;
   return (
     <span className={`zui-portrait zui-avatar--${size}${vacant ? " zui-portrait--vacant" : ""}`} data-sprite={sprite}>
       <img

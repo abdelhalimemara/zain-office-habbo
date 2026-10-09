@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { facePoint, projectFaces, texBox, type Box3, type FaceName } from "../faces";
 import { buildMesh, buildParts, REST_RIG, type NamedPart } from "../model";
 import { volumeOf } from "../raster";
-import { AVATAR_KEYS, specFor } from "../specs";
+import { TEXTURED_KEYS, specFor } from "../specs";
 
 /** Usage: tsx exportRig.ts <out.json> — stand-pose (SW) face geometry and surface colours for bakeAtlases.py. */
 function surface(p: NamedPart, k: Box3, face: FaceName): { cols: number; rows: number; data: number[] } {
@@ -25,7 +25,7 @@ function surface(p: NamedPart, k: Box3, face: FaceName): { cols: number; rows: n
   return { cols, rows, data };
 }
 
-const out = AVATAR_KEYS.map((key) => {
+const out = TEXTURED_KEYS.map((key) => {
   const spec = specFor(key);
   const mesh = buildMesh(spec, REST_RIG, "SW");
   const faces = projectFaces(spec, REST_RIG, "SW").map((f) => ({

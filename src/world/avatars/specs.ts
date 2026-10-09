@@ -1,4 +1,4 @@
-import { BOARD_SPRITES, WORKER_SPRITES, type SpriteKey } from "../characters";
+import { BOARD_SPRITES, VOXEL_SPRITES, WORKER_SPRITES, type SpriteKey, type TexturedSpriteKey } from "../characters";
 import type { AvatarSpec, BodySpec } from "./types";
 
 const FEMALE: BodySpec = { torsoW: 14, thighW: 7, shinW: 5, armW: 3 };
@@ -183,6 +183,16 @@ export const AVATAR_SPECS: Readonly<Record<SpriteKey, AvatarSpec>> = {
     shoes: { kind: "dress", color: 0x1e1f20 },
     accessories: ["glassesSquare", "nose", "pocketSquare"],
   },
+  /** Claude, the Creative Designer working on Claude Code: Claude's coral over cream, the only one in it. */
+  "voxel/claude": {
+    key: "voxel/claude",
+    skin: 0xe9b381,
+    hair: { style: "short", color: 0x2e2620 },
+    top: { kind: "turtleneck", color: 0xd97757 },
+    bottom: { kind: "trousers", color: 0xe8dcc8, belt: 0x5a4636 },
+    shoes: { kind: "sneakers", color: 0xf2ece4, sole: 0xc15f3c },
+    accessories: ["glassesRound"],
+  },
   "board/jobs": {
     key: "board/jobs",
     skin: 0xeec29d,
@@ -196,10 +206,13 @@ export const AVATAR_SPECS: Readonly<Record<SpriteKey, AvatarSpec>> = {
   },
 };
 
-export const AVATAR_KEYS: readonly SpriteKey[] = [
+/** Sprites with a reference image, which bakeAtlases.py textures. */
+export const TEXTURED_KEYS: readonly TexturedSpriteKey[] = [
   ...WORKER_SPRITES.map((k) => `people/${k}` as const),
   ...BOARD_SPRITES.map((k) => `board/${k}` as const),
 ];
+
+export const AVATAR_KEYS: readonly SpriteKey[] = [...TEXTURED_KEYS, ...VOXEL_SPRITES.map((k) => `voxel/${k}` as const)];
 
 export function specFor(key: SpriteKey): AvatarSpec {
   return AVATAR_SPECS[key];

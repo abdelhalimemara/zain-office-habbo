@@ -5,7 +5,7 @@ import { HermesClient } from "../../server/src/hermes/client";
 import { memoryHireStore } from "../../server/src/org/hireStore";
 import { soulFor, withMarketingBlock } from "../../server/src/org/persona";
 import { describePlan, planSkillSync, syncSkills } from "../../server/src/org/skillSync";
-import { ROSTER, findAgent } from "../../shared/roster";
+import { CLAUDE_LANE, ROSTER, findAgent, isExternal } from "../../shared/roster";
 import { SKILL_SOURCES } from "../../shared/skillSources";
 import { githubFetch, hermesBase, json, mockFetch, type Call } from "./helpers";
 
@@ -95,6 +95,9 @@ function memorySink() {
   return { sink, written };
 }
 
+/** Hermes profiles on the roster: external agents (Claude's lane) are never synced. */
+const PROFILES = ROSTER.filter((a) => !isExternal(a)).length;
+
 const allNames = (profile: string) => findAgent(profile)!.skills.map(hermesSkillName);
 
 describe("planSkillSync", () => {
@@ -104,7 +107,8 @@ describe("planSkillSync", () => {
     const { hermes, fetch } = fakeHermes({ "zain-growth-paid": [...headcountOnly, "some-default-skill"] });
     const plans = await planSkillSync({ hermes, hires: memoryHireStore() });
 
-    expect(plans).toHaveLength(ROSTER.length);
+    expect(plans).toHaveLength(PROFILES);
+    expect(plans.map((p) => p.profile)).not.toContain(CLAUDE_LANE);
     const plan = plans.find((p) => p.profile === "zain-growth-paid")!;
     expect(plan.missing).toEqual(["mk:ads", "mk:ad-creative", "mk:attribution", "mk:ab-testing"]);
     expect(describePlan(plan)).toMatch(/^zain-growth-paid \(Paid Ads Manager\): install 4 skill\(s\): mk-ads, mk-ad-creative, mk-attribution, mk-ab-testing; SOUL: add unit \/ marketing context; description: update$/);
@@ -117,6 +121,13 @@ describe("planSkillSync", () => {
     const plans = await planSkillSync({ hermes, hires: memoryHireStore(), profile: "zain-growth-paid" });
     expect(plans.map((p) => p.profile)).toEqual(["zain-growth-paid"]);
     await expect(planSkillSync({ hermes, hires: memoryHireStore(), profile: "zain-nobody" })).rejects.toThrow(/not on the roster/);
+  });
+
+  it("refuses to sync an external agent, even one that somehow has a Hermes profile", async () => {
+    const { hermes, fetch } = fakeHermes({ [CLAUDE_LANE]: [] });
+    await expect(planSkillSync({ hermes, hires: memoryHireStore(), profile: CLAUDE_LANE })).rejects.toThrow(/external agent/);
+    expect((await planSkillSync({ hermes, hires: memoryHireStore() })).map((p) => p.profile)).not.toContain(CLAUDE_LANE);
+    expect(fetch.calls.some((c) => c.path.includes(CLAUDE_LANE) || c.query.get("profile") === CLAUDE_LANE)).toBe(false);
   });
 
   it("never touches the CEO's SOUL or description", async () => {
@@ -136,7 +147,7 @@ describe("syncSkills", () => {
     expect(await syncSkills({ hermes, headcount, hires: memoryHireStore(), apply: false, log: (l) => lines.push(l) })).toBe(0);
     expect(fetch.calls.filter((c) => c.method !== "GET")).toEqual([]);
     expect(lines.find((l) => l.startsWith("zain-growth-seo"))).toMatch(/install 11 skill\(s\)/);
-    expect(lines.at(-1)).toBe(`${ROSTER.length} profile(s): 1 to update, ${ROSTER.length - 1} need a hire.`);
+    expect(lines.at(-1)).toBe(`${PROFILES} profile(s): 1 to update, ${PROFILES - 1} need a hire.`);
   });
 
   it("applies like hiring: same names and category, references next to SKILL.md, then the SOUL block; a re-run is a no-op", async () => {

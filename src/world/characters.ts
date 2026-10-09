@@ -1,4 +1,4 @@
-import { CEO_PROFILE, type Rank } from "../../shared/roster";
+import { CEO_PROFILE, CLAUDE_LANE, type Rank } from "../../shared/roster";
 import { hashString } from "./hash";
 
 export const WORKER_SPRITES = [
@@ -8,9 +8,19 @@ export const WORKER_SPRITES = [
 
 export const BOARD_SPRITES = ["hormozi", "alwaleed", "bezos", "buffett", "jobs"] as const;
 
+/** Characters without a reference image: drawn in the plain voxel look, with no baked atlas or portrait image. */
+export const VOXEL_SPRITES = ["claude"] as const;
+
 export type WorkerSprite = (typeof WORKER_SPRITES)[number];
 export type BoardSprite = (typeof BOARD_SPRITES)[number];
-export type SpriteKey = `people/${WorkerSprite}` | `board/${BoardSprite}`;
+export type VoxelSprite = (typeof VOXEL_SPRITES)[number];
+/** Sprites drawn from a reference image (people/ and board/ assets, baked atlases). */
+export type TexturedSpriteKey = `people/${WorkerSprite}` | `board/${BoardSprite}`;
+export type SpriteKey = TexturedSpriteKey | `voxel/${VoxelSprite}`;
+
+export function isTextured(key: SpriteKey): key is TexturedSpriteKey {
+  return !key.startsWith("voxel/");
+}
 
 export const BOARD_SPRITE_BY_PROFILE: Readonly<Record<string, BoardSprite>> = {
   "zain-board-hormozi": "hormozi",
@@ -39,6 +49,7 @@ export const NAMED_SPRITE_BY_PROFILE: Readonly<Record<string, SpriteKey>> = {
   "zain-hq-musfir": "people/male-7",
   "zain-studio-seo-writer": "people/female-2",
   "zain-studio-ux": "people/male-9",
+  [CLAUDE_LANE]: "voxel/claude",
 };
 
 export function spriteFor(profile: string, rank: Rank): SpriteKey {

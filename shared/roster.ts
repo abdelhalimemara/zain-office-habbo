@@ -29,6 +29,13 @@ export interface RosterAgent {
   focus?: string;
   /** Sub-team inside a Studio or Growth division (see shared/units.ts); reporting stays with the VP. */
   unit?: string;
+  /**
+   * Set for an agent that is not a Hermes profile: `profile` is only its kanban lane (the assignee it
+   * works under), and the agent itself runs elsewhere ("claude-code": Claude Code, through a bridge
+   * that works the lane's tasks). Zain HQ never creates, configures or syncs a Hermes profile for it,
+   * and Hermes' dispatcher never spawns a worker for it.
+   */
+  external?: "claude-code";
 }
 
 export const CEO_PROFILE = "default";
@@ -36,6 +43,8 @@ export const CEO_PROFILE = "default";
 /** coreyhaines31/marketingskills skill ids (source `mk`, shared/skillSources.ts). */
 const mk = (...skills: string[]) => skills.map((s) => `mk:${s}`);
 export const COO_PROFILE = "zain-hq-coo";
+/** Claude's kanban lane: worked by Claude Code through an always-on bridge, never a Hermes profile. */
+export const CLAUDE_LANE = "zain-claude";
 
 const hq: RosterAgent[] = [
   { profile: CEO_PROFILE, name: "Susu", title: "CEO · Main Hermes", division: "hq", rank: "ceo", reportsTo: null,
@@ -84,6 +93,9 @@ const studio: RosterAgent[] = [
   { profile: "zain-studio-ux", name: "Ziad Farouk", title: "UX / Web Designer", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp", unit: "design",
     skills: ["product:interface-craft", "product:ux-product-auditor", "product:design-styles",
       ...mk("site-architecture", "cro", "signup", "onboarding")] },
+  { profile: CLAUDE_LANE, name: "Claude", title: "Creative Designer", division: "studio", rank: "specialist", reportsTo: "zain-studio-vp",
+    unit: "design", external: "claude-code", skills: [],
+    focus: "Designs every ad, social and blog visual: editable Higgsfield + Paper workflow" },
 ];
 
 const growth: RosterAgent[] = [
@@ -175,6 +187,11 @@ export function managerOf(division: DivisionId, roster: readonly RosterAgent[] =
 
 export function findAgent(profile: string, roster: readonly RosterAgent[] = ROSTER): RosterAgent | undefined {
   return roster.find((a) => a.profile === profile);
+}
+
+/** True for agents that are not Hermes profiles (see RosterAgent.external). */
+export function isExternal(agent: Pick<RosterAgent, "external"> | undefined): boolean {
+  return !!agent?.external;
 }
 
 /** "Ahmad Al Zain · Account Management Lead" when named, else the title. */

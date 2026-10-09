@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { findBoardMember } from "@shared/board";
 import { getDivision } from "@shared/divisions";
-import { agentActivity } from "@shared/flow";
+import { rosterActivity } from "@shared/flow";
 import { displayName } from "@shared/roster";
 import { SKILL_SOURCES, skillSourceFor } from "@shared/skillSources";
 import { findUnit } from "@shared/units";
@@ -42,7 +42,7 @@ export function AgentCard({ profile }: { profile: string }) {
 
   const d = getDivision(agent.division);
   const boss = agent.reportsTo ? agents.find((a) => a.profile === agent.reportsTo) : undefined;
-  const current = board.data ? agentActivity(profile, board.data) : null;
+  const current = board.data ? rosterActivity(agent, board.data) : null;
   const vacant = loaded && !agent.hired;
   const channels = agent.clientChannels ?? [];
   const member = agent.rank === "board" ? findBoardMember(agent.profile) : undefined;
@@ -61,6 +61,12 @@ export function AgentCard({ profile }: { profile: string }) {
         {loaded && <span className={`zui-status-dot zui-status-dot--${vacant ? "vacant" : (current?.activity ?? "idle")}`} title={vacant ? "Vacant" : current ? ACTIVITY_LABEL[current.activity] : "Hired"} />}
       </div>
       {channels.length > 0 && <p className="zui-client-note">Handles all client communication. Commitments need HQ approval.</p>}
+      {agent.external && (
+        <p className="zui-client-note">
+          Runs on Claude Code, not Hermes: works the kanban tasks assigned to <span className="zui-mono">{agent.profile}</span> through an
+          always-on bridge.
+        </p>
+      )}
       <dl className="zui-facts">
         <dt>Profile</dt>
         <dd className="zui-mono">{agent.profile}</dd>
@@ -102,7 +108,15 @@ export function AgentCard({ profile }: { profile: string }) {
         )}
         <dt>Status</dt>
         <dd>
-          {!loaded ? "…" : vacant ? <span className="zui-badge zui-badge--vacant">Vacant</span> : <span className="zui-badge zui-badge--hired">Hired</span>}
+          {!loaded ? (
+            "…"
+          ) : vacant ? (
+            <span className="zui-badge zui-badge--vacant">Vacant</span>
+          ) : agent.external ? (
+            <span className="zui-badge zui-badge--hired">External · Claude Code</span>
+          ) : (
+            <span className="zui-badge zui-badge--hired">Hired</span>
+          )}
           {agent.model && <span className="zui-mono"> {agent.model}</span>}
         </dd>
         {current && !vacant && (
@@ -129,7 +143,13 @@ export function AgentCard({ profile }: { profile: string }) {
           </ul>
         </>
       )}
-      <h3 className="zui-subheading">Skills</h3>
+      {agent.focus && agent.external && (
+        <>
+          <h3 className="zui-subheading">Focus</h3>
+          <p>{agent.focus}</p>
+        </>
+      )}
+      {(agent.skills.length > 0 || !agent.external) && <h3 className="zui-subheading">Skills</h3>}
       {skillGroups(agent.skills).map((g) => (
         <section key={g.label ?? "headcount"} aria-label={g.label ? `${g.label} skills` : "Skills"}>
           {g.label && <p className="zui-skill-group">{g.label}</p>}
@@ -158,7 +178,7 @@ export function AgentCard({ profile }: { profile: string }) {
             Audits
           </button>
         )}
-        {vacant && (
+        {vacant && !agent.external && (
           <button
             type="button"
             className="zui-btn zui-btn--primary"

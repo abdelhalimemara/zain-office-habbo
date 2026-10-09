@@ -2,7 +2,7 @@ import type { HireResponse, HireStep } from "../../../shared/api";
 import { DIVISION_IDS, type DivisionId } from "../../../shared/divisions";
 import { hireFieldErrors } from "../../../shared/hireRules";
 import { findBoardMember } from "../../../shared/board";
-import { CEO_PROFILE, ROSTER, managerOf, type RosterAgent } from "../../../shared/roster";
+import { CEO_PROFILE, ROSTER, isExternal, managerOf, type RosterAgent } from "../../../shared/roster";
 import { TEAM_ROLES, type TeamRole } from "../../../shared/techTeams";
 import type { HermesClient } from "../hermes/client";
 import { HermesError } from "../hermes/client";
@@ -43,6 +43,17 @@ function assertMatchesRoster(agent: RosterAgent): void {
   }
 }
 
+/**
+ * An external agent (e.g. Claude, worked through the zain-claude lane by Claude Code) must never become a
+ * Hermes profile: Hermes would then spawn its own worker for the lane next to the bridge.
+ */
+export function assertNotExternal(profile: string, body?: Record<string, unknown>): void {
+  if (isExternal(ROSTER.find((a) => a.profile === profile))) {
+    throw badRequest(`${profile} is an external agent (not a Hermes profile) and cannot be hired`);
+  }
+  if (body?.external !== undefined) throw badRequest("external agents cannot be hired as Hermes profiles");
+}
+
 /** Board seats advise rather than report, and each one is defined in shared/board.ts. */
 function boardReportsTo(profile: string, body: Record<string, unknown>): null {
   if (!BOARD_PROFILE.test(profile)) throw badRequest("board profiles must match zain-board-*");
@@ -58,6 +69,7 @@ async function managerReportsTo(profile: string, body: Record<string, unknown>, 
   if (!reportsTo || reportsTo === profile || !roster.some((a) => a.profile === reportsTo)) {
     throw badRequest("reportsTo must name an existing roster agent");
   }
+  if (isExternal(roster.find((a) => a.profile === reportsTo))) throw badRequest(`${reportsTo} is an external agent and has no reports`);
   return reportsTo;
 }
 
@@ -103,6 +115,7 @@ export async function parseHireRequest(
   deps: Pick<HireDeps, "headcount" | "hires" | "teams">,
 ): Promise<RosterAgent> {
   const profile = stringField(body, "profile");
+  assertNotExternal(profile, body);
   const title = stringField(body, "title").trim();
   const skills = body.skills;
   if (!Array.isArray(skills) || !skills.every((s) => typeof s === "string")) {
@@ -163,6 +176,8 @@ async function step(
  * already present counts as success, so a partially failed hire can simply be retried.
  */
 export async function hire(agent: RosterAgent, deps: HireDeps): Promise<HireResponse> {
+  if (isExternal(agent)) throw badRequest(`${agent.profile} is an external agent (not a Hermes profile) and cannot be hired`);
+  assertNotExternal(agent.profile);
   const steps: HireStep[] = [];
   const description = profileDescription(agent);
   const profiles = new Set((await deps.hermes.listProfiles()).map((p) => p.name));
@@ -188,7 +203,7 @@ export async function hire(agent: RosterAgent, deps: HireDeps): Promise<HireResp
       await installSkill(deps, agent.profile, id);
     });
   }
-  for (const manager of managersToBrief(agent, roster).filter((m) => profiles.has(m.profile))) {
+  for (const manager of managersToBrief(agent, roster).filter((m) => profiles.has(m.profile) && !isExternal(m))) {
     await step(steps, "write-soul", manager.profile, async () =>
       deps.hermes.writeSoul(manager.profile, await soulText(manager, roster, deps.briefs, teams)),
     );

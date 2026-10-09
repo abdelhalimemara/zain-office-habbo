@@ -1,6 +1,6 @@
 import { allTasks, isBoardTask, isClientReply, isMandate, teamReviewMarker, teamReviewTarget } from "../../../shared/flow";
 import type { KanbanTask } from "../../../shared/hermes";
-import { displayName, findAgent, type RosterAgent } from "../../../shared/roster";
+import { displayName, findAgent, isExternal, type RosterAgent } from "../../../shared/roster";
 import { HermesError, type HermesClient, type HermesEvent, type HermesTaskDetail } from "../hermes/client";
 import { fullRoster, type HireStore } from "./hireStore";
 import type { Log } from "./reconcile";
@@ -67,7 +67,7 @@ export function reviewerOf(
   const named = str(request?.payload ?? null, "reviewer");
   const profile = named && named !== implementer ? task.assignee : implementer ? findAgent(implementer, roster)?.reportsTo : null;
   const reviewer = profile ? findAgent(profile, roster) : undefined;
-  if (!reviewer || reviewer.profile === implementer) return null;
+  if (!reviewer || reviewer.profile === implementer || isExternal(reviewer)) return null;
   if (reviewer.rank !== "vp" && reviewer.teamRole !== "head-engineer") return null;
   return { reviewer, implementer };
 }

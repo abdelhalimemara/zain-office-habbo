@@ -56,6 +56,19 @@ describe("units in the UI", () => {
     expect(within(within(units).getByLabelText("Organic unit")).getByText("Dana Al-Shammari")).toBeInTheDocument();
   });
 
+  it("shows Claude in Design as an external Claude Code agent: lane status, no hire, no Hermes model", async () => {
+    const agents = rosterEntries.map((a) => (a.profile === "zain-claude" ? { ...a, hired: true, model: null } : a));
+    const tasks = [task({ id: "c1", title: "Ramadan ad set", tenant: "zain-studio", assignee: "zain-claude", status: "running" })];
+    mockFetch({ [API.board]: board(tasks), [API.roster]: { agents } });
+    renderUi(<AgentCard profile="zain-claude" />);
+    expect(await screen.findByText("External · Claude Code")).toBeInTheDocument();
+    expect(screen.getByText("Design", { selector: "dd" })).toBeInTheDocument();
+    expect(screen.getByText(/Runs on Claude Code, not Hermes/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ramadan ad set" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hire" })).toBeNull();
+    expect(screen.queryByText("Skills")).toBeNull();
+  });
+
   it("shows no units on divisions without them", async () => {
     mockFetch({ [API.board]: board([]), [API.roster]: { agents: rosterEntries } });
     renderUi(<KanbanPanel division="labs" />);

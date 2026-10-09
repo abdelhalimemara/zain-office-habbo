@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 import { FACE_LIGHT, faceSource, projectFaces, sourceLight, standBox } from "../../src/world/avatars/faces";
 import { REST_RIG } from "../../src/world/avatars/model";
 import { rigFor } from "../../src/world/avatars/rig";
-import { AVATAR_KEYS, specFor } from "../../src/world/avatars/specs";
+import { TEXTURED_KEYS, specFor } from "../../src/world/avatars/specs";
 
 const atlasPath = (key: string, ext: string) => `src/world/avatars/atlas/${key.replace("/", "-")}.${ext}`;
 
 describe("reference texture atlases", () => {
   it("exist for every character and stay small", () => {
-    for (const k of AVATAR_KEYS) {
+    for (const k of TEXTURED_KEYS) {
       expect(statSync(atlasPath(k, "webp")).size, k).toBeLessThan(40 * 1024);
       const meta = JSON.parse(readFileSync(atlasPath(k, "json"), "utf8"));
       expect(meta.fit).toHaveLength(4);
@@ -17,7 +17,7 @@ describe("reference texture atlases", () => {
   });
 
   it("hold a texture for every face visible in the standing reference view", () => {
-    for (const k of AVATAR_KEYS) {
+    for (const k of TEXTURED_KEYS) {
       const meta = JSON.parse(readFileSync(atlasPath(k, "json"), "utf8"));
       for (const f of projectFaces(specFor(k), REST_RIG, "SW")) {
         const rect = meta.faces[f.part.name]?.[f.face];
@@ -30,7 +30,7 @@ describe("reference texture atlases", () => {
 
 describe("synthesised back views", () => {
   it("bake a back and far-side texture for every part", () => {
-    for (const k of AVATAR_KEYS) {
+    for (const k of TEXTURED_KEYS) {
       const meta = JSON.parse(readFileSync(atlasPath(k, "json"), "utf8"));
       for (const f of projectFaces(specFor(k), REST_RIG, "NW")) {
         if (f.face === "back" || f.face === "rside") expect(meta.faces[f.part.name]?.[f.face], `${k} ${f.part.name} ${f.face}`).toBeDefined();

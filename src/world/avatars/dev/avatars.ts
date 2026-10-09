@@ -1,7 +1,7 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, type Texture } from "pixi.js";
 import { SPRITE_URLS } from "../../assets/floorAssets";
 import type { SpriteKey } from "../../characters";
-import { AVATAR_KEYS, avatarCacheSize, loadAvatarAtlases, EMOTES, FACINGS, POSES, portraitTexture, setAvatarRenderer, specFor, VoxelAvatar } from "../index";
+import { AVATAR_KEYS, TEXTURED_KEYS, avatarCacheSize, loadAvatarAtlases, EMOTES, FACINGS, POSES, portraitTexture, setAvatarRenderer, specFor, VoxelAvatar } from "../index";
 import type { Emote, Facing, Pose } from "../types";
 
 const params = new URLSearchParams(location.search);
@@ -43,8 +43,9 @@ async function compare(root: Container): Promise<[number, number]> {
   const perRow = Number(params.get("cols") ?? 5);
   const cellW = H * 0.95;
   const cellH = H + 50;
-  const textures = await Promise.all(keys.map((k) => Assets.load<Texture>(SPRITE_URLS[k])));
-  keys.forEach((k, i) => {
+  const refs = TEXTURED_KEYS.filter((k) => keys.includes(k));
+  const textures = await Promise.all(refs.map((k) => Assets.load<Texture>(SPRITE_URLS[k])));
+  refs.forEach((k, i) => {
     const cx = (i % perRow) * cellW + cellW / 2;
     const top = Math.floor(i / perRow) * cellH + 40;
     const ref = new Sprite(textures[i]!);
@@ -57,7 +58,7 @@ async function compare(root: Container): Promise<[number, number]> {
     root.addChild(a);
     label(k, cx, top + H + 6, root);
   });
-  return [perRow * cellW, Math.ceil(keys.length / perRow) * cellH + 40];
+  return [perRow * cellW, Math.ceil(refs.length / perRow) * cellH + 40];
 }
 
 function grid(root: Container, columns: { title: string; facing: Facing; pose: Pose; emote: Emote; warm: number }[]): [number, number] {

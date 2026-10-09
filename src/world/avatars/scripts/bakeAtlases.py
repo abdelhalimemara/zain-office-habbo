@@ -244,12 +244,12 @@ def main():
         print(f"{key} iou={iou:.3f} atlas={atlas.shape[1]}x{atlas.shape[0]} {size // 1024}KB")
         imports.append(name)
     ident = lambda n: n.replace("-", "_").replace("people_", "").replace("board_", "")
-    lines = ['import type { SpriteKey } from "../../characters";']
+    lines = ['import type { TexturedSpriteKey } from "../../characters";']
     for n in imports:
         lines.append(f'import {ident(n)}Url from "./{n}.webp";')
         lines.append(f'import {ident(n)}Meta from "./{n}.json";')
     lines.append("")
-    lines.append("export const ATLASES: Readonly<Record<SpriteKey, { url: string; meta: unknown }>> = {")
+    lines.append("export const ATLASES: Readonly<Record<TexturedSpriteKey, { url: string; meta: unknown }>> = {")
     for rig, n in zip(rigs, imports):
         lines.append(f'  "{rig["key"]}": {{ url: {ident(n)}Url, meta: {ident(n)}Meta }},')
     lines.append("};")

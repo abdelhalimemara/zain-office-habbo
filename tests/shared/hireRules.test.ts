@@ -5,10 +5,14 @@ const ok = { profile: "zain-tech-data", title: "Data Engineer", skills: ["techno
 
 describe("hire rules", () => {
   it("accepts every canonical roster agent but the CEO", () => {
-    for (const a of ROSTER.filter((x) => x.rank !== "ceo")) {
+    for (const a of ROSTER.filter((x) => x.rank !== "ceo" && !x.external)) {
       expect(hireFieldErrors(a)).toEqual({});
       expect(a.profile).toMatch(PROFILE_PATTERN);
     }
+  });
+
+  it("refuses an external agent's lane as a profile", () => {
+    expect(hireFieldErrors({ profile: "zain-claude", title: "Creative Designer", skills: ["marketing:visual-content"] }).profile).toMatch(/external/);
   });
 
   it.each([
